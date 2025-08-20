@@ -1,0 +1,80 @@
+
+<!-- Modern Sidebar Navigation -->
+<nav class="sidebar" id="sidebar">
+
+ 
+  </button>
+ 
+  <!-- Navigation Menu -->
+  <div class="nav flex-column">
+    <div class="nav-section">
+      <div class="nav-section-title"><span>Main</span></div>
+      <a href="admin_dashboard2.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'admin_dashboard2.php' ? 'active' : ''; ?>">
+        <i class="fas fa-tachometer-alt"></i>
+        <span>Dashboard</span>
+        <div class="nav-indicator"></div>
+      </a>
+      <a href="transaction_logs.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'transaction_logs.php' ? 'active' : ''; ?>">
+        <i class="fas fa-shopping-cart"></i>
+        <span>Transactions</span>
+        <div class="nav-indicator"></div>
+      </a>
+      <a href="inventory.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'inventory.php' ? 'active' : ''; ?>">
+        <i class="fas fa-warehouse"></i>
+        <span>Inventory</span>
+        <div class="nav-indicator"></div>
+      </a>
+    </div>
+    
+    <!-- Maintenance Section -->
+    <div class="nav-section">
+      <div class="nav-section-title"><span>Management</span></div>
+      <div class="nav-item">
+        <a class="nav-link nav-dropdown-toggle" data-bs-toggle="collapse" href="#maintenanceMenu" role="button" aria-expanded="true">
+          <i class="fas fa-cogs"></i>
+          <span>Maintenance</span>
+          <i class="fas fa-chevron-down dropdown-arrow"></i>
+        </a>
+        <div class="collapse show nav-submenu" id="maintenanceMenu">
+          <a href="manage_users.php" class="nav-link nav-sublink <?php echo basename($_SERVER['PHP_SELF']) == 'manage_users.php' ? 'active' : ''; ?>">
+            <i class="fas fa-users"></i>
+            <span>User Accounts</span>
+            <div class="nav-indicator"></div>
+          </a>
+          <a href="products.php" class="nav-link nav-sublink <?php echo basename($_SERVER['PHP_SELF']) == 'products.php' ? 'active' : ''; ?>">
+            <i class="fas fa-box"></i>
+            <span>Products</span>
+            <div class="nav-indicator"></div>
+          </a>
+          <a href="manage_suppliers.php" class="nav-link nav-sublink <?php echo basename($_SERVER['PHP_SELF']) == 'manage_suppliers.php' ? 'active' : ''; ?>">
+            <i class="fas fa-truck"></i>
+            <span>Suppliers</span>
+            <div class="nav-indicator"></div>
+          </a>
+        </div>
+      </div>
+    </div>
+    
+    <div class="nav-section">
+      <div class="nav-section-title"><span>Analytics</span></div>
+      <a href="reports.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>">
+        <i class="fas fa-chart-line"></i>
+        <span>Reports</span>
+        <div class="nav-indicator"></div>
+      </a>
+      <a href="history.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'history.php' ? 'active' : ''; ?>">
+        <i class="fas fa-history"></i>
+        <span>Activity Log</span>
+        <div class="nav-indicator"></div>
+      </a>
+    </div>
+    
+    <!-- Bottom Section -->
+    <div class="nav-section nav-section-bottom">
+      <a href="logout_admin.php" class="nav-link nav-link-danger">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </div>
+</nav>
