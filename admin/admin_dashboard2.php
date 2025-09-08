@@ -222,7 +222,7 @@ try {
     <!-- Page Header -->
     <div class="mb-5">
       <h1 class="page-title">
-        <i class="fas fa-tachometer-alt text-primary me-3"></i>Dashboard Analytics
+        <i class="fas fa-tachometer-alt text-primary me-3"></i>Dashboard
       </h1>
      
     </div>
