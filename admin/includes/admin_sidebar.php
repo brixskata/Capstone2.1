@@ -4,46 +4,35 @@ include_once '../includes/permissions.php';
 ?>
 
 <style>
+/* Sidebar full height with scroll */
 .sidebar {
   height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #2c1a1a;
-}
-
-/* Make nav scrollable */
-.sidebar .nav {
-  flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 10px; /* enough gap */
 }
 
-/* Custom scrollbar */
-.sidebar .nav::-webkit-scrollbar {
+/* 🔹 Webkit Scrollbar (Chrome, Edge, Safari) */
+.sidebar::-webkit-scrollbar {
   width: 6px;
 }
-.sidebar .nav::-webkit-scrollbar-thumb {
+
+.sidebar::-webkit-scrollbar-thumb {
   background-color: #888;
   border-radius: 4px;
 }
-.sidebar .nav::-webkit-scrollbar-thumb:hover {
+
+.sidebar::-webkit-scrollbar-thumb:hover {
   background-color: #555;
 }
-.sidebar .nav::-webkit-scrollbar-track {
-  background: #2c1a1a;
-}
-.sidebar .nav {
-  scrollbar-width: thin;
-  scrollbar-color: #888 #2c1a1a;
+
+.sidebar::-webkit-scrollbar-track {
+  background: #2c1a1a; /* match sidebar background */
 }
 
-/* Keep logout pinned */
-.nav-section-bottom {
-  flex-shrink: 0; /* don’t shrink */
-  background: #2c1a1a;
-  padding: 12px;
-  border-top: 1px solid #444;
+/* 🔹 Firefox scrollbar */
+.sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: #888 #2c1a1a;
 }
 </style>
 
