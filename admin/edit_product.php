@@ -5,15 +5,15 @@ session_start();
 
 // Ensure user is logged in and has admin role
 if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php");
+    header("Location: login_admin.php");
     exit;
 }
 
 // Fetch categories, brands, suppliers, and UOM for dropdowns
-$categories = $pdo->query("SELECT id, name FROM categories")->fetchAll(PDO::FETCH_ASSOC);
+$categories = $pdo->query("SELECT category_id as id, category_name as name FROM categories")->fetchAll(PDO::FETCH_ASSOC);
 $brands = $pdo->query("SELECT id, name FROM brands WHERE is_archived = 0")->fetchAll(PDO::FETCH_ASSOC);
-$suppliers = $pdo->query("SELECT id, name FROM suppliers WHERE is_archived = 0")->fetchAll(PDO::FETCH_ASSOC);
-$uoms = $pdo->query("SELECT id, name FROM units_of_measurement WHERE is_archived = 0")->fetchAll(PDO::FETCH_ASSOC);
+$suppliers = $pdo->query("SELECT supplier_id as id, name FROM suppliers WHERE is_archive = 0")->fetchAll(PDO::FETCH_ASSOC);
+$uoms = $pdo->query("SELECT uom_id as id, name FROM uom WHERE is_archive = 0")->fetchAll(PDO::FETCH_ASSOC);
 
 // Check if form is submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -43,25 +43,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $imagePath = 'uploads/' . uniqid() . '-' . $imageName;
         move_uploaded_file($imageTmpName, $imagePath);
 
-        // Update product with new image
-        $stmt = $pdo->prepare("UPDATE products 
-            SET name = ?, description = ?, cost_price = ?, markup_percentage = ?, price = ?, stock = ?, 
-                category_id = ?, brand_id = ?, supplier_id = ?, uom_id = ?, expiration_date = ?, 
-                image = ?, is_new = ?, is_hot = ?
-            WHERE id = ?");
-        $stmt->execute([$name, $description, $cost_price, $markup_percentage, $selling_price, $stock, 
-                       $category_id, $brand_id, $supplier_id, $uom_id, $expiration_date, 
-                       $imagePath, $is_new, $is_hot, $id]);
+        // Update product with new image using normalized structure
+        $pdo->beginTransaction();
+        try {
+            // Update main product table
+            $stmt = $pdo->prepare("UPDATE products 
+                SET product_name = ?, product_description = ?, category_id = ?, brand_id = ?, supplier_id = ?, uom_id = ?
+                WHERE product_id = ?");
+            $stmt->execute([$name, $description, $category_id, $brand_id, $supplier_id, $uom_id, $id]);
+            
+            // Update pricing table
+            $stmt = $pdo->prepare("UPDATE product_pricing 
+                SET cost_price = ?, markup_percentage = ?, selling_price = ?
+                WHERE product_id = ?");
+            $stmt->execute([$cost_price, $markup_percentage, $selling_price, $id]);
+            
+            // Update stock table
+            $stmt = $pdo->prepare("UPDATE product_stock 
+                SET current_stock = ?, expiration_date = ?
+                WHERE product_id = ?");
+            $stmt->execute([$stock, $expiration_date, $id]);
+            
+            // Update primary image
+            $stmt = $pdo->prepare("UPDATE product_images 
+                SET image_url = ?
+                WHERE product_id = ? AND is_primary = 1");
+            $stmt->execute([$imagePath, $id]);
+            
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
     } else {
-        // Update product without changing image
-        $stmt = $pdo->prepare("UPDATE products 
-            SET name = ?, description = ?, cost_price = ?, markup_percentage = ?, price = ?, stock = ?, 
-                category_id = ?, brand_id = ?, supplier_id = ?, uom_id = ?, expiration_date = ?, 
-                is_new = ?, is_hot = ?
-            WHERE id = ?");
-        $stmt->execute([$name, $description, $cost_price, $markup_percentage, $selling_price, $stock, 
-                       $category_id, $brand_id, $supplier_id, $uom_id, $expiration_date, 
-                       $is_new, $is_hot, $id]);
+        // Update product without changing image using normalized structure
+        $pdo->beginTransaction();
+        try {
+            // Update main product table
+            $stmt = $pdo->prepare("UPDATE products 
+                SET product_name = ?, product_description = ?, category_id = ?, brand_id = ?, supplier_id = ?, uom_id = ?
+                WHERE product_id = ?");
+            $stmt->execute([$name, $description, $category_id, $brand_id, $supplier_id, $uom_id, $id]);
+            
+            // Update pricing table
+            $stmt = $pdo->prepare("UPDATE product_pricing 
+                SET cost_price = ?, markup_percentage = ?, selling_price = ?
+                WHERE product_id = ?");
+            $stmt->execute([$cost_price, $markup_percentage, $selling_price, $id]);
+            
+            // Update stock table
+            $stmt = $pdo->prepare("UPDATE product_stock 
+                SET current_stock = ?, expiration_date = ?
+                WHERE product_id = ?");
+            $stmt->execute([$stock, $expiration_date, $id]);
+            
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
     }
 
     // Log the edit action
@@ -71,10 +111,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-// Get product data for editing
+// Get product data for editing using normalized structure
 if (isset($_GET['id'])) {
     $productId = intval($_GET['id']);
-    $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
+    $stmt = $pdo->prepare("
+        SELECT p.product_id, p.product_name, p.product_description, p.category_id, p.brand_id, p.supplier_id, p.uom_id,
+               pp.cost_price, pp.markup_percentage, pp.selling_price,
+               ps.current_stock, ps.expiration_date,
+               (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) as image
+        FROM products p
+        LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+        WHERE p.product_id = ?
+    ");
     $stmt->execute([$productId]);
     $product = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -113,13 +162,13 @@ if (isset($_GET['id'])) {
             <!-- Edit Form -->
             <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 shadow-lg">
                 <form method="POST" enctype="multipart/form-data">
-                    <input type="hidden" name="id" value="<?= $product['id'] ?>">
+                    <input type="hidden" name="id" value="<?= $product['product_id'] ?>">
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Product Name -->
                         <div class="md:col-span-2">
                             <label for="name" class="block text-cyan-100 font-bold mb-2">Product Name</label>
-                            <input type="text" name="name" id="name" value="<?= htmlspecialchars($product['name']) ?>" 
+                            <input type="text" name="name" id="name" value="<?= htmlspecialchars($product['product_name']) ?>" 
                                    class="rounded-lg bg-gray-700 text-cyan-100 px-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-cyan-400" required>
                         </div>
 
@@ -146,13 +195,13 @@ if (isset($_GET['id'])) {
                         <!-- Stock and Expiration Date -->
                         <div>
                             <label for="stock" class="block text-cyan-100 font-bold mb-2">Stock</label>
-                            <input type="number" name="stock" id="stock" value="<?= $product['stock'] ?>" 
+                            <input type="number" name="stock" id="stock" value="<?= $product['current_stock'] ?? 0 ?>" 
                                    class="rounded-lg bg-gray-700 text-cyan-100 px-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-cyan-400" required>
                         </div>
 
                         <div>
                             <label for="expiration_date" class="block text-cyan-100 font-bold mb-2">Expiration Date</label>
-                            <input type="date" name="expiration_date" id="expiration_date" value="<?= $product['expiration_date'] ?>" 
+                            <input type="date" name="expiration_date" id="expiration_date" value="<?= $product['expiration_date'] ?? '' ?>" 
                                    class="rounded-lg bg-gray-700 text-cyan-100 px-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-cyan-400">
                         </div>
 
@@ -212,15 +261,11 @@ if (isset($_GET['id'])) {
                             <?php endif; ?>
                         </div>
 
-                        <!-- Checkboxes -->
+                        <!-- Checkboxes - Removed as these fields don't exist in normalized schema -->
                         <div class="md:col-span-2">
-                            <div class="flex items-center mb-2">
-                                <input class="rounded mr-2" type="checkbox" name="is_new" value="1" id="is_new" <?= $product['is_new'] ? 'checked' : '' ?>>
-                                <label class="text-cyan-100" for="is_new">Mark as New</label>
-                            </div>
-                            <div class="flex items-center mb-4">
-                                <input class="rounded mr-2" type="checkbox" name="is_hot" value="1" id="is_hot" <?= $product['is_hot'] ? 'checked' : '' ?>>
-                                <label class="text-cyan-100" for="is_hot">Mark as Hot</label>
+                            <div class="text-cyan-300 text-sm">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                Additional product flags can be added to the products table if needed.
                             </div>
                         </div>
                     </div>

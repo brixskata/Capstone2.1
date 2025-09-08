@@ -42,10 +42,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
 
 // Fetch favorites for page load
 $stmt = $pdo->prepare("
-    SELECT p.* 
+    SELECT 
+        p.product_id AS id,
+        p.product_name AS name,
+        p.product_description AS description,
+        c.category_name,
+        COALESCE(ps.current_stock, 0) AS stock,
+        COALESCE(pp.selling_price, 0) AS price,
+        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
     FROM favorites f
-    JOIN products p ON f.product_id = p.id
-    WHERE f.user_id = ?
+    JOIN products p ON f.product_id = p.product_id
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+    LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+    WHERE f.user_id = ? AND p.is_archive = 0
 ");
 $stmt->execute([$userId]);
 $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);

@@ -49,8 +49,10 @@ if (!isset($_POST['total_price']) || empty($_POST['total_price'])) {
     // Calculate total from cart items
     $total_price = 0;
     foreach ($_SESSION['cart'] as $product_id => $cart_item) {
-        // Get product price from database
-        $stmt = $pdo->prepare("SELECT price FROM products WHERE id = :product_id");
+        // Get product price from normalized database structure
+        $stmt = $pdo->prepare("SELECT pp.selling_price as price FROM products p 
+                               LEFT JOIN product_pricing pp ON p.product_id = pp.product_id 
+                               WHERE p.product_id = :product_id AND p.is_archive = 0");
         $stmt->bindParam(':product_id', $product_id);
         $stmt->execute();
         $product = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -99,40 +101,54 @@ if (empty($total_price)) {
     exit;
 }
 
-// Insert order into the orders table
-$sql = "INSERT INTO orders (user_id, total_price, status, delivery_option, payment_method, payment_proof) 
-        VALUES (:user_id, :total_price, 'Pending', :delivery_option, :payment_method, :payment_proof)";
+// Insert order into the orders table using normalized structure
+$sql = "INSERT INTO orders (user_id, orderstatus_id, total_price, delivery_option) 
+        VALUES (:user_id, 1, :total_price, :delivery_option)";
 $stmt = $pdo->prepare($sql);
 $stmt->bindParam(':user_id', $user_id);
 $stmt->bindParam(':total_price', $total_price);
 $stmt->bindParam(':delivery_option', $delivery_option);
-$stmt->bindParam(':payment_method', $payment_method);
-$stmt->bindParam(':payment_proof', $payment_proof);
 $stmt->execute();
 
 $order_id = $pdo->lastInsertId();
+
+// Insert payment information into payments table
+if ($payment_method && $payment_method !== 'COD') {
+    $sql = "INSERT INTO payments (orders_id, amount, method, proof, paymentstatus_id) 
+            VALUES (:order_id, :amount, :method, :proof, 1)";
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindParam(':order_id', $order_id);
+    $stmt->bindParam(':amount', $total_price);
+    $stmt->bindParam(':method', $payment_method);
+    $stmt->bindParam(':proof', $payment_proof);
+    $stmt->execute();
+}
 
 // Insert order items into the order_items table and update product stock
 foreach ($_SESSION['cart'] as $product_id => $cart_item) {
     $quantity = $cart_item['quantity'];
 
-    // Step 1: Check if the product exists in the products table
-    $stmt = $pdo->prepare("SELECT id FROM products WHERE id = :product_id");
+    // Step 1: Check if the product exists and get its price
+    $stmt = $pdo->prepare("SELECT p.product_id, pp.selling_price as price FROM products p 
+                           LEFT JOIN product_pricing pp ON p.product_id = pp.product_id 
+                           WHERE p.product_id = :product_id AND p.is_archive = 0");
     $stmt->bindParam(':product_id', $product_id);
     $stmt->execute();
+    $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
     // Step 2: If the product exists, insert it into the order_items table
-    if ($stmt->rowCount() > 0) {
-        // Insert order items
-        $sql = "INSERT INTO order_items (order_id, product_id, quantity) VALUES (:order_id, :product_id, :quantity)";
+    if ($product) {
+        // Insert order items with price
+        $sql = "INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (:order_id, :product_id, :quantity, :price)";
         $stmt = $pdo->prepare($sql);
         $stmt->bindParam(':order_id', $order_id);
         $stmt->bindParam(':product_id', $product_id);
         $stmt->bindParam(':quantity', $quantity);
+        $stmt->bindParam(':price', $product['price']);
         $stmt->execute();
 
-        // Update product stock
-        $sql = "UPDATE products SET stock = stock - :quantity WHERE id = :product_id AND stock >= :quantity";
+        // Update product stock in normalized structure
+        $sql = "UPDATE product_stock SET current_stock = current_stock - :quantity WHERE product_id = :product_id AND current_stock >= :quantity";
         $stmt = $pdo->prepare($sql);
         $stmt->bindParam(':quantity', $quantity);
         $stmt->bindParam(':product_id', $product_id);

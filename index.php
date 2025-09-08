@@ -10,7 +10,29 @@ if (empty($_SESSION['csrf_token'])) {
 // Fetch 8 featured products (not archived, in stock, ordered by is_hot/is_new/created_at)
 $featuredProducts = [];
 try {
-    $stmt = $pdo->query("SELECT * FROM products WHERE is_archived = 0 AND stock > 0 ORDER BY is_hot DESC, is_new DESC, created_at DESC LIMIT 8");
+    $stmt = $pdo->query("
+        SELECT 
+            p.product_id AS id,
+            p.product_name AS name,
+            p.product_description AS description,
+            c.category_name,
+            b.name AS brand_name,
+            uom.name AS uom_name,
+            COALESCE(ps.current_stock, 0) AS stock,
+            COALESCE(pp.selling_price, 0) AS price,
+            COALESCE(pp.cost_price, 0) AS cost_price,
+            (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1,
+            p.created_at
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.category_id
+        LEFT JOIN brands b ON p.brand_id = b.id
+        LEFT JOIN uom uom ON p.uom_id = uom.uom_id
+        LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+        LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        WHERE p.is_archive = 0 AND COALESCE(ps.current_stock, 0) > 0
+        ORDER BY p.created_at DESC
+        LIMIT 8
+    ");
     $featuredProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $featuredProducts = [];
@@ -55,11 +77,46 @@ try {
             box-sizing: border-box;
         }
 
+        /* Prevent layout shifts */
+        .row {
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        .col-md-6, .col-lg-3 {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
             color: var(--bs-dark);
             background-color: #ffffff;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        .btn, .product-card, .floating-card {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+      
+        .product-title, .product-desc {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
         }
 
         
@@ -212,7 +269,7 @@ try {
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
         }
 
-        /* Floating Elements */
+        /* Floating Elements - Simplified */
         .floating-card {
             position: absolute;
             background: white;
@@ -221,6 +278,7 @@ try {
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             width: 180px;
             animation: float 6s ease-in-out infinite;
+            z-index: 1;
         }
 
         .floating-card.card-1 {
@@ -265,6 +323,39 @@ try {
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-20px); }
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .floating-card {
+                display: none;
+            }
+            
+            .hero-section {
+                padding: 3rem 0;
+            }
+            
+            .product-card {
+                margin-bottom: 1rem;
+            }
+            
+            .product-image {
+                height: 150px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .hero-section {
+                padding: 2rem 0;
+            }
+            
+            .product-card {
+                padding: 1rem;
+            }
+            
+            .product-image {
+                height: 120px;
+            }
         }
 
         /* Categories Section */
@@ -343,6 +434,12 @@ try {
             transition: all 0.3s ease;
             height: 100%;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            will-change: transform;
+            backface-visibility: hidden;
+            transform: translateZ(0);
         }
 
         .product-card:hover {
@@ -369,6 +466,8 @@ try {
             object-fit: cover;
             border-radius: 0.75rem;
             margin-bottom: 1rem;
+            background-color: #f8f9fa;
+            flex-shrink: 0;
         }
 
         .product-title {
@@ -376,6 +475,13 @@ try {
             font-weight: 600;
             margin-bottom: 0.5rem;
             color: var(--bs-dark);
+            line-height: 1.4;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            hyphens: auto;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
         }
 
         .product-desc {
@@ -397,6 +503,11 @@ try {
             margin-bottom: 1rem;
         }
 
+        .add-to-cart-form {
+            margin-top: auto;
+            padding-top: 1rem;
+        }
+
         .btn-add-cart {
             width: 100%;
             background: var(--bs-secondary);
@@ -406,11 +517,17 @@ try {
             border-radius: 0.5rem;
             font-weight: 600;
             transition: all 0.3s ease;
+            cursor: pointer;
         }
 
         .btn-add-cart:hover {
             background: #6b1429;
             color: white;
+            transform: translateY(-2px);
+        }
+
+        .btn-add-cart:active {
+            transform: translateY(0);
         }
 
         /* Features Section */
@@ -694,12 +811,12 @@ try {
                         <div class="col-md-6 col-lg-3">
                             <div class="product-card">
                                 <div class="product-badge">
-                                    <?php if (!empty($product['is_hot'])): ?>Hot<?php elseif (!empty($product['is_new'])): ?>New<?php else: ?>Featured<?php endif; ?>
+                                    Featured
                                 </div>
 
-                                <img src="admin/<?= htmlspecialchars($product['image1']) ?>" alt="<?= htmlspecialchars($product['name']) ?>" class="product-image">
+                                <img src="<?= !empty($product['image1']) ? 'admin/' . htmlspecialchars($product['image1']) : 'images/placeholder.jpg' ?>" alt="<?= htmlspecialchars($product['name']) ?>" class="product-image" onerror="this.src='images/placeholder.jpg'">
 
-                                <h3 class="product-title"><?= htmlspecialchars($product['name']) ?></h3>
+                                <h3 class="product-title"><?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?></h3>
                                 <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
 
                                 <div class="product-price">₱<?= number_format($product['price'], 2) ?></div>
@@ -863,22 +980,22 @@ try {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Update cart badge and show/hide based on quantity
+                        // Update cart badge and show/hide based on product count
                         const cartBadge = document.querySelector('.cart-badge');
                         if (cartBadge) {
-                            cartBadge.textContent = data.cart_qty;
-                            if (data.cart_qty > 0) {
+                            cartBadge.textContent = data.cart_count;
+                            if (data.cart_count > 0) {
                                 cartBadge.style.display = 'flex';
                             } else {
                                 cartBadge.style.display = 'none';
                             }
-                        } else if (data.cart_qty > 0) {
+                        } else if (data.cart_count > 0) {
                             // Create badge if it doesn't exist and there are items
                             const cartButton = document.querySelector('[onclick="toggleCart()"]');
                             if (cartButton) {
                                 const newBadge = document.createElement('span');
                                 newBadge.className = 'cart-badge';
-                                newBadge.textContent = data.cart_qty;
+                                newBadge.textContent = data.cart_count;
                                 cartButton.appendChild(newBadge);
                             }
                         }

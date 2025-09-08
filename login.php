@@ -13,7 +13,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
         $_SESSION['error'] = "All fields are required.";
     } else {
         try {
-            $sql = "SELECT * FROM users WHERE email = :email";
+            // Join users and user_info tables to get user data with email
+            $sql = "SELECT u.user_id, u.username, u.password, u.email_verified, u.is_active, u.usertype_id, ui.email 
+                    FROM users u 
+                    INNER JOIN user_info ui ON u.user_id = ui.user_id 
+                    WHERE ui.email = :email";
             $stmt = $pdo->prepare($sql);
             $stmt->bindParam(':email', $email);
             $stmt->execute();
@@ -22,12 +26,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             if ($user && password_verify($password, $user['password'])) {
                 if ($user['email_verified'] == 0) {
                     $_SESSION['error'] = "Please verify your email before logging in. <a href='email_verification.php' style='color: #7F1734;'>Click here to verify</a>";
+                } else if ($user['is_active'] == 0) {
+                    $_SESSION['error'] = "Your account has been deactivated. Please contact support.";
                 } else {
-                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['user_id'] = $user['user_id'];
                     $_SESSION['username'] = $user['username'];
-                    $_SESSION['role'] = $user['role'];
+                    $_SESSION['email'] = $user['email'];
+                    // Set role based on usertype_id - need to get actual role from user_type table
+                    if ($user['usertype_id'] === null) {
+                        $_SESSION['role'] = 'customer';
+                    } else {
+                        // Get the actual role from user_type table
+                        $roleStmt = $pdo->prepare("SELECT role FROM user_type WHERE usertype_id = ?");
+                        $roleStmt->execute([$user['usertype_id']]);
+                        $roleData = $roleStmt->fetch(PDO::FETCH_ASSOC);
+                        $_SESSION['role'] = $roleData ? $roleData['role'] : 'customer';
+                    }
 
-                    header('Location: ' . ($_SESSION['role'] === 'admin' ? 'admin/admin_dashboard2.php' : 'index.php'));
+                    // Redirect based on role
+                    if (in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+                        header('Location: admin/admin_dashboard2.php');
+                    } else {
+                        header('Location: index.php');
+                    }
                     exit;
                 }
             } else {
@@ -376,6 +397,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
     </style>
 </head>
 <body>
+    <?php include 'includes/user_promo.php'; ?>
     <?php include 'includes/user_navbar.php'; ?>
 
     <div class="auth-container">

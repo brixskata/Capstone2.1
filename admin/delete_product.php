@@ -2,8 +2,8 @@
 include 'db.php';
 session_start();
 
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
-    header("Location: index.php");
+if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+    header("Location: login_admin.php");
     exit;
 }
 
@@ -15,7 +15,7 @@ if (isset($_GET['id']) && is_numeric($_GET['id'])) {
     $stmt->execute([$product_id]);
 
     // Then delete the product
-    $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
+    $stmt = $pdo->prepare("DELETE FROM products WHERE product_id = ?");
     $stmt->execute([$product_id]);
 
     header("Location: products.php");

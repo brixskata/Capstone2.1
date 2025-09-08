@@ -5,38 +5,56 @@ include_once '../includes/log_history.php';
 session_start();
 
 // Ensure user is logged in and has admin role
-if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php");
+if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+    header("Location: login_admin.php");
     exit;
 }
 
 // Handle restocking form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
     try {
-        $product_id = $_POST['product_id'];
-        $supplier_id = $_POST['supplier_id'];
-        $quantity_added = $_POST['quantity_added'];
-        $cost_per_unit = $_POST['cost_per_unit'];
+        // Validate required fields
+        $required_fields = ['product_id', 'supplier_id', 'quantity_added', 'cost_per_unit', 'restock_date'];
+        foreach ($required_fields as $field) {
+            if (empty($_POST[$field])) {
+                throw new Exception("Field '$field' is required.");
+            }
+        }
+
+        $product_id = (int)$_POST['product_id'];
+        $supplier_id = (int)$_POST['supplier_id'];
+        $quantity_added = (int)$_POST['quantity_added'];
+        $cost_per_unit = (float)$_POST['cost_per_unit'];
         $total_cost = $quantity_added * $cost_per_unit;
         $restock_date = $_POST['restock_date'];
-        $expected_delivery = $_POST['expected_delivery'];
-        $notes = $_POST['notes'];
+        $expected_delivery = $_POST['expected_delivery'] ?: null;
+        $notes = $_POST['notes'] ?: null;
 
-        // Insert restocking record
-        $stmt = $pdo->prepare("INSERT INTO restocking (product_id, supplier_id, quantity_added, cost_per_unit, total_cost, restock_date, expected_delivery, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$product_id, $supplier_id, $quantity_added, $cost_per_unit, $total_cost, $restock_date, $expected_delivery, $notes, $_SESSION['username']]);
+        // Validate positive values
+        if ($quantity_added <= 0) {
+            throw new Exception("Quantity added must be greater than 0.");
+        }
+        if ($cost_per_unit < 0) {
+            throw new Exception("Cost per unit cannot be negative.");
+        }
 
-        // Update product stock
-        $stmt = $pdo->prepare("UPDATE products SET stock = stock + ?, last_restock_date = ? WHERE id = ?");
+        // Insert restocking record (matches restocking table schema)
+        $stmt = $pdo->prepare("INSERT INTO restocking (product_id, supplier_id, quantity_added, cost_per_unit, total_cost, restock_date, expected_delivery, status_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)");
+        $stmt->execute([$product_id, $supplier_id, $quantity_added, $cost_per_unit, $total_cost, $restock_date, $expected_delivery, $notes, $_SESSION['user_id']]);
+
+        // Update product_stock current_stock and last_restock_date
+        $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ? WHERE product_id = ?");
         $stmt->execute([$quantity_added, $restock_date, $product_id]);
 
-        // Record stock movement
-        $stmt = $pdo->prepare("SELECT stock FROM products WHERE id = ?");
+        // Fetch new current stock
+        $stmt = $pdo->prepare("SELECT current_stock FROM product_stock WHERE product_id = ?");
         $stmt->execute([$product_id]);
-        $current_stock = $stmt->fetchColumn();
-        
-        $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, movement_type, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 'in', ?, ?, ?, 'Restocking', ?, 'restock', ?)");
-        $stmt->execute([$product_id, $quantity_added, $current_stock - $quantity_added, $current_stock, $pdo->lastInsertId(), $_SESSION['username']]);
+        $current_stock = (int)$stmt->fetchColumn();
+
+        // Record stock movement (use stock_movements schema)
+        $restock_id = $pdo->lastInsertId();
+        $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, stockmovementtype_id, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 1, ?, ?, ?, 'Restocking', ?, 'restock', ?)");
+        $stmt->execute([$product_id, $quantity_added, $current_stock - $quantity_added, $current_stock, $restock_id, $_SESSION['user_id']]);
 
         logHistory($pdo, 'Restocking', "Product ID: $product_id, Quantity: $quantity_added, Cost: ₱$total_cost", $_SESSION['username']);
         $_SESSION['success'] = "Restocking recorded successfully!";
@@ -50,16 +68,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
 // Handle stock adjustment form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
     try {
-        $product_id = $_POST['product_id'];
+        // Validate required fields
+        $required_fields = ['product_id', 'adjustment_type', 'quantity', 'reason'];
+        foreach ($required_fields as $field) {
+            if (empty($_POST[$field])) {
+                throw new Exception("Field '$field' is required.");
+            }
+        }
+
+        $product_id = (int)$_POST['product_id'];
         $adjustment_type = $_POST['adjustment_type'];
-        $quantity = $_POST['quantity'];
+        $quantity = (int)$_POST['quantity'];
         $reason = $_POST['reason'];
-        $notes = $_POST['notes'];
+        $notes = $_POST['notes'] ?: null;
+
+        // Validate quantity
+        if ($quantity <= 0) {
+            throw new Exception("Quantity must be greater than 0.");
+        }
 
         // Get current stock
-        $stmt = $pdo->prepare("SELECT stock FROM products WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT current_stock FROM product_stock WHERE product_id = ?");
         $stmt->execute([$product_id]);
-        $current_stock = $stmt->fetchColumn();
+        $current_stock = (int)$stmt->fetchColumn();
         $previous_stock = $current_stock;
 
         // Calculate new stock
@@ -69,23 +100,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
                 break;
             case 'subtract':
                 $new_stock = $current_stock - $quantity;
+                if ($new_stock < 0) {
+                    throw new Exception("Cannot subtract $quantity from current stock of $current_stock. Result would be negative.");
+                }
                 break;
             case 'set':
                 $new_stock = $quantity;
                 break;
+            default:
+                throw new Exception("Invalid adjustment type: $adjustment_type");
         }
 
-        // Update product stock
-        $stmt = $pdo->prepare("UPDATE products SET stock = ? WHERE id = ?");
+        // Update product_stock
+        $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = ? WHERE product_id = ?");
         $stmt->execute([$new_stock, $product_id]);
 
+        // Map adjustment type to proper ID
+        $adjustment_type_map = [
+            'add' => 1,      // Increase
+            'subtract' => 2, // Decrease  
+            'set' => 3       // Correction
+        ];
+        $adjustment_type_id = $adjustment_type_map[$adjustment_type] ?? 3;
+
         // Record stock adjustment
-        $stmt = $pdo->prepare("INSERT INTO stock_adjustments (product_id, adjustment_type, quantity, previous_stock, new_stock, reason, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$product_id, $adjustment_type, $quantity, $previous_stock, $new_stock, $reason, $notes, $_SESSION['username']]);
+        $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $_SESSION['user_id']]);
 
         // Record stock movement
-        $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, movement_type, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 'adjustment', ?, ?, ?, ?, ?, 'adjustment', ?)");
-        $stmt->execute([$product_id, $quantity, $previous_stock, $new_stock, $reason, $pdo->lastInsertId(), $_SESSION['username']]);
+        $adjustment_id = $pdo->lastInsertId();
+        $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, stockmovementtype_id, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 4, ?, ?, ?, ?, ?, 'adjustment', ?)");
+        $stmt->execute([$product_id, $quantity, $previous_stock, $new_stock, $reason, $adjustment_id, $_SESSION['user_id']]);
 
         logHistory($pdo, 'Stock Adjustment', "Product ID: $product_id, Type: $adjustment_type, Quantity: $quantity, Reason: $reason", $_SESSION['username']);
         $_SESSION['success'] = "Stock adjustment recorded successfully!";
@@ -98,34 +143,62 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
 
 // Fetch products with inventory data
 $stmt = $pdo->query("
-    SELECT p.*, c.name as category_name, b.name as brand_name, s.name as supplier_name, u.name as uom_name,
-           (SELECT COUNT(*) FROM stock_movements WHERE product_id = p.id AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as movements_30_days,
-           (SELECT COUNT(*) FROM restocking WHERE product_id = p.id AND status = 'received') as restock_count
+    SELECT 
+        p.product_id AS id,
+        p.product_name AS name,
+        c.category_name as category_name,
+        b.name as brand_name,
+        s.name as supplier_name,
+        u.name as uom_name,
+        COALESCE(ps.current_stock,0) AS stock,
+        COALESCE(ps.reorder_point, 10) AS reorder_point,
+        ps.last_restock_date,
+        (SELECT COUNT(*) FROM stock_movements WHERE product_id = p.product_id AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as movements_30_days,
+        (SELECT COUNT(*) FROM restocking WHERE product_id = p.product_id AND status_id = 2) as restock_count,
+        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 ORDER BY pi.product_image_id DESC LIMIT 1) AS image1
     FROM products p
-    LEFT JOIN categories c ON p.category_id = c.id
+    LEFT JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN brands b ON p.brand_id = b.id
-    LEFT JOIN suppliers s ON p.supplier_id = s.id
-    LEFT JOIN units_of_measurement u ON p.uom_id = u.id
-    WHERE p.is_archived = 0
-    ORDER BY p.stock ASC, p.name
+    LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
+    LEFT JOIN uom u ON p.uom_id = u.uom_id
+    LEFT JOIN product_stock ps ON ps.product_id = p.product_id
+    WHERE p.is_archive = 0
+    ORDER BY ps.current_stock ASC, p.product_name
 ");
 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch suppliers for restocking
-$stmt = $pdo->query("SELECT id, name FROM suppliers WHERE is_archived = 0");
+$stmt = $pdo->query("SELECT supplier_id AS id, name FROM suppliers WHERE is_archive = 0");
 $suppliers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Calculate inventory statistics
 $total_products = count($products);
-$low_stock_products = count(array_filter($products, fn($p) => $p['stock'] <= ($p['reorder_point'] ?? 10)));
-$out_of_stock_products = count(array_filter($products, fn($p) => $p['stock'] == 0));
-$total_inventory_value = array_sum(array_map(fn($p) => $p['stock'] * $p['cost_price'], $products));
+$low_stock_products = count(array_filter($products, fn($p) => (int)$p['stock'] <= (int)($p['reorder_point'] ?? 10)));
+$out_of_stock_products = count(array_filter($products, fn($p) => (int)$p['stock'] === 0));
+
+// Calculate total inventory value efficiently with single query
+$total_inventory_value = 0;
+try {
+    $stmt = $pdo->query("
+        SELECT SUM(COALESCE(ps.current_stock, 0) * COALESCE(pp.cost_price, 0)) as total_value
+        FROM products p
+        LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+        LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        WHERE p.is_archive = 0
+    ");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $total_inventory_value = (float)($result['total_value'] ?? 0);
+} catch (Exception $e) {
+    // Fallback to 0 if query fails
+    $total_inventory_value = 0;
+}
 
 // Fetch recent stock movements
 $stmt = $pdo->query("
-    SELECT sm.*, p.name as product_name, p.stock as current_stock
+    SELECT sm.*, p.product_name as product_name, COALESCE(ps.current_stock,0) as current_stock
     FROM stock_movements sm
-    JOIN products p ON sm.product_id = p.id
+    JOIN products p ON sm.product_id = p.product_id
+    LEFT JOIN product_stock ps ON ps.product_id = p.product_id
     ORDER BY sm.created_at DESC
     LIMIT 10
 ");
@@ -211,7 +284,7 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="d-flex justify-content-between align-items-center mb-4">
       <div>
         <h1 class="h3 fw-bold text-dark mb-2">
-          <i class="fa fa-warehouse text-primary me-3"></i>Inventory Management
+          <i class="fa fa-warehouse me-3" style="color: #7F1734;"></i>Inventory Management
         </h1>
       </div>
       <div class="d-flex gap-2">
@@ -318,25 +391,25 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <td>
                   <span class="fw-semibold"><?= $product['stock'] ?> <?= htmlspecialchars($product['uom_name']) ?></span>
                 </td>
-                <td><?= $product['reorder_point'] ?? 10 ?></td>
+                <td><?= $product['reorder_point'] ?></td>
                 <td>
-                  <?php if ($product['stock'] == 0): ?>
+                  <?php if ((int)$product['stock'] === 0): ?>
                     <span class="badge bg-danger stock-badge">Out of Stock</span>
-                  <?php elseif ($product['stock'] <= ($product['reorder_point'] ?? 10)): ?>
+                  <?php elseif ((int)$product['stock'] <= (int)$product['reorder_point']): ?>
                     <span class="badge bg-warning stock-badge">Low Stock</span>
                   <?php else: ?>
                     <span class="badge bg-success stock-badge">In Stock</span>
                   <?php endif; ?>
                 </td>
                 <td class="text-muted">
-                  <?= $product['last_restock_date'] ? date('M d, Y', strtotime($product['last_restock_date'])) : 'Never' ?>
+                  <?= !empty($product['last_restock_date']) ? date('M d, Y', strtotime($product['last_restock_date'])) : 'Never' ?>
                 </td>
                 <td>
                   <div class="btn-group" role="group">
                     <button class="btn btn-sm btn-success" onclick="openRestockModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>')">
                       Restock
                     </button>
-                    <button class="btn btn-sm btn-info" onclick="openAdjustModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>', <?= $product['stock'] ?>)">
+                    <button class="btn btn-sm btn-info" onclick="openAdjustModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>', <?= (int)$product['stock'] ?>)">
                       Adjust
                     </button>
                   </div>
@@ -489,7 +562,6 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <script>
     function openRestockModal(productId, productName) {
       const modal = new bootstrap.Modal(document.getElementById('restockModal'));
-      // Auto-select product
       const select = document.querySelector('#restockModal select[name="product_id"]');
       if (select) select.value = productId;
       modal.show();
@@ -497,7 +569,6 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     function openAdjustModal(productId, productName, currentStock) {
       const modal = new bootstrap.Modal(document.getElementById('adjustStockModal'));
-      // Auto-select product
       const select = document.querySelector('#adjustStockModal select[name="product_id"]');
       if (select) select.value = productId;
       modal.show();

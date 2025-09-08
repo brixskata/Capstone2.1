@@ -6,8 +6,8 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 
 session_start();
-if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php");
+if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+    header("Location: login_admin.php");
     exit;
 }
 
@@ -68,47 +68,44 @@ ob_start();
             font-family: 'DejaVu Sans', sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #181f2a;
+            background-color: #ffffff;
         }
         .header {
             text-align: center;
             margin-bottom: 30px;
-            border-bottom: 3px solid #36c6f0;
+            border-bottom: 3px solid #7F1734;
             padding-bottom: 20px;
         }
         .company-name {
             font-size: 24px;
             font-weight: bold;
-            background: linear-gradient(90deg, #36c6f0, #7f5af0, #ff5fd2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            text-fill-color: transparent;
+            color: #7F1734;
             margin: 5px 0;
         }
         .report-title {
             font-size: 20px;
-            color: #fff;
+            color: #7F1734;
             margin: 5px 0;
         }
         .report-period {
             font-size: 14px;
-            color: #b5eaff;
+            color: #6c757d;
             margin: 5px 0;
         }
         .generated-date {
             font-size: 12px;
-            color: #7f8fa6;
+            color: #6c757d;
             margin: 5px 0;
         }
         table {
             width: 100%;
             border-collapse: collapse;
             margin: 20px 0;
-            background-color: #232946;
+            background-color: #ffffff;
+            border: 1px solid #dee2e6;
         }
         th {
-            background: linear-gradient(90deg, #36c6f0, #7f5af0, #ff5fd2);
+            background: #7F1734;
             color: white;
             padding: 12px 8px;
             text-align: left;
@@ -117,18 +114,18 @@ ob_start();
         }
         td {
             padding: 10px 8px;
-            border-bottom: 1px solid #2d334a;
+            border-bottom: 1px solid #dee2e6;
             font-size: 13px;
-            color: #e0e6ed;
+            color: #212529;
         }
         tr:nth-child(even) {
-            background-color: #20263a;
+            background-color: #f8f9fa;
         }
         tr:hover {
-            background-color: #232946;
+            background-color: #e9ecef;
         }
         .total-row {
-            background: linear-gradient(90deg, #36c6f0, #7f5af0, #ff5fd2) !important;
+            background: #7F1734 !important;
             color: white;
             font-weight: bold;
         }
@@ -138,24 +135,24 @@ ob_start();
             font-size: 11px;
             font-weight: bold;
         }
-        .status-pending { background-color: #ffe066; color: #7c6f00; }
-        .status-processing { background-color: #36c6f0; color: #00334e; }
-        .status-shipped { background-color: #7f5af0; color: #fff; }
-        .status-delivered { background-color: #43e97b; color: #0a3d1a; }
-        .status-return { background-color: #ff5fd2; color: #6d004e; }
-        .status-active { background-color: #43e97b; color: #0a3d1a; }
-        .status-archived { background-color: #ff5fd2; color: #6d004e; }
+        .status-pending { background-color: #ffc107; color: #000; }
+        .status-processing { background-color: #0dcaf0; color: #000; }
+        .status-shipped { background-color: #7F1734; color: #fff; }
+        .status-delivered { background-color: #198754; color: #fff; }
+        .status-return { background-color: #dc3545; color: #fff; }
+        .status-active { background-color: #198754; color: #fff; }
+        .status-archived { background-color: #dc3545; color: #fff; }
         .summary-section {
             margin: 20px 0;
             padding: 15px;
-            background: linear-gradient(90deg, #232946 80%, #36c6f0 100%);
+            background: #f8f9fa;
             border-radius: 8px;
-            border-left: 4px solid #36c6f0;
+            border-left: 4px solid #7F1734;
         }
         .summary-title {
             font-size: 16px;
             font-weight: bold;
-            color: #fff;
+            color: #7F1734;
             margin-bottom: 10px;
         }
         .summary-grid {
@@ -166,30 +163,27 @@ ob_start();
         .summary-item {
             text-align: center;
             padding: 10px;
-            background: linear-gradient(90deg, #232946 80%, #7f5af0 100%);
+            background: #ffffff;
             border-radius: 6px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border: 1px solid #dee2e6;
         }
         .summary-number {
             font-size: 24px;
             font-weight: bold;
-            background: linear-gradient(90deg, #36c6f0, #7f5af0, #ff5fd2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            text-fill-color: transparent;
+            color: #7F1734;
         }
         .summary-label {
             font-size: 12px;
-            color: #b5eaff;
+            color: #6c757d;
             margin-top: 5px;
         }
         .footer {
             margin-top: 30px;
             text-align: center;
             font-size: 12px;
-            color: #7f8fa6;
-            border-top: 1px solid #2d334a;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
             padding-top: 20px;
         }
         .page-break {
@@ -212,10 +206,11 @@ try {
         
         // Get sales data
         $stmt = $pdo->prepare("
-            SELECT o.id, u.username as customer, o.total_price, o.created_at, o.status
+            SELECT o.orders_id as id, u.username as customer, o.total_price, o.created_at, os.status_name as status
             FROM orders o
-            INNER JOIN users u ON o.user_id = u.id
-            WHERE o.created_at BETWEEN ? AND ? AND o.status = 'Delivered'
+            INNER JOIN users u ON o.user_id = u.user_id
+            INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+            WHERE o.created_at BETWEEN ? AND ? AND os.status_name = 'Completed'
             ORDER BY o.created_at DESC
         ");
         $stmt->execute([$start, $end]);
@@ -270,10 +265,16 @@ try {
     } elseif ($type === 'inventory') {
         // Get inventory data
         $stmt = $pdo->query("
-            SELECT p.id, p.name, p.stock, p.price, p.is_archived, c.name AS category
+            SELECT p.product_id as id, p.product_name as name, 
+                   COALESCE(ps.current_stock, 0) as stock, 
+                   COALESCE(pp.selling_price, 0) as price, 
+                   p.is_archive as is_archived, 
+                   c.category_name AS category
             FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            ORDER BY c.name, p.name
+            LEFT JOIN categories c ON p.category_id = c.category_id
+            LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+            LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+            ORDER BY c.category_name, p.product_name
         ");
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
@@ -330,14 +331,15 @@ try {
         
         // Get orders data
         $stmt = $pdo->prepare("
-            SELECT o.id, u.username as customer, o.total_price, o.status, o.created_at,
-                   GROUP_CONCAT(CONCAT(p.name, ' (', oi.quantity, ')') SEPARATOR ', ') as items
+            SELECT o.orders_id as id, u.username as customer, o.total_price, os.status_name as status, o.created_at,
+                   GROUP_CONCAT(CONCAT(p.product_name, ' (', oi.quantity, ')') SEPARATOR ', ') as items
             FROM orders o
-            INNER JOIN users u ON o.user_id = u.id
-            LEFT JOIN order_items oi ON o.id = oi.order_id
-            LEFT JOIN products p ON oi.product_id = p.id
+            INNER JOIN users u ON o.user_id = u.user_id
+            INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+            LEFT JOIN order_items oi ON o.orders_id = oi.order_id
+            LEFT JOIN products p ON oi.product_id = p.product_id
             WHERE o.created_at BETWEEN ? AND ?
-            GROUP BY o.id
+            GROUP BY o.orders_id
             ORDER BY o.created_at DESC
         ");
         $stmt->execute([$start, $end]);
@@ -395,22 +397,15 @@ try {
         echo '</tbody></table>';
         
     } elseif ($type === 'returns') {
-        // Get returns data
-        $stmt = $pdo->query("
-            SELECT r.id, r.order_id, r.product, r.reason, r.created_at, u.username as customer
-            FROM returns r
-            LEFT JOIN orders o ON r.order_id = o.id
-            LEFT JOIN users u ON o.user_id = u.id
-            ORDER BY r.created_at DESC
-        ");
-        $returns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // Returns functionality not implemented yet
+        $returns = [];
         
         // Summary section
         echo '<div class="summary-section">';
         echo '<div class="summary-title">Returns Summary</div>';
         echo '<div class="summary-grid">';
         echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . count($returns) . '</div>';
+        echo '<div class="summary-number">0</div>';
         echo '<div class="summary-label">Total Returns</div>';
         echo '</div>';
         echo '</div>';
@@ -420,21 +415,7 @@ try {
         echo '<table>';
         echo '<thead><tr><th>Return ID</th><th>Order ID</th><th>Customer</th><th>Product</th><th>Reason</th><th>Date</th></tr></thead>';
         echo '<tbody>';
-        
-        if (empty($returns)) {
-            echo '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">No returns found.</td></tr>';
-        } else {
-            foreach ($returns as $row) {
-                echo '<tr>';
-                echo '<td>#' . $row['id'] . '</td>';
-                echo '<td>#' . $row['order_id'] . '</td>';
-                echo '<td>' . htmlspecialchars($row['customer']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['product']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['reason']) . '</td>';
-                echo '<td>' . date('M d, Y H:i', strtotime($row['created_at'])) . '</td>';
-                echo '</tr>';
-            }
-        }
+        echo '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">Returns functionality not implemented yet.</td></tr>';
         echo '</tbody></table>';
     }
     

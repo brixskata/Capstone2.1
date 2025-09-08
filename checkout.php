@@ -11,16 +11,29 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// Fetch user profile info
-$stmt = $pdo->prepare("SELECT * FROM users WHERE id = :user_id");
+// Fetch user profile info using normalized structure
+$stmt = $pdo->prepare("SELECT u.user_id, u.username, ui.email, ui.first_name, ui.last_name, ui.phone 
+                       FROM users u 
+                       INNER JOIN user_info ui ON u.user_id = ui.user_id 
+                       WHERE u.user_id = :user_id");
 $stmt->execute(['user_id' => $user_id]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Fetch user's default address
+$address_stmt = $pdo->prepare("SELECT * FROM addresses WHERE user_id = :user_id AND is_default = 1 LIMIT 1");
+$address_stmt->execute(['user_id' => $user_id]);
+$default_address = $address_stmt->fetch(PDO::FETCH_ASSOC);
 
 // Fetch the products in the cart
 $cart_items = [];
 $total_price = 0;
 foreach ($_SESSION['cart'] as $product_id => $cart_item) {
-    $sql = "SELECT * FROM products WHERE id = :product_id";
+    // Use normalized structure to get product with pricing
+    $sql = "SELECT p.product_id, p.product_name, p.product_description, pp.selling_price as price,
+                   (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) as image
+            FROM products p 
+            LEFT JOIN product_pricing pp ON p.product_id = pp.product_id 
+            WHERE p.product_id = :product_id AND p.is_archive = 0";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':product_id', $product_id);
     $stmt->execute();
@@ -65,16 +78,13 @@ $final_total = $total_price - $discount;
 if ($final_total < 0) $final_total = 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
-    $sql = "UPDATE users SET
+    // Update user_info table with normalized structure
+    $sql = "UPDATE user_info SET
         first_name = :first_name,
         last_name = :last_name,
         email = :email,
-        phone = :phone,
-        street = :street,
-        barangay = :barangay,
-        city = :city,
-        postal_code = :postal_code
-        WHERE id = :user_id";
+        phone = :phone
+        WHERE user_id = :user_id";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
@@ -82,12 +92,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
         ':last_name' => $_POST['lastname'],
         ':email' => $_POST['email'],
         ':phone' => $_POST['phone'],
-        ':street' => $_POST['unit_street'],
-        ':barangay' => $_POST['barangay'],
-        ':city' => $_POST['city'],
-        ':postal_code' => $_POST['postal_code'],
         ':user_id' => $user_id
     ]);
+
+    // Handle delivery address and customer information based on selection
+    if (isset($_POST['delivery_option']) && $_POST['delivery_option'] === 'delivery') {
+        if (isset($_POST['address_option']) && $_POST['address_option'] === 'new') {
+            // Use new delivery address and customer info
+            $delivery_address = $_POST['delivery_address'];
+            $delivery_city = $_POST['delivery_city'];
+            $delivery_postal_code = $_POST['delivery_postal_code'];
+            $delivery_instructions = $_POST['delivery_instructions'] ?? '';
+            
+            // Store customer info from new address form
+            $customer_info = [
+                'first_name' => $_POST['firstname'],
+                'last_name' => $_POST['lastname'],
+                'email' => $_POST['email'],
+                'phone' => $_POST['phone']
+            ];
+        } else {
+            // Use default address and existing customer info
+            $delivery_address = $default_address['address_line'] ?? '';
+            $delivery_city = $default_address['city'] ?? '';
+            $delivery_postal_code = $default_address['postal_code'] ?? '';
+            $delivery_instructions = '';
+            
+            // Use existing customer info
+            $customer_info = [
+                'first_name' => $user['first_name'],
+                'last_name' => $user['last_name'],
+                'email' => $user['email'],
+                'phone' => $user['phone']
+            ];
+        }
+        
+        // Store delivery address and customer info in session for order processing
+        $_SESSION['delivery_address'] = [
+            'address' => $delivery_address,
+            'city' => $delivery_city,
+            'postal_code' => $delivery_postal_code,
+            'instructions' => $delivery_instructions
+        ];
+        
+        $_SESSION['customer_info'] = $customer_info;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -121,14 +170,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
             min-height: 100vh;
         }
 
-        .promo-banner {
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
-            color: white;
-            padding: 0.75rem 0;
-            font-size: 0.9rem;
-            font-weight: 600;
-            text-align: center;
-        }
 
         .checkout-container {
             background: white;
@@ -368,6 +409,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
             box-shadow: 0 8px 25px rgba(127, 23, 52, 0.4);
         }
 
+        /* Delivery Address Styles */
+        #delivery-address-section {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        #new-address-form {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .address-option-disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .address-option-disabled input[type="radio"] {
+            cursor: not-allowed;
+        }
+
         @media (max-width: 768px) {
             .checkout-header h1 {
                 font-size: 2rem;
@@ -381,18 +448,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
     </style>
 </head>
 <body>
-    <!-- Promo Banner -->
-    <div class="promo-banner">
-        <div class="container">
-            <div class="d-flex flex-wrap justify-content-center align-items-center gap-3">
-                <span>₱1,000 OFF on orders ₱10,000+</span>
-                <span class="d-none d-md-inline">|</span>
-                <span>Free Nationwide Delivery on ₱7,000+</span>
-                <span class="d-none d-md-inline">|</span>
-                <span>Sign up & get 10% OFF your first order</span>
-            </div>
-        </div>
-    </div>
+    <?php include 'includes/promo_banner.php'; ?>
 
     <?php include 'includes/user_navbar.php'; ?>
 
@@ -446,51 +502,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
                         </div>
 
                         <form action="place_order.php" method="post" enctype="multipart/form-data">
-                            <!-- Customer Information -->
-                            <div class="form-section">
-                                <h3 class="section-title">
-                                    <i class="fas fa-user"></i>
-                                    Customer Information
-                                </h3>
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">First Name</label>
-                                        <input type="text" name="firstname" class="form-control" value="<?= htmlspecialchars($user['first_name']) ?>" readonly required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">Last Name</label>
-                                        <input type="text" name="lastname" class="form-control" value="<?= htmlspecialchars($user['last_name']) ?>" readonly required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">Email</label>
-                                        <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($user['email']) ?>" readonly required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">Phone Number</label>
-                                        <input type="text" name="phone" class="form-control" value="<?= htmlspecialchars($user['phone']) ?>" readonly required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">Unit Number / Street</label>
-                                        <input type="text" name="unit_street" class="form-control" value="<?= htmlspecialchars($user['street']) ?>" readonly required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">Barangay</label>
-                                        <input type="text" name="barangay" class="form-control" value="<?= htmlspecialchars($user['barangay']) ?>" readonly required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">City</label>
-                                        <input type="text" name="city" class="form-control" value="<?= htmlspecialchars($user['city']) ?>" readonly required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">Postal Code</label>
-                                        <input type="text" name="postal_code" class="form-control" value="<?= htmlspecialchars($user['postal_code']) ?>" readonly required>
-                                    </div>
-                                </div>
-                                <div class="alert alert-info mt-3">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    <strong>Note:</strong> Double-click any field to edit your information.
-                                </div>
-                            </div>
 
                             <!-- Delivery Options -->
                             <div class="form-section">
@@ -516,6 +527,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
                                                 <div class="text-muted small">We'll deliver to your address</div>
                                             </div>
                                         </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Delivery Address Selection -->
+                            <div class="form-section" id="delivery-address-section" style="display: none;">
+                                <h3 class="section-title">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    Delivery Address
+                                </h3>
+                                
+                                <!-- Address Selection -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Choose Delivery Address</label>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label class="radio-option">
+                                                <input type="radio" name="address_option" value="default" id="default-address">
+                                                <div>
+                                                    <strong>Use Default Address</strong>
+                                                    <div class="text-muted small">
+                                                        <?php if ($default_address): ?>
+                                                            <strong><?= htmlspecialchars($user['first_name'] ?? '') ?> <?= htmlspecialchars($user['last_name'] ?? '') ?></strong><br>
+                                                            <?= htmlspecialchars($user['phone'] ?? '') ?><br>
+                                                            <?= htmlspecialchars($default_address['address_line']) ?>, <?= htmlspecialchars($default_address['city']) ?>
+                                                        <?php else: ?>
+                                                            No default address set
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="radio-option">
+                                                <input type="radio" name="address_option" value="new" id="new-address">
+                                                <div>
+                                                    <strong>Use Different Address</strong>
+                                                    <div class="text-muted small">Enter a new delivery address</div>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- New Address Form -->
+                                <div id="new-address-form" style="display: none;">
+                                    <h5 class="mb-3 text-primary">
+                                        <i class="fas fa-user me-2"></i>Customer Information
+                                    </h5>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">First Name *</label>
+                                            <input type="text" name="firstname" class="form-control" value="<?= htmlspecialchars($user['first_name'] ?? '') ?>" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">Last Name *</label>
+                                            <input type="text" name="lastname" class="form-control" value="<?= htmlspecialchars($user['last_name'] ?? '') ?>" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">Email *</label>
+                                            <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($user['email'] ?? '') ?>" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">Phone Number *</label>
+                                            <input type="text" name="phone" class="form-control" value="<?= htmlspecialchars($user['phone'] ?? '') ?>" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <h5 class="mb-3 text-primary mt-4">
+                                        <i class="fas fa-map-marker-alt me-2"></i>Delivery Address
+                                    </h5>
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <label class="form-label fw-bold">Full Address *</label>
+                                            <input type="text" name="delivery_address" class="form-control" placeholder="Enter complete delivery address">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">City *</label>
+                                            <input type="text" name="delivery_city" class="form-control" placeholder="Enter city">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">Postal Code *</label>
+                                            <input type="text" name="delivery_postal_code" class="form-control" placeholder="Enter postal code">
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label fw-bold">Special Instructions (Optional)</label>
+                                            <textarea name="delivery_instructions" class="form-control" rows="3" placeholder="Any special delivery instructions..."></textarea>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -659,6 +758,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
             });
         }
 
+        // Toggle delivery address section
+        const deliveryOption = document.querySelectorAll('input[name="delivery_option"]');
+        const deliveryAddressSection = document.getElementById('delivery-address-section');
+        const addressOption = document.querySelectorAll('input[name="address_option"]');
+        const newAddressForm = document.getElementById('new-address-form');
+        
+        // Show/hide delivery address section based on delivery option
+        deliveryOption.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'delivery') {
+                    deliveryAddressSection.style.display = 'block';
+                    // Set default address as selected if available, otherwise select new address
+                    const defaultAddressRadio = document.getElementById('default-address');
+                    const newAddressRadio = document.getElementById('new-address');
+                    
+                    <?php if ($default_address): ?>
+                        if (defaultAddressRadio) {
+                            defaultAddressRadio.checked = true;
+                        }
+                    <?php else: ?>
+                        if (newAddressRadio) {
+                            newAddressRadio.checked = true;
+                            newAddressForm.style.display = 'block';
+                            // Make new address fields required
+                            const requiredFields = newAddressForm.querySelectorAll('input[type="text"], input[type="email"]');
+                            requiredFields.forEach(field => {
+                                field.setAttribute('required', 'required');
+                            });
+                        }
+                    <?php endif; ?>
+                } else {
+                    deliveryAddressSection.style.display = 'none';
+                }
+            });
+        });
+
+        // Show/hide new address form based on address option
+        addressOption.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'new') {
+                    newAddressForm.style.display = 'block';
+                    // Make all required fields required
+                    const requiredFields = newAddressForm.querySelectorAll('input[type="text"], input[type="email"]');
+                    requiredFields.forEach(field => {
+                        field.setAttribute('required', 'required');
+                    });
+                } else {
+                    newAddressForm.style.display = 'none';
+                    // Remove required attribute from new address fields
+                    const requiredFields = newAddressForm.querySelectorAll('input[type="text"], input[type="email"]');
+                    requiredFields.forEach(field => {
+                        field.removeAttribute('required');
+                    });
+                }
+            });
+        });
+
         // Allow editing of readonly fields on double-click
         document.querySelectorAll('input[readonly]').forEach(input => {
             input.addEventListener('dblclick', function() {
@@ -705,3 +861,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
     </script>
 </body>
 </html>
+
