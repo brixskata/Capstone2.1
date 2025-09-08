@@ -1,32 +1,42 @@
 <?php
 session_start();
 include 'db.php';
+include '../includes/permissions.php';
 
-// Ensure user is logged in and has admin role
-if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php");
-    exit;
-}
+// Ensure user is logged in and has admin access
+requireAdmin($pdo);
 
 // Search functionality
 $search = isset($_GET['search']) ? $_GET['search'] : '';
 $date_filter = isset($_GET['date_filter']) ? $_GET['date_filter'] : '';
 $action_filter = isset($_GET['action_filter']) ? $_GET['action_filter'] : '';
+$role_filter = isset($_GET['role_filter']) ? $_GET['role_filter'] : '';
 
-// Build the query
-$query = "SELECT * FROM history_logs WHERE 1=1";
+// Build the query with proper JOINs
+$query = "SELECT hl.*, hat.name as action_name, u.username as performed_by_username, ut.role as performed_by_role
+          FROM history_logs hl
+          LEFT JOIN history_action_types hat ON hl.history_action_type_id = hat.history_action_type_id
+          LEFT JOIN users u ON hl.performed_by = u.user_id
+          LEFT JOIN user_type ut ON u.usertype_id = ut.usertype_id
+          WHERE 1=1";
 $params = [];
 
 if ($search) {
-    $query .= " AND (action LIKE ? OR details LIKE ? OR performed_by LIKE ?)";
+    $query .= " AND (hat.name LIKE ? OR hl.details LIKE ? OR u.username LIKE ? OR ut.role LIKE ?)";
+    $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";
 }
 
 if ($action_filter) {
-    $query .= " AND action LIKE ?";
+    $query .= " AND hat.name LIKE ?";
     $params[] = "%$action_filter%";
+}
+
+if ($role_filter) {
+    $query .= " AND ut.role = ?";
+    $params[] = $role_filter;
 }
 
 if ($date_filter) {
@@ -53,8 +63,21 @@ $stmt->execute($params);
 $history_logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get unique actions for filter
-$actions_stmt = $pdo->query("SELECT DISTINCT action FROM history_logs ORDER BY action");
+$actions_stmt = $pdo->query("SELECT DISTINCT hat.name as action_name 
+                            FROM history_logs hl
+                            LEFT JOIN history_action_types hat ON hl.history_action_type_id = hat.history_action_type_id
+                            WHERE hat.name IS NOT NULL
+                            ORDER BY hat.name");
 $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
+
+// Get unique roles for filter
+$roles_stmt = $pdo->query("SELECT DISTINCT ut.role 
+                          FROM history_logs hl
+                          LEFT JOIN users u ON hl.performed_by = u.user_id
+                          LEFT JOIN user_type ut ON u.usertype_id = ut.usertype_id
+                          WHERE ut.role IS NOT NULL
+                          ORDER BY ut.role");
+$roles = $roles_stmt->fetchAll(PDO::FETCH_COLUMN);
 ?>
 
 <!DOCTYPE html>
@@ -127,7 +150,7 @@ $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background-color: var(--primary-color);
+      background-color: #7F1734;
     }
   </style>
 </head>
@@ -139,7 +162,7 @@ $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
   <main class="main-content" id="mainContent">
     <div class="mb-4">
       <h1 class="h3 fw-bold text-dark mb-2">
-        <i class="fa fa-history text-primary me-3"></i>Activity History
+        <i class="fa fa-history me-3" style="color: #7F1734;"></i>Activity History
       </h1>
     </div>
 
@@ -187,7 +210,7 @@ $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
             <div class="ms-3">
               <?php
               $admin_count = count(array_filter($history_logs, function($log) {
-                return $log['performed_by'] === 'admin';
+                return $log['performed_by_role'] === 'admin' || $log['performed_by_username'] === 'admin';
               }));
               ?>
               <h4 class="fw-bold mb-0"><?php echo $admin_count; ?></h4>
@@ -200,11 +223,11 @@ $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
       <div class="col-lg-3 col-md-6">
         <div class="stat-card">
           <div class="d-flex align-items-center">
-            <div class="stat-icon" style="background-color: var(--bs-secondary);">
+            <div class="stat-icon" style="background-color: #7F1734;">
               <i class="fa fa-clock"></i>
             </div>
             <div class="ms-3">
-              <h4 class="fw-bold mb-0"><?php echo count(array_unique(array_column($history_logs, 'action'))); ?></h4>
+              <h4 class="fw-bold mb-0"><?php echo count(array_unique(array_column($history_logs, 'action_name'))); ?></h4>
               <small class="text-muted text-uppercase">Action Types</small>
             </div>
           </div>
@@ -220,7 +243,7 @@ $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
             <label class="form-label">Search History</label>
             <div class="input-group">
               <span class="input-group-text"><i class="fa fa-search"></i></span>
-              <input type="text" class="form-control" placeholder="Search actions, details, or users" name="search" value="<?php echo htmlspecialchars($search); ?>">
+              <input type="text" class="form-control" placeholder="Search actions, details, users, or roles" name="search" value="<?php echo htmlspecialchars($search); ?>">
             </div>
           </div>
           <div class="col-md-3">
@@ -234,7 +257,7 @@ $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
               <?php endforeach; ?>
             </select>
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label class="form-label">Date Filter</label>
             <select class="form-select" name="date_filter">
               <option value="">All Time</option>
@@ -245,6 +268,17 @@ $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
             </select>
           </div>
           <div class="col-md-2">
+            <label class="form-label">Role Filter</label>
+            <select class="form-select" name="role_filter">
+              <option value="">All Roles</option>
+              <?php foreach ($roles as $role): ?>
+                <option value="<?php echo htmlspecialchars($role); ?>" <?php echo $role_filter === $role ? 'selected' : ''; ?>>
+                  <?php echo htmlspecialchars(ucfirst($role)); ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-1">
             <button type="submit" class="btn btn-info w-100">
               <i class="fa fa-filter me-1"></i> Filter
             </button>
@@ -276,12 +310,30 @@ $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
               $showDateHeader = $logDate !== $currentDate;
               $currentDate = $logDate;
 
-              // Determine action color
+              // Determine action color and name
               $actionColor = 'bg-secondary';
-              if (strpos(strtolower($log['action']), 'add') !== false) $actionColor = 'bg-success';
-              if (strpos(strtolower($log['action']), 'edit') !== false) $actionColor = 'bg-warning text-dark';
-              if (strpos(strtolower($log['action']), 'delete') !== false || strpos(strtolower($log['action']), 'deactivat') !== false) $actionColor = 'bg-danger';
-              if (strpos(strtolower($log['action']), 'reactivat') !== false) $actionColor = 'bg-info';
+              $actionName = $log['action_name'] ?? 'Unknown';
+              
+              // If action_name is null or empty, try to determine from details
+              if (empty($actionName) || $actionName === 'Unknown') {
+                $details = strtolower($log['details'] ?? '');
+                if (strpos($details, 'stock adjustment') !== false) $actionName = 'Stock Adjustment';
+                elseif (strpos($details, 'restocking') !== false) $actionName = 'Restocking';
+                elseif (strpos($details, 'added brand') !== false) $actionName = 'Added Brand';
+                elseif (strpos($details, 'added uom') !== false) $actionName = 'Added UOM';
+                elseif (strpos($details, 'deleted brand') !== false) $actionName = 'Deleted Brand';
+                elseif (strpos($details, 'deleted uom') !== false) $actionName = 'Deleted UOM';
+                elseif (strpos($details, 'login') !== false) $actionName = 'Login';
+                else $actionName = 'System Action';
+              }
+              
+              // Set colors based on action type
+              if (strpos(strtolower($actionName), 'add') !== false) $actionColor = 'bg-success';
+              elseif (strpos(strtolower($actionName), 'edit') !== false) $actionColor = 'bg-warning text-dark';
+              elseif (strpos(strtolower($actionName), 'delete') !== false) $actionColor = 'bg-danger';
+              elseif (strpos(strtolower($actionName), 'restock') !== false) $actionColor = 'bg-info';
+              elseif (strpos(strtolower($actionName), 'adjustment') !== false) $actionColor = 'bg-warning text-dark';
+              elseif (strpos(strtolower($actionName), 'login') !== false) $actionColor = 'text-white';
             ?>
 
               <?php if ($showDateHeader): ?>
@@ -305,7 +357,7 @@ $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
                       <div class="card-body p-3">
                         <div class="d-flex justify-content-between align-items-start mb-2">
                           <span class="action-badge <?php echo $actionColor; ?>">
-                            <?php echo htmlspecialchars($log['action']); ?>
+                            <?php echo htmlspecialchars($actionName); ?>
                           </span>
                           <small class="text-muted">
                             <?php echo date('g:i A', strtotime($log['performed_at'])); ?>
@@ -319,7 +371,18 @@ $actions = $actions_stmt->fetchAll(PDO::FETCH_COLUMN);
                         <div class="d-flex align-items-center">
                           <i class="fa fa-user text-muted me-2"></i>
                           <small class="text-muted">
-                            Performed by: <span class="fw-semibold"><?php echo htmlspecialchars($log['performed_by']); ?></span>
+                            Performed by: 
+                            <?php if (!empty($log['performed_by_username'])): ?>
+                              <span class="fw-semibold"><?php echo htmlspecialchars($log['performed_by_username']); ?></span>
+                              <?php if (!empty($log['performed_by_role'])): ?>
+                                <span class="badge ms-2" style="background-color: #7F1734;"><?php echo htmlspecialchars(ucfirst($log['performed_by_role'])); ?></span>
+                              <?php else: ?>
+                                <span class="badge bg-secondary ms-2">User</span>
+                              <?php endif; ?>
+                            <?php else: ?>
+                              <span class="fw-semibold text-muted">System</span>
+                              <span class="badge bg-dark ms-2">System</span>
+                            <?php endif; ?>
                           </small>
                         </div>
                       </div>

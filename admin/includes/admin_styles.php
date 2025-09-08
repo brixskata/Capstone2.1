@@ -50,7 +50,7 @@
     left: 0;
     right: 0;
     height: var(--navbar-height);
-    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    background: #7F1734;
     z-index: 1001;
     box-shadow: 0 2px 10px rgba(127, 23, 52, 0.15);
     display: flex;
@@ -208,7 +208,7 @@
   }
   
   .sidebar {
-    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    background: #7F1734;
     min-height: calc(100vh - var(--navbar-height));
     position: fixed;
     top: var(--navbar-height);
@@ -229,7 +229,7 @@
     position: absolute;
     top: 20px;
     right: -15px;
-    background: var(--primary-color);
+    background: #7F1734;
     color: white;
     border: none;
     border-radius: 50%;
@@ -460,7 +460,7 @@
   .form-control:focus,
   .form-select:focus {
     background-color: var(--card-bg) !important;
-    border-color: var(--primary-color) !important;
+    border-color: #7F1734 !important;
     color: var(--text-primary) !important;
     box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25) !important;
   }

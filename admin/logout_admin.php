@@ -2,9 +2,9 @@
 <?php
 session_start();
 
-// Check if user is logged in and is admin
-if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php");
+// Check if user is logged in and has admin access (Super Admin or Admin)
+if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+    header("Location: login_admin.php");
     exit;
 }
 
@@ -12,7 +12,7 @@ if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
 if (isset($_GET['confirm']) && $_GET['confirm'] === 'yes') {
     session_unset();  // Unset all session variables
     session_destroy();  // Destroy the session
-    header("Location: login.php");  // Redirect to login page
+    header("Location: login_admin.php");  // Redirect to login page
     exit;
 }
 
@@ -66,7 +66,7 @@ if (isset($_GET['confirm']) && $_GET['confirm'] === 'yes') {
         }
         
         .logout-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            background: #7F1734;
             padding: 2rem;
             text-align: center;
             position: relative;
@@ -150,18 +150,28 @@ if (isset($_GET['confirm']) && $_GET['confirm'] === 'yes') {
             height: 40px;
             border-radius: 50%;
             object-fit: cover;
-            border: 2px solid var(--primary-color);
+            border: 2px solid #7F1734;
         }
         
         .admin-details h6 {
             margin: 0;
-            color: var(--primary-color);
+            color: #7F1734;
             font-weight: 600;
         }
         
         .admin-details small {
             color: #6c757d;
             font-size: 0.8rem;
+        }
+        
+        .super-admin {
+            color: var(--danger-color) !important;
+            font-weight: 700;
+        }
+        
+        .admin-role {
+            color: #ffc107 !important;
+            font-weight: 600;
         }
         
         .btn-logout {
@@ -217,7 +227,7 @@ if (isset($_GET['confirm']) && $_GET['confirm'] === 'yes') {
                 <i class="fas fa-sign-out-alt"></i>
             </div>
             <h2 class="logout-title">Confirm Logout</h2>
-            <p class="logout-subtitle">Admin Panel Session</p>
+            <p class="logout-subtitle"><?php echo ucfirst(str_replace('_', ' ', $_SESSION['role'] ?? 'admin')); ?> Panel Session</p>
         </div>
         
         <!-- Body -->
@@ -231,7 +241,9 @@ if (isset($_GET['confirm']) && $_GET['confirm'] === 'yes') {
                      onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNmOGY5ZmEiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iIzZjNzU3ZCIvPgo8cGF0aCBkPSJNOCAzMmMwLTYuNjI3IDUuMzczLTEyIDEyLTEyczEyIDUuMzczIDEyIDEyIiBmaWxsPSIjNmM3NTdkIi8+Cjwvc3ZnPgo='">
                 <div class="admin-details">
                     <h6><?php echo htmlspecialchars($_SESSION['username']); ?></h6>
-                    <small>Administrator</small>
+                    <small class="<?php echo ($_SESSION['role'] ?? 'admin') === 'super_admin' ? 'super-admin' : 'admin-role'; ?>">
+                        <?php echo ucfirst(str_replace('_', ' ', $_SESSION['role'] ?? 'admin')); ?>
+                    </small>
                 </div>
             </div>
             

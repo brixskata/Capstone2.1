@@ -3,8 +3,8 @@ include 'db.php';
 session_start();
 
 // Ensure user is logged in and has admin role
-if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php");
+if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+    header("Location: login_admin.php");
     exit;
 }
 
@@ -12,8 +12,8 @@ if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
 if (isset($_GET['id'])) {
     $productId = $_GET['id'];
 
-    // Update the product to set 'is_archived' to 0 (unarchived)
-    $stmt = $pdo->prepare("UPDATE products SET is_archived = 0 WHERE id = ?");
+    // Update the product to set 'is_archive' to 0 (unarchived)
+    $stmt = $pdo->prepare("UPDATE products SET is_archive = 0 WHERE product_id = ?");
     $stmt->execute([$productId]);
 
     // Redirect back to the product catalog

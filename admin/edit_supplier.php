@@ -5,14 +5,14 @@ session_start();
 
 // Ensure user is logged in and has admin role
 if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php");
+    header("Location: login_admin.php");
     exit;
 }
 
 // Get supplier data for editing
 if (isset($_GET['id'])) {
     $supplierId = intval($_GET['id']);
-    $stmt = $pdo->prepare("SELECT * FROM suppliers WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM suppliers WHERE supplier_id = ?");
     $stmt->execute([$supplierId]);
     $supplier = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -27,7 +27,7 @@ if (isset($_GET['id'])) {
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $id = $_POST['id'];
+    $id = (int)$_POST['id'];
     $name = $_POST['name'];
     $contact_info = $_POST['contact_info'];
     $email = $_POST['email'];
@@ -36,8 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $notes = $_POST['notes'];
 
     try {
-        $stmt = $pdo->prepare("UPDATE suppliers SET name = ?, contact_info = ?, email = ?, phone = ?, address = ?, notes = ? WHERE id = ?");
-        $stmt->execute([$name, $contact_info, $email, $phone, $address, $notes, $id]);
+        $stmt = $pdo->prepare("UPDATE suppliers SET name = ?, email = ?, phone = ?, address_line = ?, notes = ? WHERE supplier_id = ?");
+        $stmt->execute([$name, $email, $phone, $address, $notes, $id]);
 
         logHistory($pdo, 'Edited Supplier', 'Supplier ID: ' . $id . ', Name: ' . $name . ', Contact: ' . $contact_info, $_SESSION['username']);
 
@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <!-- Edit Form -->
             <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 shadow-lg">
                 <form method="POST">
-                    <input type="hidden" name="id" value="<?= $supplier['id'] ?>">
+                    <input type="hidden" name="id" value="<?= $supplier['supplier_id'] ?>">
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Supplier Name -->
@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="md:col-span-2">
                             <label for="address" class="block text-cyan-100 font-bold mb-2">Address</label>
                             <textarea name="address" id="address" rows="3" 
-                                      class="rounded-lg bg-gray-700 text-cyan-100 px-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-cyan-400"><?= htmlspecialchars($supplier['address'] ?? '') ?></textarea>
+                                      class="rounded-lg bg-gray-700 text-cyan-100 px-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-cyan-400"><?= htmlspecialchars($supplier['address_line'] ?? '') ?></textarea>
                         </div>
 
                         <!-- Notes -->

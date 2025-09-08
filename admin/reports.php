@@ -3,8 +3,8 @@ session_start();
 include 'db.php';
 
 // Ensure user is logged in and has admin role
-if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php");
+if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+    header("Location: login_admin.php");
     exit;
 }
 
@@ -32,46 +32,116 @@ function getDateRange($type) {
     }
 }
 
-// Get report type from query string
+// Get report type from query string with validation
 $reportType = $_GET['type'] ?? 'sales';
 $period = $_GET['period'] ?? 'daily';
 
-// Get basic stats for overview
-$totalSales = $pdo->query("SELECT COALESCE(SUM(total_price), 0) FROM delivered_orders")->fetchColumn();
-$totalOrders = $pdo->query("SELECT COUNT(*) FROM orders")->fetchColumn();
-$totalCustomers = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'user'")->fetchColumn();
-$totalProducts = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archived = 0")->fetchColumn();
+// Validate report type
+$validTypes = ['sales', 'inventory', 'orders', 'returns'];
+if (!in_array($reportType, $validTypes)) {
+    $reportType = 'sales';
+}
+
+// Validate period
+$validPeriods = ['daily', 'weekly', 'monthly', 'yearly'];
+if (!in_array($period, $validPeriods)) {
+    $period = 'daily';
+}
+
+// Get basic stats for overview with error handling
+try {
+    $totalSales = $pdo->query("
+        SELECT COALESCE(SUM(o.total_price), 0) 
+        FROM orders o
+        INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+        WHERE os.status_name = 'Completed'
+    ")->fetchColumn();
+    
+    $totalOrders = $pdo->query("SELECT COUNT(*) FROM orders")->fetchColumn();
+    
+    $totalCustomers = $pdo->query("
+        SELECT COUNT(*) 
+        FROM users u
+        LEFT JOIN user_type ut ON u.usertype_id = ut.usertype_id
+        WHERE (ut.role IS NULL OR ut.role != 'admin') 
+        AND u.username NOT IN ('admin', 'admin1')
+    ")->fetchColumn();
+    
+    $totalProducts = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 0")->fetchColumn();
+} catch (Exception $e) {
+    $totalSales = 0;
+    $totalOrders = 0;
+    $totalCustomers = 0;
+    $totalProducts = 0;
+    $error_message = "Error loading statistics: " . $e->getMessage();
+}
 
 // Fetch data for reports
 $salesData = [];
 $inventoryData = [];
 $returnData = [];
 $ordersData = [];
+$topProducts = [];
 
 if ($reportType === 'sales') {
     list($start, $end) = getDateRange($period);
-    $stmt = $pdo->prepare("SELECT id, customer, total_price, delivered_at FROM delivered_orders WHERE delivered_at BETWEEN ? AND ? ORDER BY delivered_at DESC");
+    $stmt = $pdo->prepare("
+        SELECT o.orders_id as id, u.username as customer, o.total_price, o.created_at as delivered_at
+        FROM orders o
+        INNER JOIN users u ON o.user_id = u.user_id
+        INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+        WHERE os.status_name = 'Completed' AND o.created_at BETWEEN ? AND ?
+        ORDER BY o.created_at DESC
+    ");
     $stmt->execute([$start, $end]);
     $salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } elseif ($reportType === 'inventory') {
-    $stmt = $pdo->query("SELECT id, name, stock, price, is_archived FROM products ORDER BY name ASC");
+    $stmt = $pdo->query("
+        SELECT 
+            p.product_id as id,
+            p.product_name as name,
+            COALESCE(ps.current_stock, 0) as stock,
+            COALESCE(pp.selling_price, 0) as price,
+            p.is_archive as is_archived
+        FROM products p
+        LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+        LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        ORDER BY p.product_name ASC
+    ");
     $inventoryData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } elseif ($reportType === 'returns') {
-    // Example: Assume you have a returns table
-    $stmt = $pdo->query("SELECT * FROM returns ORDER BY created_at DESC");
-    $returnData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Returns functionality - create empty array since returns table doesn't exist yet
+    $returnData = [];
 } elseif ($reportType === 'orders') {
     list($start, $end) = getDateRange($period);
     $stmt = $pdo->prepare("
-        SELECT o.id, u.username as customer, o.total_price, o.status, o.created_at
+        SELECT o.orders_id as id, u.username as customer, o.total_price, os.status_name as status, o.created_at
         FROM orders o
-        INNER JOIN users u ON o.user_id = u.id
+        INNER JOIN users u ON o.user_id = u.user_id
+        INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
         WHERE o.created_at BETWEEN ? AND ?
         ORDER BY o.created_at DESC
     ");
     $stmt->execute([$start, $end]);
     $ordersData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
+// Get top selling products for all report types
+$topProductsStmt = $pdo->query("
+    SELECT 
+        p.product_name as name,
+        SUM(oi.quantity) as total_sold,
+        SUM(oi.quantity * oi.price) as total_revenue
+    FROM products p
+    INNER JOIN order_items oi ON p.product_id = oi.product_id
+    INNER JOIN orders o ON oi.order_id = o.orders_id
+    INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+    WHERE os.status_name = 'Completed'
+    GROUP BY p.product_id, p.product_name
+    ORDER BY total_sold DESC
+    LIMIT 5
+");
+$topProducts = $topProductsStmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -83,21 +153,142 @@ if ($reportType === 'sales') {
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <?php include 'includes/admin_styles.php'; ?>
   <style>
+    :root {
+      --primary-color: #7F1734;
+      --secondary-color: #a91d42;
+      --success-color: #198754;
+      --info-color: #0dcaf0;
+      --warning-color: #ffc107;
+      --danger-color: #dc3545;
+    }
+
     .report-card {
       background: white;
       border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
       border: 1px solid #e9ecef;
+      transition: all 0.3s ease;
+    }
+
+    .report-card:hover {
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+      transform: translateY(-2px);
     }
 
     .metric-item {
       padding: 24px;
       text-align: center;
       transition: transform 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-item::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: #7F1734;
     }
 
     .metric-item:hover {
       transform: translateY(-2px);
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      border-radius: 8px;
+      padding: 1.5rem;
+      border-left: 4px solid #7F1734;
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(127, 23, 52, 0.1);
+    }
+
+    .report-nav .nav-link {
+      color: #6c757d;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      border-radius: 8px;
+      margin-right: 0.5rem;
+    }
+
+    .report-nav .nav-link:hover {
+      color: #7F1734;
+      background-color: rgba(127, 23, 52, 0.1);
+    }
+
+    .report-nav .nav-link.active {
+      color: white;
+      background-color: #7F1734;
+    }
+
+    .table-hover tbody tr:hover {
+      background-color: rgba(127, 23, 52, 0.05);
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      padding: 0.5rem 0.75rem;
+    }
+
+    .btn {
+      border-radius: 8px;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .display-6 {
+      font-weight: 700;
+    }
+
+    .text-primary {
+      color: #7F1734 !important;
+    }
+
+    .text-success {
+      color: var(--success-color) !important;
+    }
+
+    .text-info {
+      color: var(--info-color) !important;
+    }
+
+    .text-warning {
+      color: var(--warning-color) !important;
+    }
+
+    .text-danger {
+      color: var(--danger-color) !important;
+    }
+
+    .bg-primary {
+      background-color: #7F1734 !important;
+    }
+
+    .bg-success {
+      background-color: var(--success-color) !important;
+    }
+
+    .bg-info {
+      background-color: var(--info-color) !important;
+    }
+
+    .bg-warning {
+      background-color: var(--warning-color) !important;
+    }
+
+    .bg-danger {
+      background-color: var(--danger-color) !important;
     }
   </style>
 </head>
@@ -107,13 +298,21 @@ if ($reportType === 'sales') {
 
   <!-- Main Content -->
   <main class="main-content" id="mainContent">
+    <?php if (isset($error_message)): ?>
+      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="fa fa-exclamation-triangle me-2"></i>
+        <?= htmlspecialchars($error_message) ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    <?php endif; ?>
+    
     <div class="d-flex justify-content-between align-items-center mb-4">
       <div>
         <h1 class="h3 fw-bold text-dark mb-2">
-          <i class="fa fa-chart-line text-primary me-3"></i>Business Reports
+          <i class="fa fa-chart-line me-3" style="color: #7F1734;"></i>Business Reports
         </h1>
       </div>
-      <a href="generate_report_pdf.php" class="btn text-white fw-bold" style="background-color: var(--bs-secondary);">
+      <a href="generate_report_pdf.php?type=<?= $reportType ?>&period=<?= $period ?>" class="btn text-white fw-bold" style="background-color: #7F1734;">
         <i class="fa fa-download me-2"></i>Export PDF
       </a>
     </div>
@@ -123,7 +322,7 @@ if ($reportType === 'sales') {
         <div class="col-md-3">
           <div class="report-card h-100">
             <div class="metric-item">
-              <div class="text-primary mb-2">
+              <div class="mb-2" style="color: #7F1734;">
                 <i class="fa fa-chart-line fa-2x"></i>
               </div>
               <h4 class="fw-bold">₱<?php echo number_format($totalSales, 2); ?></h4>
@@ -134,7 +333,7 @@ if ($reportType === 'sales') {
         <div class="col-md-3">
           <div class="report-card h-100">
             <div class="metric-item">
-              <div class="text-success mb-2">
+              <div class="mb-2" style="color: #198754;">
                 <i class="fa fa-shopping-cart fa-2x"></i>
               </div>
               <h4 class="fw-bold"><?php echo $totalOrders; ?></h4>
@@ -146,7 +345,7 @@ if ($reportType === 'sales') {
         <div class="col-md-3">
           <div class="report-card h-100">
             <div class="metric-item">
-              <div class="text-info mb-2">
+              <div class="mb-2" style="color: #0dcaf0;">
                 <i class="fa fa-users fa-2x"></i>
               </div>
               <h4 class="fw-bold"><?php echo $totalCustomers; ?></h4>
@@ -158,7 +357,7 @@ if ($reportType === 'sales') {
         <div class="col-md-3">
           <div class="report-card h-100">
             <div class="metric-item">
-              <div class="text-warning mb-2">
+              <div class="mb-2" style="color: #ffc107;">
                 <i class="fa fa-box fa-2x"></i>
               </div>
               <h4 class="fw-bold"><?php echo $totalProducts; ?></h4>
@@ -198,14 +397,14 @@ if ($reportType === 'sales') {
                   <tr>
                     <td class="fw-semibold">#<?= $row['id'] ?></td>
                     <td><?= htmlspecialchars($row['customer']) ?></td>
-                    <td class="fw-bold text-success">₱<?= number_format($row['total_price'],2) ?></td>
+                    <td class="fw-bold" style="color: #198754;">₱<?= number_format($row['total_price'],2) ?></td>
                     <td>
                       <span class="badge
                         <?= $row['status'] === 'Pending' ? 'bg-warning text-dark' : '' ?>
-                        <?= $row['status'] === 'Processing' ? 'bg-info' : '' ?>
+                        <?= $row['status'] === 'To Ship' ? 'bg-info' : '' ?>
                         <?= $row['status'] === 'Shipped' ? 'bg-secondary' : '' ?>
-                        <?= $row['status'] === 'Delivered' ? 'bg-success' : '' ?>
-                        <?= $row['status'] === 'Return' ? 'bg-danger' : '' ?>">
+                        <?= $row['status'] === 'Completed' ? 'bg-success' : '' ?>
+                        <?= $row['status'] === 'Cancelled' ? 'bg-danger' : '' ?>">
                         <?= htmlspecialchars($row['status']) ?>
                       </span>
                     </td>
@@ -233,7 +432,7 @@ if ($reportType === 'sales') {
                   </tr>
                 </thead>
                 <tbody>
-                <?php if (empty($salesData)): // Assuming salesData can represent top products for now ?>
+                <?php if (empty($topProducts)): ?>
                   <tr>
                     <td colspan="3" class="text-center py-5">
                       <i class="fa fa-box-open display-4 text-muted mb-3"></i>
@@ -241,18 +440,11 @@ if ($reportType === 'sales') {
                     </td>
                   </tr>
                 <?php else: ?>
-                  <?php
-                    // For demonstration, let's assume we have top product data similar to salesData structure
-                    // In a real scenario, you'd fetch this specifically.
-                    // Example: $topProducts = fetchTopProducts();
-                    // For now, we'll just show a few from salesData if available
-                    $displayProducts = array_slice($salesData, 0, 5); // Displaying first 5 as example
-                    foreach ($displayProducts as $row):
-                  ?>
+                  <?php foreach ($topProducts as $product): ?>
                   <tr>
-                    <td><?= htmlspecialchars($row['customer']) ?></td> <?php // Using customer name as product name placeholder ?>
-                    <td>120</td> <?php // Placeholder sales count ?>
-                    <td class="fw-bold text-success">₱<?= number_format($row['total_price'], 2) ?></td>
+                    <td><?= htmlspecialchars($product['name']) ?></td>
+                    <td><?= $product['total_sold'] ?></td>
+                    <td class="fw-bold" style="color: #198754;">₱<?= number_format($product['total_revenue'], 2) ?></td>
                   </tr>
                   <?php endforeach; ?>
                 <?php endif; ?>
@@ -296,7 +488,7 @@ if ($reportType === 'sales') {
           <div class="card-header bg-transparent border-0 p-4">
             <div class="d-flex justify-content-between align-items-center">
               <h5 class="fw-bold mb-0">
-                <i class="fa fa-chart-line text-warning me-2"></i>
+                <i class="fa fa-chart-line me-2" style="color: #ffc107;"></i>
                 Sales Report (<?= ucfirst($period) ?>)
               </h5>
               <a href="generate_report_pdf.php?type=sales&period=<?= $period ?>" class="btn btn-danger">
@@ -315,19 +507,19 @@ if ($reportType === 'sales') {
             <div class="row g-3 mb-4">
               <div class="col-md-4">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold text-warning"><?= $orderCount ?></div>
+                  <div class="display-6 fw-bold" style="color: #ffc107;"><?= $orderCount ?></div>
                   <div class="text-muted">Total Orders</div>
                 </div>
               </div>
               <div class="col-md-4">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold text-success">₱<?= number_format($total, 2) ?></div>
+                  <div class="display-6 fw-bold" style="color: #198754;">₱<?= number_format($total, 2) ?></div>
                   <div class="text-muted">Total Revenue</div>
                 </div>
               </div>
               <div class="col-md-4">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold text-info">₱<?= number_format($avgOrder, 2) ?></div>
+                  <div class="display-6 fw-bold" style="color: #0dcaf0;">₱<?= number_format($avgOrder, 2) ?></div>
                   <div class="text-muted">Average Order Value</div>
                 </div>
               </div>
@@ -356,7 +548,7 @@ if ($reportType === 'sales') {
                     <tr>
                       <td class="fw-semibold">#<?= $row['id'] ?></td>
                       <td><?= htmlspecialchars($row['customer']) ?></td>
-                      <td class="fw-bold text-success">₱<?= number_format($row['total_price'],2) ?></td>
+                      <td class="fw-bold" style="color: #198754;">₱<?= number_format($row['total_price'],2) ?></td>
                       <td class="text-muted"><?= date('M d, Y H:i', strtotime($row['delivered_at'])) ?></td>
                     </tr>
                     <?php endforeach; ?>
@@ -366,7 +558,7 @@ if ($reportType === 'sales') {
                 <tfoot class="table-light">
                   <tr class="fw-bold">
                     <td colspan="2" class="text-end">Total Sales:</td>
-                    <td class="text-success">₱<?= number_format($total,2) ?></td>
+                    <td style="color: #198754;">₱<?= number_format($total,2) ?></td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -382,7 +574,7 @@ if ($reportType === 'sales') {
           <div class="card-header bg-transparent border-0 p-4">
             <div class="d-flex justify-content-between align-items-center">
               <h5 class="fw-bold mb-0">
-                <i class="fa fa-shopping-bag text-warning me-2"></i>
+                <i class="fa fa-shopping-bag me-2" style="color: #ffc107;"></i>
                 Orders Report (<?= ucfirst($period) ?>)
               </h5>
               <a href="generate_report_pdf.php?type=orders&period=<?= $period ?>" class="btn btn-danger">
@@ -401,26 +593,26 @@ if ($reportType === 'sales') {
             <div class="row g-3 mb-4">
               <div class="col-lg-3 col-md-6">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold text-info"><?= $orderCount ?></div>
+                  <div class="display-6 fw-bold" style="color: #0dcaf0;"><?= $orderCount ?></div>
                   <div class="text-muted">Total Orders</div>
                 </div>
               </div>
               <div class="col-lg-3 col-md-6">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold text-success">₱<?= number_format($totalRevenue, 2) ?></div>
+                  <div class="display-6 fw-bold" style="color: #198754;">₱<?= number_format($totalRevenue, 2) ?></div>
                   <div class="text-muted">Total Revenue</div>
                 </div>
               </div>
               <div class="col-lg-3 col-md-6">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold text-warning"><?= $statusCounts['Pending'] ?? 0 ?></div>
+                  <div class="display-6 fw-bold" style="color: #ffc107;"><?= $statusCounts['Pending'] ?? 0 ?></div>
                   <div class="text-muted">Pending Orders</div>
                 </div>
               </div>
               <div class="col-lg-3 col-md-6">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold" style="color: var(--bs-secondary);"><?= $statusCounts['Delivered'] ?? 0 ?></div>
-                  <div class="text-muted">Delivered Orders</div>
+                  <div class="display-6 fw-bold" style="color: #7F1734;"><?= $statusCounts['Completed'] ?? 0 ?></div>
+                  <div class="text-muted">Completed Orders</div>
                 </div>
               </div>
             </div>
@@ -449,14 +641,14 @@ if ($reportType === 'sales') {
                     <tr>
                       <td class="fw-semibold">#<?= $row['id'] ?></td>
                       <td><?= htmlspecialchars($row['customer']) ?></td>
-                      <td class="fw-bold text-success">₱<?= number_format($row['total_price'],2) ?></td>
+                      <td class="fw-bold" style="color: #198754;">₱<?= number_format($row['total_price'],2) ?></td>
                       <td>
                         <span class="badge
                           <?= $row['status'] === 'Pending' ? 'bg-warning text-dark' : '' ?>
-                          <?= $row['status'] === 'Processing' ? 'bg-info' : '' ?>
+                          <?= $row['status'] === 'To Ship' ? 'bg-info' : '' ?>
                           <?= $row['status'] === 'Shipped' ? 'bg-secondary' : '' ?>
-                          <?= $row['status'] === 'Delivered' ? 'bg-success' : '' ?>
-                          <?= $row['status'] === 'Return' ? 'bg-danger' : '' ?>">
+                          <?= $row['status'] === 'Completed' ? 'bg-success' : '' ?>
+                          <?= $row['status'] === 'Cancelled' ? 'bg-danger' : '' ?>">
                           <?= htmlspecialchars($row['status']) ?>
                         </span>
                       </td>
@@ -476,7 +668,7 @@ if ($reportType === 'sales') {
           <div class="card-header bg-transparent border-0 p-4">
             <div class="d-flex justify-content-between align-items-center">
               <h5 class="fw-bold mb-0">
-                <i class="fa fa-boxes text-warning me-2"></i>
+                <i class="fa fa-boxes me-2" style="color: #ffc107;"></i>
                 Inventory Report
               </h5>
               <a href="generate_report_pdf.php?type=inventory" class="btn btn-danger">
@@ -495,19 +687,19 @@ if ($reportType === 'sales') {
             <div class="row g-3 mb-4">
               <div class="col-md-4">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold text-info"><?= $totalProducts ?></div>
+                  <div class="display-6 fw-bold" style="color: #0dcaf0;"><?= $totalProducts ?></div>
                   <div class="text-muted">Total Products</div>
                 </div>
               </div>
               <div class="col-md-4">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold text-success"><?= $activeProducts ?></div>
+                  <div class="display-6 fw-bold" style="color: #198754;"><?= $activeProducts ?></div>
                   <div class="text-muted">Active Products</div>
                 </div>
               </div>
               <div class="col-md-4">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold" style="color: var(--bs-secondary);">₱<?= number_format($totalValue, 2) ?></div>
+                  <div class="display-6 fw-bold" style="color: #7F1734;">₱<?= number_format($totalValue, 2) ?></div>
                   <div class="text-muted">Total Inventory Value</div>
                 </div>
               </div>
@@ -538,7 +730,7 @@ if ($reportType === 'sales') {
                       <td class="fw-semibold">#<?= $row['id'] ?></td>
                       <td><?= htmlspecialchars($row['name']) ?></td>
                       <td><?= $row['stock'] ?></td>
-                      <td class="fw-bold text-success">₱<?= number_format($row['price'],2) ?></td>
+                      <td class="fw-bold" style="color: #198754;">₱<?= number_format($row['price'],2) ?></td>
                       <td>
                         <?php if ($row['is_archived']): ?>
                           <span class="badge bg-danger">Archived</span>
@@ -561,7 +753,7 @@ if ($reportType === 'sales') {
           <div class="card-header bg-transparent border-0 p-4">
             <div class="d-flex justify-content-between align-items-center">
               <h5 class="fw-bold mb-0">
-                <i class="fa fa-undo text-warning me-2"></i>
+                <i class="fa fa-undo me-2" style="color: #ffc107;"></i>
                 Return Reports
               </h5>
               <a href="generate_report_pdf.php?type=returns" class="btn btn-danger">
@@ -575,7 +767,7 @@ if ($reportType === 'sales') {
             <div class="row g-3 mb-4">
               <div class="col-md-12">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold text-danger"><?= count($returnData) ?></div>
+                  <div class="display-6 fw-bold" style="color: #dc3545;"><?= count($returnData) ?></div>
                   <div class="text-muted">Total Returns</div>
                 </div>
               </div>
@@ -606,7 +798,7 @@ if ($reportType === 'sales') {
                       <td class="fw-semibold">#<?= $row['id'] ?></td>
                       <td>#<?= $row['order_id'] ?></td>
                       <td><?= htmlspecialchars($row['product']) ?></td>
-                      <td class="text-warning"><?= htmlspecialchars($row['reason']) ?></td>
+                      <td style="color: #ffc107;"><?= htmlspecialchars($row['reason']) ?></td>
                       <td class="text-muted"><?= date('M d, Y H:i', strtotime($row['created_at'])) ?></td>
                     </tr>
                     <?php endforeach; ?>

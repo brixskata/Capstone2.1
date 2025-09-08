@@ -14,9 +14,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     
     try {
-        // First, check if there's any OTP record for this email
-        $stmt = $pdo->prepare("SELECT *, NOW() as `current_time` FROM email_verification WHERE email = ? ORDER BY created_at DESC LIMIT 1");
+        // First, get the user_id from user_info table
+        $stmt = $pdo->prepare("SELECT user_id FROM user_info WHERE email = ?");
         $stmt->execute([$email]);
+        $user_info = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user_info) {
+            echo json_encode(['success' => false, 'message' => 'Email not found in our system']);
+            exit;
+        }
+        
+        $user_id = $user_info['user_id'];
+        
+        // Check if there's any OTP record for this user
+        $stmt = $pdo->prepare("SELECT *, NOW() as `current_time` FROM email_verification WHERE user_id = ? ORDER BY created_at DESC LIMIT 1");
+        $stmt->execute([$user_id]);
         $record = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if (!$record) {
@@ -43,12 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         
         // OTP is valid - mark as verified
-        $stmt = $pdo->prepare("UPDATE email_verification SET verified = 1 WHERE email = ? AND otp = ?");
-        $stmt->execute([$email, $otp]);
+        $stmt = $pdo->prepare("UPDATE email_verification SET verified = 1 WHERE user_id = ? AND otp = ?");
+        $stmt->execute([$user_id, $otp]);
 
         // Update the users table to mark email as verified
-        $stmt = $pdo->prepare("UPDATE users SET email_verified = 1 WHERE email = ?");
-        $stmt->execute([$email]);
+        $stmt = $pdo->prepare("UPDATE users SET email_verified = 1 WHERE user_id = ?");
+        $stmt->execute([$user_id]);
 
         // Store verified email in session
         $_SESSION['verified_email'] = $email;

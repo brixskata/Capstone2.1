@@ -2,30 +2,67 @@
 <?php
 include 'db.php';
 include '../includes/log_history.php';
+include '../includes/permissions.php';
 session_start();
 
-// Ensure user is logged in and has admin role
-if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php");
-    exit;
+// Ensure user is logged in and has admin access (Super Admin or Admin)
+requireAdmin($pdo);
+
+// Helper: fetch admin password hash for current admin
+function getAdminHash(PDO $pdo, string $username): ?string {
+    $stmt = $pdo->prepare("SELECT u.password
+                           FROM users u
+                           LEFT JOIN user_type ut ON ut.usertype_id = u.usertype_id
+                           WHERE u.username = ? AND (ut.role IN ('admin', 'super_admin') OR u.username IN ('admin','admin1'))");
+    $stmt->execute([$username]);
+    return $stmt->fetchColumn() ?: null;
+}
+
+// Map role string to usertype_id
+function getUsertypeId(PDO $pdo, string $role): ?int {
+    $stmt = $pdo->prepare("SELECT usertype_id FROM user_type WHERE role = ? LIMIT 1");
+    $stmt->execute([$role]);
+    $id = $stmt->fetchColumn();
+    return $id !== false ? (int)$id : null;
 }
 
 // Handle role update
 if (isset($_POST['update_role'])) {
-    $user_id = $_POST['user_id'];
+    // Check if user has permission to update user roles
+    if (!hasPermission($pdo, 'user_update')) {
+        $_SESSION['error'] = "You don't have permission to update user roles.";
+        header("Location: manage_users.php");
+        exit;
+    }
+
+    $user_id = (int)$_POST['user_id'];
     $new_role = $_POST['role'];
     $admin_password = $_POST['admin_password'];
 
-    // First verify admin password
-    $stmt = $pdo->prepare("SELECT password FROM users WHERE username = ? AND role = 'admin'");
-    $stmt->execute([$_SESSION['username']]);
-    $admin = $stmt->fetch();
+    // Super Admin can assign any role, Admin can only assign customer role
+    if (!isSuperAdmin($pdo) && $new_role === 'super_admin') {
+        $_SESSION['error'] = "Only Super Admin can assign Super Admin role.";
+        header("Location: manage_users.php");
+        exit;
+    }
 
-    if ($admin && password_verify($admin_password, $admin['password'])) {
+    $adminHash = getAdminHash($pdo, $_SESSION['username']);
+    $passwordOk = false;
+    if ($adminHash) {
+        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
+        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
+    }
+
+    if ($passwordOk) {
         try {
-            $stmt = $pdo->prepare("UPDATE users SET role = ? WHERE id = ? AND username != ?");
-            $stmt->execute([$new_role, $user_id, $_SESSION['username']]);
-            $_SESSION['success'] = "User role updated successfully";
+            $usertypeId = getUsertypeId($pdo, $new_role);
+            if ($usertypeId === null) {
+                $_SESSION['error'] = "Invalid role specified.";
+            } else {
+                $stmt = $pdo->prepare("UPDATE users SET usertype_id = ? WHERE user_id = ? AND username != ?");
+                $stmt->execute([$usertypeId, $user_id, $_SESSION['username']]);
+                $_SESSION['success'] = "User role updated successfully";
+            }
         } catch (PDOException $e) {
             $_SESSION['error'] = "Error updating role";
         }
@@ -38,29 +75,75 @@ if (isset($_POST['update_role'])) {
 
 // Handle user creation
 if (isset($_POST['create_user'])) {
+    // Check if user has permission to create users
+    if (!hasPermission($pdo, 'user_create')) {
+        $_SESSION['error'] = "You don't have permission to create users.";
+        header("Location: manage_users.php");
+        exit;
+    }
+
     $new_username = trim($_POST['new_username']);
     $new_email = trim($_POST['new_email']);
     $new_password = $_POST['new_password'];
     $new_role = $_POST['new_role'];
     $admin_password = $_POST['admin_password_create'];
 
-    // Verify admin password
-    $stmt = $pdo->prepare("SELECT password FROM users WHERE username = ? AND role = 'admin'");
-    $stmt->execute([$_SESSION['username']]);
-    $admin = $stmt->fetch();
+    // Super Admin can create any role, Admin can only create customer role
+    if (!isSuperAdmin($pdo) && in_array($new_role, ['super_admin', 'admin'])) {
+        $_SESSION['error'] = "Only Super Admin can create Admin or Super Admin users.";
+        header("Location: manage_users.php");
+        exit;
+    }
+    
+    // Require Super Admin password for creating admin users
+    if (in_array($new_role, ['super_admin', 'admin'])) {
+        if (!isSuperAdmin($pdo)) {
+            $_SESSION['error'] = "Only Super Admin can create Admin or Super Admin users.";
+            header("Location: manage_users.php");
+            exit;
+        }
+    }
 
-    if ($admin && password_verify($admin_password, $admin['password'])) {
+    $adminHash = getAdminHash($pdo, $_SESSION['username']);
+    $passwordOk = false;
+    if ($adminHash) {
+        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
+        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
+    }
+
+    if ($passwordOk) {
         // Check if username or email exists
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ? OR email = ?");
-        $stmt->execute([$new_username, $new_email]);
-        if ($stmt->fetch()) {
+        $stmt = $pdo->prepare("SELECT 1 FROM users WHERE username = ?");
+        $stmt->execute([$new_username]);
+        $existsUser = (bool)$stmt->fetch();
+        $stmt = $pdo->prepare("SELECT 1 FROM user_info WHERE email = ?");
+        $stmt->execute([$new_email]);
+        $existsEmail = (bool)$stmt->fetch();
+        if ($existsUser || $existsEmail) {
             $_SESSION['error'] = "Username or email already exists.";
         } else {
             $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("INSERT INTO users (username, email, password, role, email_verified) VALUES (?, ?, ?, ?, 1)");
-            $stmt->execute([$new_username, $new_email, $hashed_password, $new_role]);
-            $_SESSION['success'] = "User created successfully.";
-            logHistory($pdo, 'User Created', "Username: $new_username, Email: $new_email, Role: $new_role", $_SESSION['username']);
+            $usertypeId = getUsertypeId($pdo, $new_role);
+            if ($usertypeId === null) {
+                $_SESSION['error'] = "Invalid role specified.";
+            } else {
+                $pdo->beginTransaction();
+                try {
+                    $stmt = $pdo->prepare("INSERT INTO users (username, password, is_active, usertype_id) VALUES (?, ?, 1, ?)");
+                    $stmt->execute([$new_username, $hashed_password, $usertypeId]);
+                    $newUserId = (int)$pdo->lastInsertId();
+
+                    $stmt = $pdo->prepare("INSERT INTO user_info (user_id, email) VALUES (?, ?)");
+                    $stmt->execute([$newUserId, $new_email]);
+
+                    $pdo->commit();
+                    $_SESSION['success'] = "User created successfully.";
+                    logHistory($pdo, 'User Created', "Username: $new_username, Email: $new_email, Role: $new_role", $_SESSION['username']);
+                } catch (Exception $e) {
+                    $pdo->rollBack();
+                    $_SESSION['error'] = "Error creating user.";
+                }
+            }
         }
     } else {
         $_SESSION['error'] = "Invalid admin password.";
@@ -70,16 +153,25 @@ if (isset($_POST['create_user'])) {
 }
 // Handle user deactivation
 if (isset($_POST['deactivate_user'])) {
-    $user_id = $_POST['user_id'];
+    // Check if user has permission to deactivate users
+    if (!hasPermission($pdo, 'user_deactivate')) {
+        $_SESSION['error'] = "You don't have permission to deactivate users.";
+        header("Location: manage_users.php");
+        exit;
+    }
+
+    $user_id = (int)$_POST['user_id'];
     $admin_password = $_POST['admin_password_deactivate'];
-    $stmt = $pdo->prepare("SELECT password FROM users WHERE username = ? AND role = 'admin'");
-    $stmt->execute([$_SESSION['username']]);
-    $admin = $stmt->fetch();
-    if ($admin && password_verify($admin_password, $admin['password'])) {
-       
-        $pdo->prepare("UPDATE users SET deactivated = 1 WHERE id = ? AND username != ?")->execute([$user_id, $_SESSION['username']]);
+    $adminHash = getAdminHash($pdo, $_SESSION['username']);
+    $passwordOk = false;
+    if ($adminHash) {
+        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
+        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
+    }
+    if ($passwordOk) {
+        $pdo->prepare("UPDATE users SET is_active = 0 WHERE user_id = ? AND username != ?")->execute([$user_id, $_SESSION['username']]);
         $_SESSION['success'] = "User deactivated successfully.";
-        $stmt = $pdo->prepare("SELECT username, email FROM users WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT u.username, ui.email FROM users u LEFT JOIN user_info ui ON ui.user_id = u.user_id WHERE u.user_id = ?");
         $stmt->execute([$user_id]);
         $user = $stmt->fetch();
         logHistory($pdo, 'User Deactivated', "Username: {$user['username']}, Email: {$user['email']}", $_SESSION['username']);
@@ -92,15 +184,25 @@ if (isset($_POST['deactivate_user'])) {
 
 // Handle user reactivation
 if (isset($_POST['reactivate_user'])) {
-    $user_id = $_POST['user_id'];
+    // Check if user has permission to reactivate users
+    if (!hasPermission($pdo, 'user_deactivate')) {
+        $_SESSION['error'] = "You don't have permission to reactivate users.";
+        header("Location: manage_users.php");
+        exit;
+    }
+
+    $user_id = (int)$_POST['user_id'];
     $admin_password = $_POST['admin_password_reactivate'];
-    $stmt = $pdo->prepare("SELECT password FROM users WHERE username = ? AND role = 'admin'");
-    $stmt->execute([$_SESSION['username']]);
-    $admin = $stmt->fetch();
-    if ($admin && password_verify($admin_password, $admin['password'])) {
-        $pdo->prepare("UPDATE users SET deactivated = 0 WHERE id = ? AND username != ?")->execute([$user_id, $_SESSION['username']]);
+    $adminHash = getAdminHash($pdo, $_SESSION['username']);
+    $passwordOk = false;
+    if ($adminHash) {
+        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
+        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
+    }
+    if ($passwordOk) {
+        $pdo->prepare("UPDATE users SET is_active = 1 WHERE user_id = ? AND username != ?")->execute([$user_id, $_SESSION['username']]);
         $_SESSION['success'] = "User reactivated successfully.";
-        $stmt = $pdo->prepare("SELECT username, email FROM users WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT u.username, ui.email FROM users u LEFT JOIN user_info ui ON ui.user_id = u.user_id WHERE u.user_id = ?");
         $stmt->execute([$user_id]);
         $user = $stmt->fetch();
         logHistory($pdo, 'User Reactivated', "Username: {$user['username']}, Email: {$user['email']}", $_SESSION['username']);
@@ -116,23 +218,27 @@ $search = isset($_GET['search']) ? $_GET['search'] : '';
 $role_filter = isset($_GET['role_filter']) ? $_GET['role_filter'] : '';
 $show_deactivated = isset($_GET['show_deactivated']) ? true : false;
 
-// Build the query
-$query = "SELECT * FROM users WHERE username != ?";
+// Build the query to list users
+$query = "SELECT u.user_id AS id, u.username, ui.email, ut.role, (CASE WHEN u.is_active = 0 THEN 1 ELSE 0 END) AS deactivated
+          FROM users u
+          LEFT JOIN user_info ui ON ui.user_id = u.user_id
+          LEFT JOIN user_type ut ON ut.usertype_id = u.usertype_id
+          WHERE u.username != ?";
 $params = [$_SESSION['username']];
 
 if ($search) {
-    $query .= " AND (username LIKE ? OR email LIKE ?)";
+    $query .= " AND (u.username LIKE ? OR ui.email LIKE ?)";
     $params[] = "%$search%";
     $params[] = "%$search%";
 }
 
 if ($role_filter) {
-    $query .= " AND role = ?";
+    $query .= " AND ut.role = ?";
     $params[] = $role_filter;
 }
 
 if (!$show_deactivated) {
-    $query .= " AND (deactivated IS NULL OR deactivated = 0)";
+    $query .= " AND (u.is_active IS NULL OR u.is_active = 1)";
 }
 
 $stmt = $pdo->prepare($query);
@@ -193,7 +299,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         width: 60px;
         height: 60px;
         border-radius: 50%;
-        background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
+        background: #7F1734;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -232,12 +338,14 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="d-flex justify-content-between align-items-center mb-4">
       <div>
         <h1 class="h3 fw-bold text-dark mb-2">
-          <i class="fa fa-users text-primary me-3"></i>User Management
+          <i class="fa fa-users me-3" style="color: #7F1734;"></i>User Management
         </h1>
       </div>
-      <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createUserModal">
-        <i class="fa fa-user-plus me-1"></i> Add User
-      </button>
+      <?php if (hasPermission($pdo, 'user_create')): ?>
+        <button class="btn" data-bs-toggle="modal" data-bs-target="#createUserModal" style="background-color: #198754; color: white; border: none;">
+          <i class="fa fa-user-plus me-1"></i> Add User
+        </button>
+      <?php endif; ?>
     </div>
 
     <!-- Statistics Cards -->
@@ -245,7 +353,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
       <div class="col-lg-4 col-md-6">
         <div class="stat-card">
           <div class="d-flex align-items-center">
-            <div class="stat-icon bg-info">
+            <div class="stat-icon" style="background-color: #016bf8;">
               <i class="fa fa-users"></i>
             </div>
             <div class="ms-3">
@@ -259,12 +367,12 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
       <div class="col-lg-4 col-md-6">
         <div class="stat-card">
           <div class="d-flex align-items-center">
-            <div class="stat-icon bg-warning">
-              <i class="fa fa-shield-halved"></i>
+            <div class="stat-icon" style="background-color: #7F1734; color: white;">
+              <i class="fa fa-user"></i>
             </div>
             <div class="ms-3">
-              <h4 class="fw-bold mb-0"><?php echo count(array_filter($users, function($user) { return $user['role'] === 'admin'; })); ?></h4>
-              <small class="text-muted text-uppercase">Administrators</small>
+              <h4 class="fw-bold mb-0"><?php echo count(array_filter($users, function($user) { return ($user['role'] ?? '') === 'customer'; })); ?></h4>
+              <small class="text-muted text-uppercase">Customers</small>
             </div>
           </div>
         </div>
@@ -273,12 +381,12 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
       <div class="col-lg-4 col-md-6">
         <div class="stat-card">
           <div class="d-flex align-items-center">
-            <div class="stat-icon" style="background-color: var(--bs-secondary);">
-              <i class="fa fa-user"></i>
+            <div class="stat-icon" style="background-color: #016bf8;">
+              <i class="fa fa-user-slash"></i>
             </div>
             <div class="ms-3">
-              <h4 class="fw-bold mb-0"><?php echo count(array_filter($users, function($user) { return $user['role'] === 'customer'; })); ?></h4>
-              <small class="text-muted text-uppercase">Customers</small>
+              <h4 class="fw-bold mb-0"><?php echo count(array_filter($users, function($user) { return !empty($user['deactivated']); })); ?></h4>
+              <small class="text-muted text-uppercase">Deactivated</small>
             </div>
           </div>
         </div>
@@ -300,8 +408,19 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <label class="form-label">Role Filter</label>
             <select class="form-select" name="role_filter">
               <option value="">All Roles</option>
-              <option value="admin" <?php echo $role_filter === 'admin' ? 'selected' : ''; ?>>Admin</option>
-              <option value="customer" <?php echo $role_filter === 'customer' ? 'selected' : ''; ?>>Customer</option>
+              <?php
+              // Fetch all roles for filter dropdown
+              $roles_query = "SELECT usertype_id, role FROM user_type ORDER BY role";
+              $roles_stmt = $pdo->query($roles_query);
+              $all_roles = $roles_stmt->fetchAll(PDO::FETCH_ASSOC);
+              
+              foreach ($all_roles as $role): 
+              ?>
+                <option value="<?php echo htmlspecialchars($role['role']); ?>" 
+                        <?php echo $role_filter === $role['role'] ? 'selected' : ''; ?>>
+                  <?php echo ucfirst(str_replace('_', ' ', $role['role'])); ?>
+                </option>
+              <?php endforeach; ?>
             </select>
           </div>
           <div class="col-md-3">
@@ -311,7 +430,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
           </div>
           <div class="col-md-2">
-            <button type="submit" class="btn btn-info w-100">
+            <button type="submit" class="btn w-100" style="background-color: #016bf8; color: white; border: none;">
               <i class="fa fa-filter me-1"></i> Filter
             </button>
           </div>
@@ -332,28 +451,64 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <h5 class="mb-1 fw-bold">
                   <?php echo htmlspecialchars($user['username']); ?>
                   <?php if (!empty($user['deactivated'])): ?>
-                    <span class="badge bg-danger ms-2">Deactivated</span>
+                    <span class="badge ms-2" style="background-color: #db3030; color: white;">Deactivated</span>
+                  <?php endif; ?>
+                  <?php if (!empty($user['role'])): ?>
+                    <?php
+                    $role_badge_style = 'background-color: #6c757d; color: white;';
+                    if ($user['role'] === 'super_admin') $role_badge_style = 'background-color: #db3030; color: white;';
+                    elseif ($user['role'] === 'admin') $role_badge_style = 'background-color: #ffc107; color: black;';
+                    elseif ($user['role'] === 'customer') $role_badge_style = 'background-color: #016bf8; color: white;';
+                    ?>
+                    <span class="badge ms-2" style="<?php echo $role_badge_style; ?>"><?php echo ucfirst(str_replace('_', ' ', $user['role'])); ?></span>
                   <?php endif; ?>
                 </h5>
-                <small class="text-muted"><?php echo htmlspecialchars($user['email']); ?></small>
+                <small class="text-muted"><?php echo htmlspecialchars($user['email'] ?? ''); ?></small>
               </div>
             </div>
             
             <div class="d-flex flex-wrap gap-2">
-              <?php if ($user['role'] !== 'admin' && empty($user['deactivated'])): ?>
+              <?php if (($user['role'] ?? '') !== 'super_admin' && empty($user['deactivated'])): ?>
                 <select class="form-select form-select-sm" onchange="showPasswordModal(this.value, <?php echo $user['id']; ?>)">
-                  <option value="customer" <?php echo $user['role'] === 'customer' ? 'selected' : ''; ?>>Customer</option>
-                  <option value="admin" <?php echo $user['role'] === 'admin' ? 'selected' : ''; ?>>Admin</option>
+                  <?php
+                  // Fetch all roles from database for role assignment
+                  $roles_query = "SELECT usertype_id, role FROM user_type ORDER BY role";
+                  $roles_stmt = $pdo->query($roles_query);
+                  $all_roles = $roles_stmt->fetchAll(PDO::FETCH_ASSOC);
+                  
+                  foreach ($all_roles as $role): 
+                    // Super Admin can assign any role, Admin can only assign customer role
+                    $canAssign = false;
+                    if (isSuperAdmin($pdo)) {
+                      $canAssign = true;
+                    } elseif (isAdmin($pdo) && $role['role'] === 'customer') {
+                      $canAssign = true;
+                    }
+                    
+                    if ($canAssign):
+                  ?>
+                    <option value="<?php echo htmlspecialchars($role['role']); ?>" 
+                            <?php echo ($user['role'] ?? '') === $role['role'] ? 'selected' : ''; ?>>
+                      <?php echo ucfirst(str_replace('_', ' ', $role['role'])); ?>
+                    </option>
+                  <?php 
+                    endif;
+                  endforeach; 
+                  ?>
                 </select>
-                <button type="button" onclick="showDeactivateModal(<?php echo $user['id']; ?>)" class="btn btn-danger btn-sm">
-                  <i class="fa fa-user-slash me-1"></i> Deactivate
-                </button>
-              <?php elseif ($user['role'] !== 'admin' && !empty($user['deactivated'])): ?>
-                <button type="button" onclick="showReactivateModal(<?php echo $user['id']; ?>)" class="btn btn-success btn-sm">
-                  <i class="fa fa-user-check me-1"></i> Reactivate
-                </button>
+                <?php if (hasPermission($pdo, 'user_deactivate')): ?>
+                  <button type="button" onclick="showDeactivateModal(<?php echo $user['id']; ?>)" class="btn btn-sm" style="background-color: #db3030; color: white; border: none;">
+                    <i class="fa fa-user-slash me-1"></i> Deactivate
+                  </button>
+                <?php endif; ?>
+              <?php elseif (($user['role'] ?? '') !== 'super_admin' && !empty($user['deactivated'])): ?>
+                <?php if (hasPermission($pdo, 'user_deactivate')): ?>
+                  <button type="button" onclick="showReactivateModal(<?php echo $user['id']; ?>)" class="btn btn-sm" style="background-color: #198754; color: white; border: none;">
+                    <i class="fa fa-user-check me-1"></i> Reactivate
+                  </button>
+                <?php endif; ?>
               <?php else: ?>
-                <span class="badge bg-warning text-dark">Protected Admin</span>
+                <span class="badge" style="background-color: #ffc107; color: black;">Protected Super Admin</span>
               <?php endif; ?>
             </div>
           </div>
@@ -383,7 +538,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-primary">Confirm Change</button>
+            <button type="submit" class="btn" style="background-color: #7F1734; color: white; border: none;">Confirm Change</button>
           </div>
         </div>
       </form>
@@ -415,18 +570,41 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="mb-3">
               <label class="form-label">Role</label>
               <select class="form-select" name="new_role" required>
-                <option value="customer">Customer</option>
-                <option value="admin">Admin</option>
+                <?php
+                // Fetch all roles from database
+                $roles_query = "SELECT usertype_id, role FROM user_type ORDER BY role";
+                $roles_stmt = $pdo->query($roles_query);
+                $all_roles = $roles_stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                foreach ($all_roles as $role): 
+                  // Super Admin can assign any role, Admin can only assign customer role
+                  $canAssign = false;
+                  if (isSuperAdmin($pdo)) {
+                    $canAssign = true;
+                  } elseif (isAdmin($pdo) && $role['role'] === 'customer') {
+                    $canAssign = true;
+                  }
+                  
+                  if ($canAssign):
+                ?>
+                  <option value="<?php echo htmlspecialchars($role['role']); ?>">
+                    <?php echo ucfirst(str_replace('_', ' ', $role['role'])); ?>
+                  </option>
+                <?php 
+                  endif;
+                endforeach; 
+                ?>
               </select>
             </div>
             <div class="mb-3">
-              <label class="form-label">Admin Password (to confirm)</label>
+              <label class="form-label" id="adminPasswordLabel">Admin Password (to confirm)</label>
               <input type="password" class="form-control" name="admin_password_create" required>
+              <small class="text-muted" id="adminPasswordHelp">Enter your admin password to confirm user creation</small>
             </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" name="create_user" class="btn btn-success">Create User</button>
+            <button type="submit" name="create_user" class="btn" style="background-color: #198754; color: white; border: none;">Create User</button>
           </div>
         </div>
       </form>
@@ -452,7 +630,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-danger">Deactivate</button>
+            <button type="submit" class="btn" style="background-color: #db3030; color: white; border: none;">Deactivate</button>
           </div>
         </div>
       </form>
@@ -478,7 +656,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-success">Reactivate</button>
+            <button type="submit" class="btn" style="background-color: #198754; color: white; border: none;">Reactivate</button>
           </div>
         </div>
       </form>
@@ -503,6 +681,27 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
       document.getElementById('reactivateUserId').value = userId;
       new bootstrap.Modal(document.getElementById('reactivateUserModal')).show();
     }
+    
+    // Update password label based on role selection
+    document.addEventListener('DOMContentLoaded', function() {
+      const roleSelect = document.querySelector('select[name="new_role"]');
+      const passwordLabel = document.getElementById('adminPasswordLabel');
+      const passwordHelp = document.getElementById('adminPasswordHelp');
+      
+      if (roleSelect) {
+        roleSelect.addEventListener('change', function() {
+          if (this.value === 'super_admin' || this.value === 'admin') {
+            passwordLabel.textContent = 'Super Admin Password (required for admin users)';
+            passwordHelp.textContent = 'Enter your Super Admin password to create admin users';
+            passwordHelp.className = 'text-warning';
+          } else {
+            passwordLabel.textContent = 'Admin Password (to confirm)';
+            passwordHelp.textContent = 'Enter your admin password to confirm user creation';
+            passwordHelp.className = 'text-muted';
+          }
+        });
+      }
+    });
   </script>
 </body>
 </html>

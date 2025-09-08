@@ -3,92 +3,113 @@
 include 'db.php';
 session_start();
 
-// Ensure user is logged in and has admin role
-if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php");
-    exit; 
+// Ensure user is logged in and has admin access (Super Admin or Admin)
+if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+	header("Location: login_admin.php");
+	exit; 
 }
 
 try {
-    // Basic statistics
-    $stmt = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archived = 0");
-    $totalProducts = $stmt->fetchColumn();
+	// Basic statistics
+	$stmt = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 0");
+	$totalProducts = $stmt->fetchColumn();
 
-    // Get total sales from delivered orders
-    $stmt = $pdo->query("SELECT SUM(total_price) as total_sales FROM delivered_orders");
-    $deliveredStats = $stmt->fetch(PDO::FETCH_ASSOC);
-    $totalCompletedSales = $deliveredStats['total_sales'] ?: 0;
+	// Get total sales from delivered orders
+	$stmt = $pdo->query("SELECT SUM(total_price) as total_sales FROM delivered_orders");
+	$deliveredStats = $stmt->fetch(PDO::FETCH_ASSOC);
+	$totalCompletedSales = $deliveredStats['total_sales'] ?: 0;
 
-    // Get total pending sales
-    $stmt = $pdo->query("SELECT SUM(total_price) FROM orders WHERE status IN ('Pending', 'Processing', 'Shipped')");
-    $totalPendingSales = $stmt->fetchColumn() ?: 0;
+	// Get total pending sales (Pending/To Ship/Shipped)
+	$stmt = $pdo->query("SELECT SUM(o.total_price)
+		FROM orders o
+		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+		WHERE os.status_name IN ('Pending','To Ship','Shipped')");
+	$totalPendingSales = $stmt->fetchColumn() ?: 0;
 
-    $stmt = $pdo->query("SELECT COUNT(*) FROM users");
-    $totalUsers = $stmt->fetchColumn();
+	$stmt = $pdo->query("SELECT COUNT(*) FROM users");
+	$totalUsers = $stmt->fetchColumn();
 
-    $stmt = $pdo->query("SELECT SUM(stock) FROM products WHERE is_archived = 0");
-    $totalStock = $stmt->fetchColumn();
+	// Sum current stock from product_stock for active products
+	$stmt = $pdo->query("SELECT COALESCE(SUM(ps.current_stock),0)
+		FROM products p
+		LEFT JOIN product_stock ps ON ps.product_id = p.product_id
+		WHERE p.is_archive = 0");
+	$totalStock = $stmt->fetchColumn();
 
-    // Order status counts
-    $stmt = $pdo->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'");
-    $pendingOrders = $stmt->fetchColumn();
+	// Order status counts
+	$stmt = $pdo->query("SELECT COUNT(*)
+		FROM orders o
+		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+		WHERE os.status_name = 'Pending'");
+	$pendingOrders = $stmt->fetchColumn();
 
-    $stmt = $pdo->query("SELECT COUNT(*) FROM orders WHERE status = 'processing'");
-    $processingOrders = $stmt->fetchColumn();
+	$stmt = $pdo->query("SELECT COUNT(*)
+		FROM orders o
+		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+		WHERE os.status_name = 'To Ship'");
+	$processingOrders = $stmt->fetchColumn();
 
-    $stmt = $pdo->query("SELECT COUNT(*) FROM orders WHERE status = 'shipped'");
-    $shippedOrders = $stmt->fetchColumn();
+	$stmt = $pdo->query("SELECT COUNT(*)
+		FROM orders o
+		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+		WHERE os.status_name = 'Shipped'");
+	$shippedOrders = $stmt->fetchColumn();
 
-    // Recent orders
-    $stmt = $pdo->query("SELECT o.id, u.username, o.status, o.created_at 
-                        FROM orders o 
-                        JOIN users u ON o.user_id = u.id 
-                        ORDER BY o.created_at DESC 
-                        LIMIT 5");
-    $recentOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+	// Recent orders
+	$stmt = $pdo->query("SELECT o.orders_id AS id, u.username, os.status_name AS status, o.created_at 
+						FROM orders o 
+						JOIN users u ON o.user_id = u.user_id 
+						JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+						ORDER BY o.created_at DESC 
+						LIMIT 5");
+	$recentOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Low stock products
-    $stmt = $pdo->query("SELECT name, stock FROM products 
-                        WHERE stock < 10 AND is_archived = 0 
-                        ORDER BY stock ASC 
-                        LIMIT 5");
-    $lowStockProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+	// Low stock products
+	$stmt = $pdo->query("SELECT p.product_name AS name, COALESCE(ps.current_stock,0) AS stock
+						FROM products p
+						LEFT JOIN product_stock ps ON ps.product_id = p.product_id
+						WHERE COALESCE(ps.current_stock,0) < 10 AND p.is_archive = 0
+						ORDER BY ps.current_stock ASC 
+						LIMIT 5");
+	$lowStockProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Sales data for line chart (last 12 months)
-    $stmt = $pdo->query("SELECT 
-        DATE_FORMAT(delivered_at, '%Y-%m') as month,
-        SUM(total_price) as total_sales,
-        COUNT(*) as order_count
-        FROM delivered_orders 
-        WHERE delivered_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-        GROUP BY DATE_FORMAT(delivered_at, '%Y-%m')
-        ORDER BY month ASC");
-    $salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+	// Sales data for line chart (last 12 months)
+	$stmt = $pdo->query("SELECT 
+		DATE_FORMAT(delivered_at, '%Y-%m') as month,
+		SUM(total_price) as total_sales,
+		COUNT(*) as order_count
+		FROM delivered_orders 
+		WHERE delivered_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+		GROUP BY DATE_FORMAT(delivered_at, '%Y-%m')
+		ORDER BY month ASC");
+	$salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Product categories data for pie chart
-    $stmt = $pdo->query("SELECT 
-        c.name as category,
-        COUNT(p.id) as product_count,
-        SUM(p.stock) as total_stock
-        FROM categories c
-        LEFT JOIN products p ON c.id = p.category_id AND p.is_archived = 0
-        GROUP BY c.id, c.name
-        HAVING product_count > 0
-        ORDER BY product_count DESC");
-    $categoriesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+	// Product categories data for pie chart
+	$stmt = $pdo->query("SELECT 
+		c.category_name as category,
+		COUNT(p.product_id) as product_count,
+		COALESCE(SUM(ps.current_stock),0) as total_stock
+		FROM categories c
+		LEFT JOIN products p ON c.category_id = p.category_id AND p.is_archive = 0
+		LEFT JOIN product_stock ps ON ps.product_id = p.product_id
+		GROUP BY c.category_id, c.category_name
+		HAVING product_count > 0
+		ORDER BY product_count DESC");
+	$categoriesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Order status data for bar chart
-    $stmt = $pdo->query("SELECT 
-        status,
-        COUNT(*) as order_count,
-        SUM(total_price) as total_amount
-        FROM orders 
-        GROUP BY status 
-        ORDER BY order_count DESC");
-    $orderStatusData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+	// Order status data for bar chart
+	$stmt = $pdo->query("SELECT 
+		os.status_name AS status,
+		COUNT(*) as order_count,
+		SUM(o.total_price) as total_amount
+		FROM orders o
+		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+		GROUP BY os.status_name 
+		ORDER BY order_count DESC");
+	$orderStatusData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (Exception $e) {
-    echo "Error: " . $e->getMessage();
+	echo "Error: " . $e->getMessage();
 }
 ?>
 
@@ -231,7 +252,7 @@ try {
       
       <div class="col-xl-3 col-md-6">
         <div class="metric-card">
-          <div class="metric-icon" style="background-color: var(--primary-color);">
+          <div class="metric-icon" style="background-color: #7F1734;">
             <i class="fas fa-users"></i>
           </div>
           <h3 class="fw-bold mb-1"><?php echo number_format($totalUsers); ?></h3>
@@ -307,7 +328,7 @@ try {
       
       <div class="col-md-4">
         <div class="metric-card text-center">
-          <div class="metric-icon mx-auto" style="background-color: var(--primary-color);">
+          <div class="metric-icon mx-auto" style="background-color: #7F1734;">
             <i class="fas fa-shipping-fast"></i>
           </div>
           <h4 class="fw-bold"><?php echo $shippedOrders; ?></h4>
@@ -362,13 +383,13 @@ try {
                       $status = strtolower($order['status']);
                       $badgeClass = 'bg-secondary';
                       if ($status === 'pending') $badgeClass = 'bg-warning text-dark';
-                      elseif ($status === 'processing') $badgeClass = 'bg-info';
+                      elseif ($status === 'to ship') $badgeClass = 'bg-info';
                       elseif ($status === 'shipped') $badgeClass = 'text-white';
-                      elseif ($status === 'delivered') $badgeClass = 'bg-success';
+                      elseif ($status === 'completed' || $status === 'delivered') $badgeClass = 'bg-success';
                     ?>
                     <span class="status-badge <?php echo $badgeClass; ?>" 
-                          <?php if($status === 'shipped') echo 'style="background-color: var(--primary-color);"'; ?>>
-                      <?php echo ucfirst($order['status']); ?>
+                          <?php if($status === 'shipped') echo 'style="background-color: #7F1734;"'; ?>>
+                      <?php echo ucwords($order['status']); ?>
                     </span>
                   </td>
                   <td class="text-muted"><?php echo date('M j, Y g:i A', strtotime($order['created_at'])); ?></td>
@@ -612,7 +633,7 @@ try {
                 $statusCounts = [];
                 $statusAmounts = [];
                 foreach ($orderStatusData as $data) {
-                    $statusLabels[] = "'" . ucfirst($data['status']) . "'";
+                    $statusLabels[] = "'" . ucwords($data['status']) . "'";
                     $statusCounts[] = intval($data['order_count']);
                     $statusAmounts[] = floatval($data['total_amount']);
                 }
@@ -623,11 +644,11 @@ try {
                 label: 'Number of Orders',
                 data: [<?php echo implode(', ', $statusCounts); ?>],
                 backgroundColor: [
-                    'rgba(255, 193, 7, 0.8)',   // Warning - Pending
-                    'rgba(13, 202, 240, 0.8)',  // Info - Processing  
-                    'rgba(127, 23, 52, 0.8)',   // Primary - Shipped
-                    'rgba(25, 135, 84, 0.8)',   // Success - Delivered
-                    'rgba(220, 53, 69, 0.8)',   // Danger - Cancelled
+                    'rgba(255, 193, 7, 0.8)',   // Pending
+                    'rgba(13, 202, 240, 0.8)',  // To Ship / Processing
+                    'rgba(127, 23, 52, 0.8)',   // Shipped
+                    'rgba(25, 135, 84, 0.8)',   // Completed/Delivered
+                    'rgba(220, 53, 69, 0.8)',   // Cancelled
                 ],
                 borderColor: [
                     '#ffc107',

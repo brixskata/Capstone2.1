@@ -22,35 +22,49 @@ $selected_items_total = 0; // Initialize for selected items total
 
 if (!empty($_SESSION['cart'])) {
     foreach ($_SESSION['cart'] as $product_id => $cart_item) {
-        $sql = "SELECT * FROM products WHERE id = :product_id AND is_archived = 0";
-        $stmt = $pdo->prepare($sql);
-        $stmt->bindParam(':product_id', $product_id);
-        $stmt->execute();
-        $product = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $sql = "SELECT 
+                        p.product_id,
+                        p.product_name,
+                        COALESCE(ps.current_stock, 0) AS stock,
+                        COALESCE(pp.selling_price, 0) AS price,
+                        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+                    FROM products p
+                    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+                    LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+                    WHERE p.product_id = :product_id AND p.is_archive = 0";
+            $stmt = $pdo->prepare($sql);
+            $stmt->bindParam(':product_id', $product_id);
+            $stmt->execute();
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($product) {
-            $quantity = $cart_item['quantity'] ?? 1;
-            $item_total = $product['price'] * $quantity;
-            $cart_total += $item_total;
+            if ($product) {
+                $quantity = $cart_item['quantity'] ?? 1;
+                $item_total = ($product['price'] ?? 0) * $quantity;
+                $cart_total += $item_total;
 
-            // Check if the item is selected, default to false if not set
-            $is_selected = $cart_item['selected'] ?? false;
-            if ($is_selected) {
-                $selected_items_total += $item_total;
+                // Check if the item is selected, default to false if not set
+                $is_selected = $cart_item['selected'] ?? false;
+                if ($is_selected) {
+                    $selected_items_total += $item_total;
+                }
+
+                $cart_items[] = [
+                    'product' => [
+                        'id' => $product['product_id'] ?? 0,
+                        'name' => $product['product_name'] ?? 'Unknown Product',
+                        'price' => $product['price'] ?? 0,
+                        'image1' => $product['image1'] ?? '',
+                        'stock' => $product['stock'] ?? 0
+                    ],
+                    'quantity' => $quantity,
+                    'total' => $item_total,
+                    'selected' => $is_selected // Add selection status
+                ];
             }
-
-            $cart_items[] = [
-                'product' => [
-                    'id' => $product['id'],
-                    'name' => $product['name'],
-                    'price' => $product['price'],
-                    'image1' => $product['image1'],
-                    // add other product fields if needed
-                ],
-                'quantity' => $quantity,
-                'total' => $item_total,
-                'selected' => $is_selected // Add selection status
-            ];
+        } catch (Exception $e) {
+            error_log("Error loading cart item for product $product_id: " . $e->getMessage());
+            continue;
         }
     }
 }
@@ -64,13 +78,27 @@ if (!empty($_SESSION['cart'])) {
 <!-- Sliding Cart -->
 <div class="sliding-cart" id="slidingCart">
     <div class="cart-header d-flex justify-content-between align-items-center">
-        <h4 class="mb-0 text-secondary fw-bold">Shopping Cart</h4>
+        <h4 class="mb-0 fw-bold" style="color: var(--bs-secondary);">Shopping Cart</h4>
         <button class="cart-close btn p-0" onclick="closeCart()">
-            <i class="fas fa-times fs-4 text-secondary"></i>
+            <i class="fas fa-times fs-4" style="color: var(--bs-secondary);"></i>
         </button>
     </div>
     <div class="cart-body" id="cartContent">
         <!-- Cart content will be loaded here dynamically -->
+    </div>
+    <div class="cart-footer" id="cartFooter" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="fw-bold">Total:</span>
+            <span class="fw-bold cart-total">₱0.00</span>
+        </div>
+        <div class="d-grid gap-2">
+            <button class="btn btn-primary" onclick="window.location.href='cart.php'">
+                <i class="fas fa-shopping-cart me-2"></i>View Cart
+            </button>
+            <button class="btn btn-success" onclick="window.location.href='checkout.php'">
+                <i class="fas fa-credit-card me-2"></i>Checkout
+            </button>
+        </div>
     </div>
 </div>
 
@@ -176,16 +204,22 @@ if (!empty($_SESSION['cart'])) {
 
   // Function to update the cart badge count
   function updateCartBadge() {
-      const cartBadge = document.querySelector('.cart-badge');
-      const cartItemsCount = document.querySelectorAll('.cart-item').length;
-      if (cartBadge) {
-          cartBadge.textContent = cartItemsCount;
-          if (cartItemsCount === 0) {
-              cartBadge.style.display = 'none';
-          } else {
-              cartBadge.style.display = 'flex';
-          }
-      }
+      fetch('cart_count.php')
+          .then(response => response.text())
+          .then(count => {
+              const cartBadge = document.querySelector('.cart-badge');
+              if (cartBadge) {
+                  cartBadge.textContent = count;
+                  if (count == 0) {
+                      cartBadge.style.display = 'none';
+                  } else {
+                      cartBadge.style.display = 'flex';
+                  }
+              }
+          })
+          .catch(error => {
+              console.error('Error updating cart badge:', error);
+          });
   }
 
   
@@ -222,6 +256,7 @@ if (!empty($_SESSION['cart'])) {
         // Reload the entire cart content to reflect changes
         loadCartContent();
         updateCartBadge(); // Update badge count after any quantity change
+        updateCartFooter(); // Update footer totals
       } else {
         console.error('Cart update failed:', data.error || 'Unknown error');
       }
@@ -251,6 +286,7 @@ if (!empty($_SESSION['cart'])) {
         // Reload the entire cart content to reflect changes
         loadCartContent();
         updateCartBadge(); // Update badge count after removal
+        updateCartFooter(); // Update footer totals
       } else {
         console.error('Cart removal failed:', data.error || 'Unknown error');
       }
@@ -277,9 +313,35 @@ if (!empty($_SESSION['cart'])) {
           .then(html => {
               document.getElementById('cartContent').innerHTML = html;
               updateCartBadge(); // Update badge after loading content
+              updateCartFooter(); // Update footer with totals
           })
           .catch(error => {
               console.error('Error loading cart content:', error);
+          });
+  }
+
+  // Function to update cart footer with totals
+  function updateCartFooter() {
+      fetch('cart_total.php')
+          .then(response => response.json())
+          .then(data => {
+              const cartFooter = document.getElementById('cartFooter');
+              const cartTotal = document.querySelector('.cart-total');
+              
+              if (data.has_items) {
+                  cartFooter.style.display = 'block';
+                  if (cartTotal) {
+                      cartTotal.textContent = '₱' + data.total.toLocaleString('en-US', { 
+                          minimumFractionDigits: 2, 
+                          maximumFractionDigits: 2 
+                      });
+                  }
+              } else {
+                  cartFooter.style.display = 'none';
+              }
+          })
+          .catch(error => {
+              console.error('Error loading cart total:', error);
           });
   }
 

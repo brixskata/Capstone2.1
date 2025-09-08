@@ -19,28 +19,49 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } else if (strlen($password) < 6) {
         $_SESSION['error'] = "Password must be at least 6 characters long.";
     } else {
-        // Check if user already exists
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :username OR email = :email");
+        // Check if user already exists (check username in users table and email in user_info table)
+        $stmt = $pdo->prepare("SELECT 1 FROM users WHERE username = :username");
         $stmt->bindParam(':username', $username);
+        $stmt->execute();
+        $usernameExists = $stmt->fetch();
+        
+        $stmt = $pdo->prepare("SELECT 1 FROM user_info WHERE email = :email");
         $stmt->bindParam(':email', $email);
         $stmt->execute();
-        if ($stmt->fetch()) {
+        $emailExists = $stmt->fetch();
+        
+        if ($usernameExists || $emailExists) {
             $_SESSION['error'] = "Username or email already exists.";
         } else {
             // Hash password
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-            // Insert user
-            $stmt = $pdo->prepare("INSERT INTO users (username, email, password, role, email_verified) VALUES (:username, :email, :password, 'customer', 0)");
-            $stmt->bindParam(':username', $username);
-            $stmt->bindParam(':email', $email);
-            $stmt->bindParam(':password', $hashed_password);
-
-            if ($stmt->execute()) {
+            // Start transaction to ensure both inserts succeed
+            $pdo->beginTransaction();
+            try {
+                // Insert user into users table (without email)
+                $stmt = $pdo->prepare("INSERT INTO users (username, password, is_verified, is_active, usertype_id) VALUES (:username, :password, 0, 1, NULL)");
+                $stmt->bindParam(':username', $username);
+                $stmt->bindParam(':password', $hashed_password);
+                $stmt->execute();
+                
+                $newUserId = $pdo->lastInsertId();
+                
+                // Insert user info into user_info table (with email)
+                $stmt = $pdo->prepare("INSERT INTO user_info (user_id, email) VALUES (:user_id, :email)");
+                $stmt->bindParam(':user_id', $newUserId);
+                $stmt->bindParam(':email', $email);
+                $stmt->execute();
+                
+                // Commit transaction
+                $pdo->commit();
+                
                 $_SESSION['success'] = "Registration successful! Please verify your email to complete the process.";
                 header("Location: email_verification.php?email=" . urlencode($email));
                 exit;
-            } else {
+            } catch (Exception $e) {
+                // Rollback transaction on error
+                $pdo->rollBack();
                 $_SESSION['error'] = "Registration failed. Please try again.";
             }
         }

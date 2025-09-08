@@ -12,7 +12,7 @@ $categories = [];
 
 try {
     // Fetch all categories for the sidebar
-    $categories = $pdo->query("SELECT * FROM categories")->fetchAll(PDO::FETCH_ASSOC);
+    $categories = $pdo->query("SELECT category_id, category_name FROM categories")->fetchAll(PDO::FETCH_ASSOC);
     
     // Get user's favorite products if logged in
     $user_favorites = [];
@@ -27,38 +27,65 @@ try {
         $selectedCategory = $_GET['category'];
 
         if ($selectedCategory === 'all') {
-            // Fetch all non-archived products and their UOM
+            // Fetch all non-archived products with normalized data
             $products = $pdo->query("
-                SELECT p.*, uom.name AS uom_name 
+                SELECT 
+                    p.product_id AS id,
+                    p.product_name AS name,
+                    p.product_description AS description,
+                    uom.name AS uom_name,
+                    COALESCE(ps.current_stock, 0) AS stock,
+                    COALESCE(pp.selling_price, 0) AS price,
+                    (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
                 FROM products p
-                LEFT JOIN units_of_measurement uom ON p.uom_id = uom.id
-                WHERE p.is_archived = 0
+                LEFT JOIN uom uom ON p.uom_id = uom.uom_id
+                LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+                LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+                WHERE p.is_archive = 0
             ")->fetchAll(PDO::FETCH_ASSOC);
         } else {
             // Get the selected category's ID
-            $stmt = $pdo->prepare("SELECT id FROM categories WHERE name = :name");
+            $stmt = $pdo->prepare("SELECT category_id FROM categories WHERE category_name = :name");
             $stmt->execute(['name' => $selectedCategory]);
             $categoryData = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($categoryData) {
-                // Fetch products for selected category with UOM
+                // Fetch products for selected category with normalized data
                 $stmt = $pdo->prepare("
-                    SELECT p.*, uom.name AS uom_name 
+                    SELECT 
+                        p.product_id AS id,
+                        p.product_name AS name,
+                        p.product_description AS description,
+                        uom.name AS uom_name,
+                        COALESCE(ps.current_stock, 0) AS stock,
+                        COALESCE(pp.selling_price, 0) AS price,
+                        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
                     FROM products p
-                    LEFT JOIN units_of_measurement uom ON p.uom_id = uom.id
-                    WHERE p.category_id = :category_id AND p.is_archived = 0
+                    LEFT JOIN uom uom ON p.uom_id = uom.uom_id
+                    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+                    LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+                    WHERE p.category_id = :category_id AND p.is_archive = 0
                 ");
-                $stmt->execute(['category_id' => $categoryData['id']]);
+                $stmt->execute(['category_id' => $categoryData['category_id']]);
                 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
         }
     } else {
-        // Fetch all non-archived products with UOM by default
+        // Fetch all non-archived products with normalized data by default
         $products = $pdo->query("
-            SELECT p.*, uom.name AS uom_name 
+            SELECT 
+                p.product_id AS id,
+                p.product_name AS name,
+                p.product_description AS description,
+                uom.name AS uom_name,
+                COALESCE(ps.current_stock, 0) AS stock,
+                COALESCE(pp.selling_price, 0) AS price,
+                (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
             FROM products p
-            LEFT JOIN units_of_measurement uom ON p.uom_id = uom.id
-            WHERE p.is_archived = 0
+            LEFT JOIN uom uom ON p.uom_id = uom.uom_id
+            LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+            LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+            WHERE p.is_archive = 0
         ")->fetchAll(PDO::FETCH_ASSOC);
     }
 } catch (PDOException $e) {
@@ -69,7 +96,16 @@ try {
 $cart_items = [];
 $cart_total = 0;
 foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
-    $sql = "SELECT * FROM products WHERE id = :product_id";
+    $sql = "SELECT 
+                p.product_id AS id,
+                p.product_name AS name,
+                p.product_description AS description,
+                COALESCE(pp.selling_price, 0) AS price,
+                COALESCE(ps.current_stock, 0) AS stock
+            FROM products p
+            LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+            LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+            WHERE p.product_id = :product_id";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':product_id', $product_id);
     $stmt->execute();
@@ -105,14 +141,18 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
 
     <style>
         :root {
-            --bs-primary: #ffffff;
-            --bs-secondary: #7F1734;
+            --bs-primary: #7F1734;
+            --bs-secondary: #a91d42;
             --bs-success: #198754;
-            --bs-danger: #db3030;
+            --bs-danger: #dc3545;
             --bs-warning: #ffc107;
-            --bs-info: #016bf8;
-            --bs-light: #f0f3f2;
-            --bs-dark: #001e2b;
+            --bs-info: #0dcaf0;
+            --bs-light: #f8f9fa;
+            --bs-dark: #212529;
+            --brand-primary: #7F1734;
+            --brand-secondary: #a91d42;
+            --brand-light: #f8f9fa;
+            --brand-gradient: linear-gradient(135deg, #7F1734 0%, #a91d42 100%);
         }
 
         * {
@@ -127,15 +167,17 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
             color: var(--bs-dark);
             background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
             min-height: 100vh;
+            padding-bottom: 120px; /* Add space for footer */
         }
 
         /* Promo Banner */
         .promo-banner {
-            background: var(--bs-secondary);
+            background: var(--brand-gradient);
             color: white;
             padding: 0.75rem 0;
             font-weight: 500;
             font-size: 0.9rem;
+            box-shadow: 0 2px 10px rgba(127, 23, 52, 0.2);
         }
 
         /* Navigation */
@@ -149,7 +191,8 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
         .navbar-brand {
             font-weight: 800;
             font-size: 1.8rem;
-            color: var(--bs-secondary) !important;
+            color: var(--brand-primary) !important;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .navbar-nav .nav-link {
@@ -157,10 +200,27 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
             color: var(--bs-dark) !important;
             transition: all 0.3s ease;
             margin: 0 0.5rem;
+            position: relative;
         }
 
         .navbar-nav .nav-link:hover {
-            color: var(--bs-secondary) !important;
+            color: var(--brand-primary) !important;
+        }
+
+        .navbar-nav .nav-link::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: -5px;
+            left: 50%;
+            background: var(--brand-gradient);
+            transition: all 0.3s ease;
+            transform: translateX(-50%);
+        }
+
+        .navbar-nav .nav-link:hover::after {
+            width: 100%;
         }
 
         /* Cart styles are now handled by the shared navbar */
@@ -171,80 +231,115 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
             border-radius: 1rem;
             padding: 2rem;
             margin-bottom: 2rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 20px rgba(127, 23, 52, 0.1);
+            border: 1px solid rgba(127, 23, 52, 0.1);
         }
 
         .category-title {
             font-size: 1.8rem;
             font-weight: 700;
-            color: var(--bs-secondary);
+            background: var(--brand-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 1rem;
         }
 
         .category-select {
             border: 2px solid #e9ecef;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             padding: 0.75rem 1rem;
             font-weight: 500;
             transition: all 0.3s ease;
+            background: white;
         }
 
         .category-select:focus {
-            border-color: var(--bs-secondary);
-            box-shadow: 0 0 0 0.2rem rgba(127,23,52,0.25);
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
+            outline: none;
         }
 
         /* Product Cards */
         .product-card {
             background: white;
-            border-radius: 1rem;
+            border-radius: 1.25rem;
             padding: 1.5rem;
-            border: 1px solid #e9ecef;
+            border: 1px solid rgba(127, 23, 52, 0.1);
             transition: all 0.3s ease;
             height: 100%;
             position: relative;
+            overflow: hidden;
+        }
+
+        .product-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--brand-gradient);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
         }
 
         .product-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(127, 23, 52, 0.15);
+            border-color: var(--brand-primary);
+        }
+
+        .product-card:hover::before {
+            transform: scaleX(1);
         }
 
         .product-badge {
             position: absolute;
             top: 1rem;
             left: 1rem;
-            background: var(--bs-secondary);
+            background: var(--brand-gradient);
             color: white;
-            padding: 0.25rem 0.75rem;
+            padding: 0.4rem 0.8rem;
             border-radius: 50px;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             font-weight: 600;
             z-index: 3;
+            box-shadow: 0 2px 8px rgba(127, 23, 52, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .product-badge.in-stock {
-            background: var(--bs-success);
+            background: linear-gradient(135deg, #198754 0%, #20c997 100%);
         }
 
         .product-badge.low-stock {
-            background: var(--bs-warning);
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+            color: #212529;
         }
 
         .product-badge.out-of-stock {
-            background: #6c757d;
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
         }
 
         .swiper {
             border-radius: 0.75rem;
             margin-bottom: 1rem;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .swiper-slide img {
+            border-radius: 0.75rem;
         }
 
         .product-title {
             font-size: 1.1rem;
             font-weight: 600;
             margin-bottom: 0.5rem;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
+            line-height: 1.4;
         }
 
         .product-desc {
@@ -258,9 +353,12 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
         }
 
         .product-price {
-            font-size: 1.2rem;
+            font-size: 1.3rem;
             font-weight: 700;
-            color: var(--bs-secondary);
+            background: var(--brand-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 0.5rem;
         }
 
@@ -280,47 +378,55 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
         }
 
         .btn-add-cart {
-            background: var(--bs-secondary);
+            background: var(--brand-gradient);
             color: white;
             border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.75rem;
             font-weight: 600;
             transition: all 0.3s ease;
             margin-right: 0.5rem;
+            box-shadow: 0 4px 15px rgba(127, 23, 52, 0.3);
         }
 
         .btn-add-cart:hover {
-            background: #6b1429;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(127, 23, 52, 0.4);
             color: white;
         }
 
         .btn-favorite {
             background: white;
-            color: var(--bs-secondary);
-            border: 2px solid var(--bs-secondary);
-            padding: 0.5rem;
-            border-radius: 0.5rem;
+            color: var(--brand-primary);
+            border: 2px solid var(--brand-primary);
+            padding: 0.6rem;
+            border-radius: 0.75rem;
             transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(127, 23, 52, 0.1);
         }
 
         .btn-favorite:hover {
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(127, 23, 52, 0.3);
         }
 
         .btn-favorite.favorited {
             background: var(--bs-danger) !important;
             color: white !important;
             border-color: var(--bs-danger) !important;
+            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3) !important;
         }
 
         /* Footer */
         .footer {
-            background: var(--bs-dark);
+            background: linear-gradient(135deg, #212529 0%, #343a40 100%);
             color: white;
             padding: 3rem 0 1rem;
             margin-top: 4rem;
+            position: relative;
+            z-index: 10;
         }
 
         .footer-title {
@@ -359,12 +465,61 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
             .category-title {
                 font-size: 1.5rem;
             }
+
+            .product-card {
+                margin-bottom: 1.5rem;
+            }
+
+            .category-section {
+                padding: 1.5rem;
+            }
         }
 
         @media (max-width: 576px) {
             .sliding-cart {
                 width: 100%;
             }
+
+            .product-card {
+                padding: 1rem;
+            }
+
+            .btn-add-cart {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+
+            .btn-favorite {
+                padding: 0.5rem;
+            }
+        }
+
+        /* Loading animation for images */
+        .swiper-slide img {
+            transition: opacity 0.3s ease;
+        }
+
+        .swiper-slide img[src=""] {
+            opacity: 0;
+        }
+
+        /* Enhanced product grid spacing */
+        .row.g-4 {
+            margin-bottom: 2rem;
+        }
+
+        /* Better spacing for empty states */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #6c757d;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            color: var(--brand-primary);
+            opacity: 0.5;
         }
     </style>
 </head>
@@ -381,7 +536,7 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
     <?php include 'includes/user_navbar.php'; ?>
 
     <!-- Main Content -->
-    <div class="container mt-4">
+    <div class="container mt-4 mb-5">
         <!-- Category Section -->
         <div class="category-section">
             <div class="row align-items-center">
@@ -397,8 +552,8 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                         <select name="category" class="form-select category-select" onchange="this.form.submit()">
                             <option value="all" <?= !isset($_GET['category']) || $_GET['category'] === 'all' ? 'selected' : '' ?>>All Products</option>
                             <?php foreach ($categories as $category): ?>
-                                <option value="<?= htmlspecialchars($category['name']) ?>" <?= isset($_GET['category']) && $_GET['category'] === $category['name'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars(ucfirst($category['name'])) ?>
+                                <option value="<?= htmlspecialchars($category['category_name']) ?>" <?= isset($_GET['category']) && $_GET['category'] === $category['category_name'] ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars(ucfirst($category['category_name'])) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -426,17 +581,13 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                             <div class="swiper-wrapper">
                                 <?php if (!empty($product['image1'])): ?>
                                     <div class="swiper-slide">
-                                        <img src="admin/<?= htmlspecialchars($product['image1']) ?>" class="w-100" style="height: 200px; object-fit: cover;">
+                                        <img src="admin/<?= htmlspecialchars($product['image1']) ?>" class="w-100" style="height: 200px; object-fit: cover;" onerror="this.src='images/placeholder.jpg'">
                                     </div>
-                                <?php endif; ?>
-                                <?php if (!empty($product['image2'])): ?>
+                                <?php else: ?>
                                     <div class="swiper-slide">
-                                        <img src="admin/<?= htmlspecialchars($product['image2']) ?>" class="w-100" style="height: 200px; object-fit: cover;">
-                                    </div>
-                                <?php endif; ?>
-                                <?php if (!empty($product['image3'])): ?>
-                                    <div class="swiper-slide">
-                                        <img src="admin/<?= htmlspecialchars($product['image3']) ?>" class="w-100" style="height: 200px; object-fit: cover;">
+                                        <div class="w-100 d-flex align-items-center justify-content-center" style="height: 200px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 0.75rem;">
+                                            <i class="fas fa-image text-muted" style="font-size: 3rem;"></i>
+                                        </div>
                                     </div>
                                 <?php endif; ?>
                             </div>
@@ -462,18 +613,14 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                         </div>
 
                         <?php if ($product['stock'] > 0): ?>
-                            <form class="add-to-cart-form d-flex align-items-center gap-2" method="POST" action="cart.php">
-                                <input type="hidden" name="product_id" value="<?= $product['id'] ?>">
-                                <input type="hidden" name="action" value="add">
-                                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
-                                <input type="number" name="quantity" value="1" min="1" max="<?= $product['stock'] ?>" class="form-control" style="width: 70px;">
-                                <button type="submit" class="btn-add-cart">
-                                    <i class="fas fa-cart-plus"></i>
-                                </button>
+                            <div class="d-flex align-items-center gap-2">
+                                <a href="product_detail.php?id=<?= $product['id'] ?>" class="btn btn-primary flex-grow-1">
+                                    <i class="fas fa-eye me-2"></i>View Details
+                                </a>
                                 <button type="button" class="btn-favorite <?= in_array($product['id'], $user_favorites) ? 'favorited' : '' ?>" data-product-id="<?= $product['id'] ?>">
                                     <i class="fas fa-heart"></i>
                                 </button>
-                            </form>
+                            </div>
                         <?php else: ?>
                             <button class="btn btn-secondary" disabled>Out of Stock</button>
                         <?php endif; ?>
