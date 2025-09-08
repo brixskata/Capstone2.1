@@ -1,12 +1,43 @@
-
 <?php
 // Include permissions for module access checks
 include_once '../includes/permissions.php';
 ?>
 
+<style>
+/* Sidebar full height with scroll */
+.sidebar {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 🔹 Webkit Scrollbar (Chrome, Edge, Safari) */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background-color: #555;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: #2c1a1a; /* match sidebar background */
+}
+
+/* 🔹 Firefox scrollbar */
+.sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: #888 #2c1a1a;
+}
+</style>
+
 <!-- Modern Sidebar Navigation -->
-<nav class="sidebar" id="sidebar" 
-     style="height: 100vh; overflow-y: auto; overflow-x: hidden;">
+<nav class="sidebar" id="sidebar">
 
   <!-- Navigation Menu -->
   <div class="nav flex-column">
