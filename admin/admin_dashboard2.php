@@ -1,740 +1,333 @@
-
 <?php 
 include 'db.php';
 session_start();
 
 // Ensure user is logged in and has admin access (Super Admin or Admin)
 if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
-	header("Location: login_admin.php");
-	exit; 
+    header("Location: login_admin.php");
+    exit; 
 }
 
 try {
-	// Basic statistics
-	$stmt = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 0");
-	$totalProducts = $stmt->fetchColumn();
+    // Basic statistics
+    $stmt = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 0");
+    $totalProducts = $stmt->fetchColumn();
 
-	// Get total sales from delivered orders
-	$stmt = $pdo->query("SELECT SUM(total_price) as total_sales FROM delivered_orders");
-	$deliveredStats = $stmt->fetch(PDO::FETCH_ASSOC);
-	$totalCompletedSales = $deliveredStats['total_sales'] ?: 0;
+    // Get total sales from delivered orders
+    $stmt = $pdo->query("SELECT SUM(total_price) as total_sales FROM delivered_orders");
+    $deliveredStats = $stmt->fetch(PDO::FETCH_ASSOC);
+    $totalCompletedSales = $deliveredStats['total_sales'] ?: 0;
 
-	// Get total pending sales (Pending/To Ship/Shipped)
-	$stmt = $pdo->query("SELECT SUM(o.total_price)
-		FROM orders o
-		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		WHERE os.status_name IN ('Pending','To Ship','Shipped')");
-	$totalPendingSales = $stmt->fetchColumn() ?: 0;
+    // Get total pending sales (Pending/To Ship/Shipped)
+    $stmt = $pdo->query("SELECT SUM(o.total_price)
+        FROM orders o
+        JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+        WHERE os.status_name IN ('Pending','To Ship','Shipped')");
+    $totalPendingSales = $stmt->fetchColumn() ?: 0;
 
-	$stmt = $pdo->query("SELECT COUNT(*) FROM users");
-	$totalUsers = $stmt->fetchColumn();
+    $stmt = $pdo->query("SELECT COUNT(*) FROM users");
+    $totalUsers = $stmt->fetchColumn();
 
-	// Sum current stock from product_stock for active products
-	$stmt = $pdo->query("SELECT COALESCE(SUM(ps.current_stock),0)
-		FROM products p
-		LEFT JOIN product_stock ps ON ps.product_id = p.product_id
-		WHERE p.is_archive = 0");
-	$totalStock = $stmt->fetchColumn();
+    // Sum current stock from product_stock for active products
+    $stmt = $pdo->query("SELECT CO");
+    $statusCounts = array_fill_keys(['Pending', 'To Ship', 'Shipped', 'Delivered'], 0);
+    $statusAmounts = array_fill_keys(['Pending', 'To Ship', 'Shipped', 'Delivered'], 0);
 
-	// Order status counts
-	$stmt = $pdo->query("SELECT COUNT(*)
-		FROM orders o
-		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		WHERE os.status_name = 'Pending'");
-	$pendingOrders = $stmt->fetchColumn();
+    $stmt = $pdo->query("SELECT os.status_name, COUNT(*) AS order_count, SUM(o.total_price) AS total_amount
+                        FROM orders o
+                        JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+                        GROUP BY os.status_name");
 
-	$stmt = $pdo->query("SELECT COUNT(*)
-		FROM orders o
-		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		WHERE os.status_name = 'To Ship'");
-	$processingOrders = $stmt->fetchColumn();
-
-	$stmt = $pdo->query("SELECT COUNT(*)
-		FROM orders o
-		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		WHERE os.status_name = 'Shipped'");
-	$shippedOrders = $stmt->fetchColumn();
-
-	// Recent orders
-	$stmt = $pdo->query("SELECT o.orders_id AS id, u.username, os.status_name AS status, o.created_at 
-						FROM orders o 
-						JOIN users u ON o.user_id = u.user_id 
-						JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-						ORDER BY o.created_at DESC 
-						LIMIT 5");
-	$recentOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-	// Low stock products
-	$stmt = $pdo->query("SELECT p.product_name AS name, COALESCE(ps.current_stock,0) AS stock
-						FROM products p
-						LEFT JOIN product_stock ps ON ps.product_id = p.product_id
-						WHERE COALESCE(ps.current_stock,0) < 10 AND p.is_archive = 0
-						ORDER BY ps.current_stock ASC 
-						LIMIT 5");
-	$lowStockProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-	// Sales data for line chart (last 12 months)
-	$stmt = $pdo->query("SELECT 
-		DATE_FORMAT(delivered_at, '%Y-%m') as month,
-		SUM(total_price) as total_sales,
-		COUNT(*) as order_count
-		FROM delivered_orders 
-		WHERE delivered_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-		GROUP BY DATE_FORMAT(delivered_at, '%Y-%m')
-		ORDER BY month ASC");
-	$salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-	// Product categories data for pie chart
-	$stmt = $pdo->query("SELECT 
-		c.category_name as category,
-		COUNT(p.product_id) as product_count,
-		COALESCE(SUM(ps.current_stock),0) as total_stock
-		FROM categories c
-		LEFT JOIN products p ON c.category_id = p.category_id AND p.is_archive = 0
-		LEFT JOIN product_stock ps ON ps.product_id = p.product_id
-		GROUP BY c.category_id, c.category_name
-		HAVING product_count > 0
-		ORDER BY product_count DESC");
-	$categoriesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-	// Order status data for bar chart
-	$stmt = $pdo->query("SELECT 
-		os.status_name AS status,
-		COUNT(*) as order_count,
-		SUM(o.total_price) as total_amount
-		FROM orders o
-		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		GROUP BY os.status_name 
-		ORDER BY order_count DESC");
-	$orderStatusData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-} catch (Exception $e) {
-	echo "Error: " . $e->getMessage();
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        if (isset($statusCounts[$row['status_name']])) {
+            $statusCounts[$row['status_name']] = (int)$row['order_count'];
+            $statusAmounts[$row['status_name']] = (float)$row['total_amount'];
+        }
+    }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MikeMadz - Admin Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <?php include 'includes/admin_styles.php'; ?>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <!-- Navigation Menu Styles -->
     <style>
-    .metric-card {
-      background: white;
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-      border: 1px solid #e9ecef;
-      transition: all 0.3s ease;
-      height: 100%;
-    }
-    
-    .metric-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-    }
-    
-    .metric-icon {
-      width: 56px;
-      height: 56px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      color: white;
-      margin-bottom: 16px;
-    }
-    
-    .chart-container {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-      border: 1px solid #e9ecef;
-      overflow: hidden;
-    }
-    
-    .chart-header {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-      padding: 20px 24px;
-      border-bottom: 1px solid #e9ecef;
-    }
-    
-    .chart-body {
-      padding: 24px;
-    }
-    
-    .status-badge {
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: capitalize;
-    }
-    
-    .table-modern {
-      background: white;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-    }
-    
-    .table-modern thead {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    }
-    
-    .table-modern th {
-      border: none;
-      padding: 16px 20px;
-      font-weight: 600;
-      color: var(--dark-text);
-    }
-    
-    .table-modern td {
-      border: none;
-      padding: 16px 20px;
-      vertical-align: middle;
-    }
-    
-    .page-title {
-      color: var(--dark-text);
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-    
-    .page-subtitle {
-      color: #6c757d;
-      font-size: 16px;
-      margin-bottom: 32px;
-    }
-  </style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            min-height: 100vh;
+        }
+        /* Custom scrollbar for demonstration */
+        .scrollbar-hidden::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hidden {
+            -ms-overflow-style: none; /* IE and Edge */
+            scrollbar-width: none; /* Firefox */
+        }
+        /* Styles for the smooth reveal effect */
+        .logout-btn-wrapper {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            opacity: 0;
+        }
+        .logout-btn-wrapper.is-visible {
+            max-height: 100px; /* A value large enough to contain the button */
+            opacity: 1;
+        }
+    </style>
 </head>
-<body>
-  <?php include 'includes/admin_navbar.php'; ?>
-  <?php include 'includes/admin_sidebar.php'; ?>
-
-  <!-- Main Content Area -->
-  <main class="main-content" id="mainContent">
-    <!-- Page Header -->
-    <div class="mb-5">
-      <h1 class="page-title">
-        <i class="fas fa-tachometer-alt text-primary me-3"></i>Dashboard Analytics
-      </h1>
-     
+<body class="bg-gray-100 flex flex-col min-h-screen">
+    <div class="flex-grow p-4">
+        <!-- Your existing dashboard content -->
+        <h1 class="text-2xl font-bold text-gray-800 mt-10">Admin Dashboard</h1>
+        <div class="container mx-auto mt-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow-md flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-700">Total Products</h2>
+                        <p class="text-3xl font-bold text-gray-900 mt-1"><?php echo $totalProducts; ?></p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-700">Total Completed Sales</h2>
+                        <p class="text-3xl font-bold text-green-500 mt-1">₱<?php echo number_format($totalCompletedSales, 2); ?></p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-700">Total Pending Sales</h2>
+                        <p class="text-3xl font-bold text-yellow-500 mt-1">₱<?php echo number_format($totalPendingSales, 2); ?></p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-700">Total Users</h2>
+                        <p class="text-3xl font-bold text-gray-900 mt-1"><?php echo $totalUsers; ?></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4">Order Status Breakdown</h2>
+                <canvas id="orderStatusChart"></canvas>
+            </div>
+        </div>
+        <div id="message-box" class="mt-6 p-4 rounded-lg shadow-md max-w-sm mx-auto hidden">
+            <p id="message-text" class="text-sm font-medium"></p>
+        </div>
     </div>
-
-    <!-- Key Metrics Cards -->
-    <div class="row g-4 mb-5">
-      <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-          <div class="metric-icon bg-info">
-            <i class="fas fa-box"></i>
-          </div>
-          <h3 class="fw-bold mb-1"><?php echo number_format($totalProducts); ?></h3>
-          <p class="text-muted mb-0">Active Products</p>
-        </div>
-      </div>
-      
-      <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-          <div class="metric-icon bg-success">
-            <i class="fas fa-peso-sign"></i>
-          </div>
-          <h3 class="fw-bold mb-1">₱<?php echo number_format($totalCompletedSales, 2); ?></h3>
-          <p class="text-muted mb-0">Total Revenue</p>
-        </div>
-      </div>
-      
-      <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-          <div class="metric-icon" style="background-color: #7F1734;">
-            <i class="fas fa-users"></i>
-          </div>
-          <h3 class="fw-bold mb-1"><?php echo number_format($totalUsers); ?></h3>
-          <p class="text-muted mb-0">Registered Users</p>
-        </div>
-      </div>
-      
-      <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-          <div class="metric-icon bg-warning">
-            <i class="fas fa-cubes"></i>
-          </div>
-          <h3 class="fw-bold mb-1"><?php echo number_format($totalStock); ?></h3>
-          <p class="text-muted mb-0">Items in Stock</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Analytics Charts - Moved to Top -->
-    <div class="row g-4 mb-5">
-      <!-- Sales Trend Line Chart -->
-      <div class="col-lg-8">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-line text-success me-2"></i>Sales Trend Analysis
-            </h5>
-            <small class="text-muted">Monthly revenue over the last 12 months</small>
-          </div>
-          <div class="chart-body">
-            <canvas id="salesTrendChart" height="120"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Product Categories Pie Chart -->
-      <div class="col-lg-4">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-pie text-warning me-2"></i>Product Distribution
-            </h5>
-            <small class="text-muted">Products by category</small>
-          </div>
-          <div class="chart-body">
-            <canvas id="categoriesChart"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Order Status Overview -->
-    <div class="row g-4 mb-5">
-      <div class="col-md-4">
-        <div class="metric-card text-center">
-          <div class="metric-icon bg-warning mx-auto">
-            <i class="fas fa-clock"></i>
-          </div>
-          <h4 class="fw-bold"><?php echo $pendingOrders; ?></h4>
-          <p class="text-muted">Pending Orders</p>
-        </div>
-      </div>
-      
-      <div class="col-md-4">
-        <div class="metric-card text-center">
-          <div class="metric-icon bg-info mx-auto">
-            <i class="fas fa-spinner"></i>
-          </div>
-          <h4 class="fw-bold"><?php echo $processingOrders; ?></h4>
-          <p class="text-muted">Processing Orders</p>
-        </div>
-      </div>
-      
-      <div class="col-md-4">
-        <div class="metric-card text-center">
-          <div class="metric-icon mx-auto" style="background-color: #7F1734;">
-            <i class="fas fa-shipping-fast"></i>
-          </div>
-          <h4 class="fw-bold"><?php echo $shippedOrders; ?></h4>
-          <p class="text-muted">Shipped Orders</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Order Status Bar Chart -->
-    <div class="row g-4 mb-5">
-      <div class="col-12">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-bar text-info me-2"></i>Order Status Overview
-            </h5>
-            <small class="text-muted">Distribution of orders by current status</small>
-          </div>
-          <div class="chart-body">
-            <canvas id="orderStatusChart" height="100"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Data Tables -->
-    <div class="row g-4">
-      <!-- Recent Orders Table -->
-      <div class="col-lg-8">
-        <div class="table-modern">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">Latest Orders</h5>
-            <small class="text-muted">Most recent customer orders</small>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead>
-                <tr>
-                  <th>Order ID</th>
-                  <th>Customer</th>
-                  <th>Status</th>
-                  <th>Order Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach($recentOrders as $order): ?>
-                <tr>
-                  <td class="fw-semibold">#<?php echo str_pad($order['id'], 4, '0', STR_PAD_LEFT); ?></td>
-                  <td><?php echo htmlspecialchars($order['username']); ?></td>
-                  <td>
-                    <?php
-                      $status = strtolower($order['status']);
-                      $badgeClass = 'bg-secondary';
-                      if ($status === 'pending') $badgeClass = 'bg-warning text-dark';
-                      elseif ($status === 'to ship') $badgeClass = 'bg-info';
-                      elseif ($status === 'shipped') $badgeClass = 'text-white';
-                      elseif ($status === 'completed' || $status === 'delivered') $badgeClass = 'bg-success';
-                    ?>
-                    <span class="status-badge <?php echo $badgeClass; ?>" 
-                          <?php if($status === 'shipped') echo 'style="background-color: #7F1734;"'; ?>>
-                      <?php echo ucwords($order['status']); ?>
-                    </span>
-                  </td>
-                  <td class="text-muted"><?php echo date('M j, Y g:i A', strtotime($order['created_at'])); ?></td>
-                </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- Low Stock Alert -->
-      <div class="col-lg-4">
-        <div class="table-modern">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0 text-danger">
-              <i class="fas fa-exclamation-triangle me-2"></i>Stock Alerts
-            </h5>
-            <small class="text-muted">Products running low</small>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead>
-                <tr>
-                  <th>Product Name</th>
-                  <th class="text-center">Stock</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach($lowStockProducts as $product): ?>
-                <tr>
-                  <td class="fw-medium"><?php echo htmlspecialchars($product['name']); ?></td>
-                  <td class="text-center">
-                    <span class="badge bg-danger fs-6"><?php echo $product['stock']; ?></span>
-                  </td>
-                </tr>
-                <?php endforeach; ?>
-                <?php if (empty($lowStockProducts)): ?>
-                <tr>
-                  <td colspan="2" class="text-center text-muted py-4">
-                    <i class="fas fa-check-circle text-success me-2"></i>All products have sufficient stock
-                  </td>
-                </tr>
-                <?php endif; ?>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  
-  <?php include 'includes/admin_scripts.php'; ?>
-  
-  <script>
-    // Chart configuration
-    Chart.defaults.font.family = 'Inter, Segoe UI, sans-serif';
-    Chart.defaults.color = '#6c757d';
     
-    // Sales Trend Line Chart
-    const salesCtx = document.getElementById('salesTrendChart').getContext('2d');
-    new Chart(salesCtx, {
-        type: 'line',
-        data: {
-            labels: [
-                <?php 
-                $months = [];
-                $sales = [];
-                // Ensure we have data for the last 12 months, filling gaps with 0
-                $allMonths = [];
-                for ($i = 11; $i >= 0; $i--) {
-                    $month = date('Y-m', strtotime("-$i months"));
-                    $allMonths[$month] = 0;
-                }
-                
-                foreach ($salesData as $data) {
-                    $allMonths[$data['month']] = floatval($data['total_sales']);
-                }
-                
-                foreach ($allMonths as $month => $sale) {
-                    $months[] = "'" . date('M Y', strtotime($month . '-01')) . "'";
-                    $sales[] = $sale;
-                }
-                echo implode(', ', $months);
-                ?>
-            ],
-            datasets: [{
-                label: 'Monthly Revenue (₱)',
-                data: [<?php echo implode(', ', $sales); ?>],
-                borderColor: '#198754',
-                backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointBackgroundColor: '#198754',
-                pointBorderColor: '#ffffff',
-                pointBorderWidth: 3,
-                pointRadius: 6,
-                pointHoverRadius: 8,
-                pointHoverBackgroundColor: '#198754',
-                pointHoverBorderColor: '#ffffff',
-                pointHoverBorderWidth: 3
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        font: {
-                            size: 13,
-                            weight: 'bold'
-                        },
-                        padding: 20
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#ffffff',
-                    cornerRadius: 8,
-                    padding: 12
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.1)',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return '₱' + new Intl.NumberFormat('en-PH').format(value);
-                        },
-                        font: {
-                            size: 12
-                        },
-                        padding: 10
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false,
-                        drawBorder: false
-                    },
-                    ticks: {
-                        font: {
-                            size: 12
-                        },
-                        padding: 10
-                    }
-                }
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            }
-        }
-    });
+    <!-- Interactive Navigation Menu -->
+    <nav id="nav-menu" class="fixed bottom-0 left-0 w-full bg-white shadow-lg border-t-2 border-gray-200 p-2 overflow-x-auto scrollbar-hidden">
+        <div class="flex flex-nowrap items-center justify-between space-x-4">
+            <!-- Home Button -->
+            <button class="flex flex-col items-center justify-center p-2 rounded-lg text-blue-600 hover:bg-gray-200 transition-colors flex-shrink-0 min-w-[70px]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-10v10a1 1 0 001 1h3M3 12l2-2m0 0l7-7 7 7m-7 7h-2.5a2.5 2.5 0 01-2.5-2.5V9.5a2.5 2.5 0 012.5-2.5h2.5a2.5 2.5 0 012.5 2.5v2.5a2.5 2.5 0 01-2.5 2.5z" />
+                </svg>
+                <span class="mt-1 text-xs font-medium">Home</span>
+            </button>
 
-    // Product Categories Pie Chart
-    const categoriesCtx = document.getElementById('categoriesChart').getContext('2d');
-    new Chart(categoriesCtx, {
-        type: 'doughnut',
-        data: {
-            labels: [
-                <?php 
-                $categoryNames = [];
-                $productCounts = [];
-                $colors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c'];
-                foreach ($categoriesData as $index => $data) {
-                    $categoryNames[] = "'" . htmlspecialchars($data['category']) . "'";
-                    $productCounts[] = intval($data['product_count']);
-                }
-                echo implode(', ', $categoryNames);
-                ?>
-            ],
-            datasets: [{
-                data: [<?php echo implode(', ', $productCounts); ?>],
-                backgroundColor: [
-                    <?php 
-                    for ($i = 0; $i < count($productCounts); $i++) {
-                        echo "'" . $colors[$i % count($colors)] . "'";
-                        if ($i < count($productCounts) - 1) echo ", ";
-                    }
-                    ?>
-                ],
-                borderColor: '#ffffff',
-                borderWidth: 3,
-                hoverBorderWidth: 4,
-                hoverOffset: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        padding: 20,
-                        font: {
-                            size: 12
-                        },
-                        usePointStyle: true,
-                        pointStyle: 'circle'
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#ffffff',
-                    cornerRadius: 8,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((context.parsed / total) * 100).toFixed(1);
-                            return context.label + ': ' + context.parsed + ' products (' + percentage + '%)';
-                        }
-                    }
-                }
-            }
-        }
-    });
+            <!-- Menu Button -->
+            <button class="flex flex-col items-center justify-center p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-gray-200 transition-colors flex-shrink-0 min-w-[70px]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                <span class="mt-1 text-xs font-medium">Menu</span>
+            </button>
 
-    // Order Status Bar Chart
-    const orderStatusCtx = document.getElementById('orderStatusChart').getContext('2d');
-    new Chart(orderStatusCtx, {
-        type: 'bar',
-        data: {
-            labels: [
-                <?php 
-                $statusLabels = [];
-                $statusCounts = [];
-                $statusAmounts = [];
-                foreach ($orderStatusData as $data) {
-                    $statusLabels[] = "'" . ucwords($data['status']) . "'";
-                    $statusCounts[] = intval($data['order_count']);
-                    $statusAmounts[] = floatval($data['total_amount']);
-                }
-                echo implode(', ', $statusLabels);
-                ?>
-            ],
-            datasets: [{
-                label: 'Number of Orders',
-                data: [<?php echo implode(', ', $statusCounts); ?>],
-                backgroundColor: [
-                    'rgba(255, 193, 7, 0.8)',   // Pending
-                    'rgba(13, 202, 240, 0.8)',  // To Ship / Processing
-                    'rgba(127, 23, 52, 0.8)',   // Shipped
-                    'rgba(25, 135, 84, 0.8)',   // Completed/Delivered
-                    'rgba(220, 53, 69, 0.8)',   // Cancelled
-                ],
-                borderColor: [
-                    '#ffc107',
-                    '#0dcaf0', 
-                    '#7f1734',
-                    '#198754',
-                    '#dc3545',
-                ],
-                borderWidth: 2,
-                borderRadius: 8,
-                borderSkipped: false,
-                hoverBackgroundColor: [
-                    'rgba(255, 193, 7, 1)',
-                    'rgba(13, 202, 240, 1)',
-                    'rgba(127, 23, 52, 1)',
-                    'rgba(25, 135, 84, 1)',
-                    'rgba(220, 53, 69, 1)',
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        font: {
-                            size: 13,
-                            weight: 'bold'
-                        },
-                        padding: 20
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#ffffff',
-                    cornerRadius: 8,
-                    padding: 12,
-                    callbacks: {
-                        afterLabel: function(context) {
-                            const amounts = [<?php echo implode(', ', $statusAmounts); ?>];
-                            if (amounts[context.dataIndex] > 0) {
-                                return 'Total Value: ₱' + new Intl.NumberFormat('en-PH').format(amounts[context.dataIndex]);
+            <!-- Order Button -->
+            <button class="flex flex-col items-center justify-center p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-gray-200 transition-colors flex-shrink-0 min-w-[70px]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+                <span class="mt-1 text-xs font-medium">Order</span>
+            </button>
+
+            <!-- Location Button -->
+            <button class="flex flex-col items-center justify-center p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-gray-200 transition-colors flex-shrink-0 min-w-[70px]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span class="mt-1 text-xs font-medium">Location</span>
+            </button>
+
+            <!-- About Button -->
+            <button class="flex flex-col items-center justify-center p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-gray-200 transition-colors flex-shrink-0 min-w-[70px]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="mt-1 text-xs font-medium">About</span>
+            </button>
+
+            <!-- Maintenance/Log Out Group -->
+            <div class="flex flex-col items-center flex-shrink-0 space-y-2">
+                <!-- Maintenance Button -->
+                <button id="maintenance-btn" class="flex flex-col items-center justify-center p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-gray-200 transition-colors min-w-[70px]">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                    <span class="mt-1 text-xs font-medium">Maintenance</span>
+                </button>
+                
+                <!-- Log Out Button - Wrapper for smooth transition -->
+                <div class="logout-btn-wrapper">
+                    <button id="logout-btn" class="flex flex-col items-center justify-center p-2 rounded-lg text-gray-500 hover:text-red-500 hover:bg-gray-200 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        <span class="mt-1 text-xs font-medium">Log Out</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Navigation Menu Script -->
+    <script>
+        const maintenanceBtn = document.getElementById('maintenance-btn');
+        const logoutBtnWrapper = document.querySelector('.logout-btn-wrapper');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+
+        // Function to show a temporary message
+        function showMessage(text, isError = false) {
+            messageText.textContent = text;
+            messageBox.style.display = 'block';
+            if (isError) {
+                messageBox.classList.remove('bg-gray-200', 'text-gray-800');
+                messageBox.classList.add('bg-red-100', 'text-red-700');
+            } else {
+                messageBox.classList.remove('bg-red-100', 'text-gray-800');
+                messageBox.classList.add('bg-gray-200', 'text-gray-800');
+            }
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 3000); // Hide after 3 seconds
+        }
+
+        // Event listener for the maintenance button
+        maintenanceBtn.addEventListener('click', () => {
+            // Toggle the visibility of the log out button with the new wrapper
+            logoutBtnWrapper.classList.toggle('is-visible');
+            if (logoutBtnWrapper.classList.contains('is-visible')) {
+                showMessage("Maintenance options are now visible.");
+            } else {
+                showMessage("Maintenance options are now hidden.");
+            }
+        });
+
+        // Event listener for the log out button
+        const logoutBtn = document.getElementById('logout-btn');
+        logoutBtn.addEventListener('click', () => {
+            showMessage("You have been logged out.", true);
+            // In a real application, you would add your logout logic here
+            // e.g., redirecting to a login page, clearing session data, etc.
+        });
+        
+        // Add event listeners for other buttons to show they are functional
+        document.querySelectorAll('.flex-col:not(#maintenance-btn):not(.logout-btn-wrapper button)').forEach(button => {
+            button.addEventListener('click', (event) => {
+                const buttonText = event.currentTarget.querySelector('span').textContent;
+                showMessage(`Navigating to the ${buttonText} page.`);
+            });
+        });
+
+    </script>
+    <script>
+        // Your existing Chart.js script
+        const ctx = document.getElementById('orderStatusChart').getContext('2d');
+        const orderStatusChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Pending', 'To Ship', 'Shipped', 'Delivered'],
+                datasets: [{
+                    label: 'Number of Orders',
+                    data: [<?php echo implode(', ', $statusCounts); ?>],
+                    backgroundColor: [
+                        'rgba(255, 159, 64, 0.7)',
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(153, 102, 255, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                const amounts = [<?php echo implode(', ', $statusAmounts); ?>];
+                                if (amounts[context.dataIndex] > 0) {
+                                    return 'Total Value: ₱' + new Intl.NumberFormat('en-PH').format(amounts[context.dataIndex]);
+                                }
+                                return '';
                             }
-                            return '';
                         }
                     }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.1)',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        stepSize: 1,
-                        font: {
-                            size: 12
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)',
+                            drawBorder: false
                         },
-                        padding: 10
+                        ticks: {
+                            stepSize: 1,
+                            font: {
+                                size: 12
+                            },
+                            padding: 10
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        },
+                        ticks: {
+                            font: {
+                                size: 12
+                            },
+                            padding: 10
+                        }
                     }
                 },
-                x: {
-                    grid: {
-                        display: false,
-                        drawBorder: false
-                    },
-                    ticks: {
-                        font: {
-                            size: 12
-                        },
-                        padding: 10
-                    }
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
                 }
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index'
             }
-        }
-    });
-  </script>
+        });
+      </script>
 </body>
 </html>
