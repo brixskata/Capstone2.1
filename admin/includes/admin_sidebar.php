@@ -4,57 +4,41 @@ include_once '../includes/permissions.php';
 ?>
 
 <style>
-/* Sidebar full height with flexbox */
+/* Sidebar full height with scroll */
 .sidebar {
   height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #2c1a1a; /* match your sidebar bg */
-}
-
-/* Scrollable navigation area */
-.sidebar .nav {
-  flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 60px; /* prevent overlap with sticky logout */
 }
 
-/* Custom scrollbar */
-.sidebar .nav::-webkit-scrollbar {
+/* 🔹 Webkit Scrollbar (Chrome, Edge, Safari) */
+.sidebar::-webkit-scrollbar {
   width: 6px;
 }
 
-.sidebar .nav::-webkit-scrollbar-thumb {
+.sidebar::-webkit-scrollbar-thumb {
   background-color: #888;
   border-radius: 4px;
 }
 
-.sidebar .nav::-webkit-scrollbar-thumb:hover {
+.sidebar::-webkit-scrollbar-thumb:hover {
   background-color: #555;
 }
 
-.sidebar .nav::-webkit-scrollbar-track {
-  background: #2c1a1a;
+.sidebar::-webkit-scrollbar-track {
+  background: #2c1a1a; /* match sidebar background */
 }
 
-.sidebar .nav {
+/* 🔹 Firefox scrollbar */
+.sidebar {
   scrollbar-width: thin;
   scrollbar-color: #888 #2c1a1a;
-}
-
-/* Sticky logout */
-.nav-section-bottom {
-  position: sticky;
-  bottom: 0;
-  background: #2c1a1a;
-  padding: 10px;
-  border-top: 1px solid #444; /* subtle divider */
 }
 </style>
 
 <!-- Modern Sidebar Navigation -->
 <nav class="sidebar" id="sidebar">
+
   <!-- Navigation Menu -->
   <div class="nav flex-column">
     <div class="nav-section">
@@ -137,13 +121,13 @@ include_once '../includes/permissions.php';
         <div class="nav-indicator"></div>
       </a>
     </div>
-  </div>
-
-  <!-- Sticky Bottom Section -->
-  <div class="nav-section nav-section-bottom">
-    <a href="logout_admin.php" class="nav-link nav-link-danger">
-      <i class="fas fa-sign-out-alt"></i>
-      <span>Logout</span>
-    </a>
+    
+    <!-- Bottom Section -->
+    <div class="nav-section nav-section-bottom">
+      <a href="logout_admin.php" class="nav-link nav-link-danger">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </div>
   </div>
 </nav>
