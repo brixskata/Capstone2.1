@@ -5,11 +5,9 @@ include_once '../includes/permissions.php';
 ?>
 
 <!-- Modern Sidebar Navigation -->
-<nav class="sidebar" id="sidebar">
+<nav class="sidebar" id="sidebar" 
+     style="height: 100vh; overflow-y: auto; overflow-x: hidden;">
 
- 
-  </button>
- 
   <!-- Navigation Menu -->
   <div class="nav flex-column">
     <div class="nav-section">
