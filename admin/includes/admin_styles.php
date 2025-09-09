@@ -105,6 +105,131 @@
     color: white;
     transform: translateY(-1px);
   }
+
+  /* ===== Navbar ===== */
+.top-navbar {
+  background: var(--bs-body-bg);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  padding: 0.5rem 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+}
+
+/* ===== Quick Links ===== */
+.nav-quick-link {
+  color: var(--bs-gray-600);
+  font-size: 1.2rem;
+  margin: 0 0.4rem;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+.nav-quick-link:hover {
+  background: var(--bs-primary-bg-subtle);
+  color: var(--bs-primary);
+}
+
+/* ===== Notification Icon ===== */
+.nav-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--bs-gray-700);
+  font-size: 1.2rem;
+  position: relative;
+  padding: 6px;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+.nav-icon-btn:hover {
+  background: rgba(0,0,0,0.05);
+}
+.notification-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: var(--bs-danger);
+  color: #fff;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+/* ===== Notification Dropdown ===== */
+.notification-dropdown {
+  width: 280px;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+}
+.notification-dropdown .dropdown-item {
+  padding: 0.6rem 1rem;
+  font-size: 0.875rem;
+}
+.notification-dropdown .dropdown-header {
+  font-weight: 600;
+  color: var(--bs-primary);
+}
+
+/* ===== Profile Section ===== */
+.admin-profile {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+.admin-profile:hover {
+  background: rgba(0,0,0,0.05);
+}
+.admin-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--bs-light);
+}
+
+/* ===== Profile Dropdown ===== */
+.dropdown-menu {
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+}
+.dropdown-item {
+  font-size: 0.9rem;
+  padding: 0.6rem 1rem;
+}
+.dropdown-item:hover {
+  background: var(--bs-primary-bg-subtle);
+  color: var(--bs-primary);
+}
+
+/* ===== Dark Mode Toggle ===== */
+.dark-mode-toggle {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  padding: 6px;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+.dark-mode-toggle:hover {
+  background: rgba(0,0,0,0.05);
+}
+.theme-icon {
+  display: none;
+}
+.dark-mode-toggle .sun { display: inline; }
+body.dark-mode .dark-mode-toggle .sun { display: none; }
+body.dark-mode .dark-mode-toggle .moon { display: inline; }
+
   
   .nav-icon-btn {
     position: relative;
