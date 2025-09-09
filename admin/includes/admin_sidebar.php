@@ -4,56 +4,43 @@ include_once '../includes/permissions.php';
 ?>
 
 <style>
-/* Sidebar full height */
+/* Sidebar full height with scroll */
 .sidebar {
   height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #2c1a1a;
-  color: white;
-}
-
-/* Scrollable area */
-.sidebar .nav-content {
-  flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 10px;
 }
 
-/* Scrollbar styling */
-.sidebar .nav-content::-webkit-scrollbar {
+/* 🔹 Webkit Scrollbar (Chrome, Edge, Safari) */
+.sidebar::-webkit-scrollbar {
   width: 6px;
 }
-.sidebar .nav-content::-webkit-scrollbar-thumb {
+
+.sidebar::-webkit-scrollbar-thumb {
   background-color: #888;
   border-radius: 4px;
 }
-.sidebar .nav-content::-webkit-scrollbar-thumb:hover {
+
+.sidebar::-webkit-scrollbar-thumb:hover {
   background-color: #555;
 }
-.sidebar .nav-content::-webkit-scrollbar-track {
-  background: #2c1a1a;
-}
-.sidebar .nav-content {
-  scrollbar-width: thin;
-  scrollbar-color: #888 #2c1a1a;
+
+.sidebar::-webkit-scrollbar-track {
+  background: #2c1a1a; /* match sidebar background */
 }
 
-/* Fixed bottom logout */
-.nav-section-bottom {
-  flex-shrink: 0;
-  padding: 12px 16px;
-  border-top: 1px solid #444;
-  background: #2c1a1a;
+/* 🔹 Firefox scrollbar */
+.sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: #888 #2c1a1a;
 }
 </style>
 
 <!-- Modern Sidebar Navigation -->
 <nav class="sidebar" id="sidebar">
 
-  <!-- Scrollable Section -->
-  <div class="nav-content">
+  <!-- Navigation Menu -->
+  <div class="nav flex-column">
     <div class="nav-section">
       <div class="nav-section-title"><span>Main</span></div>
       <a href="admin_dashboard2.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'admin_dashboard2.php' ? 'active' : ''; ?>">
@@ -134,13 +121,13 @@ include_once '../includes/permissions.php';
         <div class="nav-indicator"></div>
       </a>
     </div>
-  </div>
-
-  <!-- Fixed Bottom (Logout) -->
-  <div class="nav-section-bottom">
-    <a href="logout_admin.php" class="nav-link nav-link-danger">
-      <i class="fas fa-sign-out-alt"></i>
-      <span>Logout</span>
-    </a>
+    
+    <!-- Bottom Section -->
+    <div class="nav-section nav-section-bottom">
+      <a href="logout_admin.php" class="nav-link nav-link-danger">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </div>
   </div>
 </nav>
