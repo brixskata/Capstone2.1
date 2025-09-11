@@ -325,6 +325,285 @@ try {
             50% { transform: translateY(-20px); }
         }
 
+        /* Enhanced Product Cards */
+        .product-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(127,23,52,0.05) 0%, rgba(169,29,66,0.05) 100%);
+            opacity: 0;
+            transition: all 0.3s ease;
+            border-radius: 1rem;
+        }
+
+        .product-card:hover::before {
+            opacity: 1;
+        }
+
+        .product-card:hover .product-image {
+            transform: scale(1.05);
+            transition: all 0.3s ease;
+        }
+
+        .product-card .add-to-cart-form .btn-add-cart {
+            transform: translateY(10px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .product-card:hover .add-to-cart-form .btn-add-cart {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* Enhanced Floating Cards */
+        .floating-card {
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .floating-card:hover {
+            transform: translateY(-30px) scale(1.1);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        .floating-card::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: var(--bs-secondary);
+            border-radius: 0.75rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: -1;
+        }
+
+        .floating-card:hover::before {
+            opacity: 0.1;
+        }
+
+        /* Enhanced Category Cards */
+        .category-card {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="1" fill="%23ffffff" opacity="0.05"/><circle cx="80" cy="40" r="1" fill="%23ffffff" opacity="0.05"/><circle cx="40" cy="80" r="1" fill="%23ffffff" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            background-size: 200px 200px;
+            overflow: hidden;
+        }
+
+        .category-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, var(--bs-secondary) 0%, rgba(127,23,52,0.8) 100%);
+            transition: all 0.3s ease;
+            z-index: 1;
+        }
+
+        .category-card:hover::before {
+            background: linear-gradient(135deg, rgba(127,23,52,0.9) 0%, rgba(169,29,66,0.8) 100%);
+        }
+
+        /* Enhanced Features Section */
+        .feature-card {
+            transition: all 0.3s ease;
+            border-radius: 1rem;
+            padding: 2.5rem 1.5rem;
+            background: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            border: 1px solid #f0f0f0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background: var(--bs-secondary);
+            transition: all 0.6s ease;
+        }
+
+        .feature-card:hover::before {
+            left: 0;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 15px 35px rgba(127,23,52,0.15);
+        }
+
+        .feature-icon {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-icon::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            transition: all 0.6s ease;
+            transform: translate(-50%, -50%);
+        }
+
+        .feature-card:hover .feature-icon::before {
+            width: 120%;
+            height: 120%;
+        }
+
+        .feature-card:hover .feature-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        /* Enhanced Hero Section */
+        .hero-title {
+            background: linear-gradient(135deg, var(--bs-dark) 0%, var(--bs-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+        }
+
+        .hero-badge {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-badge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: all 0.8s ease;
+        }
+
+        .hero-badge:hover::before {
+            left: 100%;
+        }
+
+        /* Loading States */
+        .loading-shimmer {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        /* Enhanced Testimonials */
+        .testimonial-card {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .testimonial-card::before {
+            content: '"';
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            font-size: 8rem;
+            color: var(--bs-secondary);
+            opacity: 0.1;
+            font-family: serif;
+            line-height: 1;
+            z-index: 1;
+        }
+
+        .testimonial-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }
+
+        /* Enhanced Buttons */
+        .btn-hero {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-hero::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            transition: all 0.6s ease;
+            transform: translate(-50%, -50%);
+        }
+
+        .btn-hero:hover::before {
+            width: 300%;
+            height: 300%;
+        }
+
+        /* Scroll Progress Bar */
+        .scroll-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 0%;
+            height: 3px;
+            background: var(--bs-secondary);
+            z-index: 9999;
+            transition: width 0.1s ease;
+        }
+
+        /* Parallax Effect */
+        .parallax-element {
+            transform: translateZ(0);
+            will-change: transform;
+        }
+
+        /* Enhanced Toast Notifications */
+        .toast.enhanced {
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 1rem;
+            overflow: hidden;
+        }
+
+        .toast.enhanced::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--bs-secondary);
+            animation: toastProgress 3s linear;
+        }
+
+        @keyframes toastProgress {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+
         /* Mobile optimizations */
         @media (max-width: 768px) {
             .floating-card {
@@ -342,6 +621,15 @@ try {
             .product-image {
                 height: 150px;
             }
+
+            .product-card .add-to-cart-form .btn-add-cart {
+                transform: translateY(0);
+                opacity: 1;
+            }
+
+            .feature-card {
+                padding: 2rem 1rem;
+            }
         }
 
         @media (max-width: 576px) {
@@ -355,6 +643,31 @@ try {
             
             .product-image {
                 height: 120px;
+            }
+
+            .hero-title {
+                font-size: 2rem;
+            }
+
+            .feature-card {
+                padding: 1.5rem 1rem;
+            }
+        }
+
+        /* Reduced motion preferences */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+
+            .floating-card {
+                animation: none;
+            }
+
+            .product-card:hover .product-image {
+                transform: none;
             }
         }
 
@@ -1101,27 +1414,237 @@ try {
             });
         });
 
-        // Add animation on scroll
+        // Enhanced scroll progress bar
+        function updateScrollProgress() {
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+            const scrollProgress = (scrollTop / scrollHeight) * 100;
+            
+            let progressBar = document.querySelector('.scroll-progress');
+            if (!progressBar) {
+                progressBar = document.createElement('div');
+                progressBar.className = 'scroll-progress';
+                document.body.appendChild(progressBar);
+            }
+            
+            progressBar.style.width = scrollProgress + '%';
+        }
+
+        // Parallax effects
+        function handleParallax() {
+            const scrolled = window.pageYOffset;
+            const parallaxElements = document.querySelectorAll('.parallax-element');
+            
+            parallaxElements.forEach(element => {
+                const speed = element.dataset.speed || 0.5;
+                const yPos = -(scrolled * speed);
+                element.style.transform = `translate3d(0, ${yPos}px, 0)`;
+            });
+        }
+
+        // Enhanced intersection observer with stagger animations
         const observerOptions = {
             threshold: 0.1,
             rootMargin: '0px 0px -50px 0px'
         };
 
         const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
+            entries.forEach((entry, index) => {
                 if (entry.isIntersecting) {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
+                    setTimeout(() => {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                        entry.target.classList.add('animate-in');
+                    }, index * 100); // Stagger animation
                 }
             });
         }, observerOptions);
 
-        // Observe elements for animation
-        document.querySelectorAll('.category-card, .product-card, .feature-card, .testimonial-card').forEach(el => {
-            el.style.opacity = '0';
-            el.style.transform = 'translateY(20px)';
-            el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-            observer.observe(el);
+        // Enhanced floating card interactions
+        function initFloatingCards() {
+            const floatingCards = document.querySelectorAll('.floating-card');
+            
+            floatingCards.forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    // Add ripple effect
+                    const ripple = document.createElement('div');
+                    ripple.style.cssText = `
+                        position: absolute;
+                        border-radius: 50%;
+                        background: rgba(255, 255, 255, 0.3);
+                        transform: scale(0);
+                        animation: ripple 0.6s linear;
+                        pointer-events: none;
+                    `;
+                    
+                    const rect = this.getBoundingClientRect();
+                    const size = Math.max(rect.width, rect.height);
+                    ripple.style.width = ripple.style.height = size + 'px';
+                    ripple.style.left = (rect.width / 2 - size / 2) + 'px';
+                    ripple.style.top = (rect.height / 2 - size / 2) + 'px';
+                    
+                    this.appendChild(ripple);
+                    
+                    setTimeout(() => {
+                        ripple.remove();
+                    }, 600);
+                });
+            });
+        }
+
+        // Enhanced loading states for products
+        function showProductLoading() {
+            const productCards = document.querySelectorAll('.product-card');
+            productCards.forEach(card => {
+                const image = card.querySelector('.product-image');
+                if (image && !image.complete) {
+                    image.classList.add('loading-shimmer');
+                    image.onload = () => {
+                        image.classList.remove('loading-shimmer');
+                    };
+                }
+            });
+        }
+
+        // Enhanced typing animation for hero title
+        function initTypingAnimation() {
+            const heroTitle = document.querySelector('.hero-title');
+            if (heroTitle) {
+                const text = heroTitle.innerHTML;
+                heroTitle.innerHTML = '';
+                
+                let i = 0;
+                const typing = setInterval(() => {
+                    if (i < text.length) {
+                        heroTitle.innerHTML += text.charAt(i);
+                        i++;
+                    } else {
+                        clearInterval(typing);
+                    }
+                }, 50);
+            }
+        }
+
+        // Enhanced product card interactions
+        function initProductCards() {
+            const productCards = document.querySelectorAll('.product-card');
+            
+            productCards.forEach(card => {
+                // Add hover sound effect (visual feedback)
+                card.addEventListener('mouseenter', function() {
+                    this.style.setProperty('--hover-scale', '1.02');
+                });
+                
+                card.addEventListener('mouseleave', function() {
+                    this.style.setProperty('--hover-scale', '1');
+                });
+                
+                // Enhanced add to cart button
+                const addToCartBtn = card.querySelector('.btn-add-cart');
+                if (addToCartBtn) {
+                    addToCartBtn.addEventListener('click', function(e) {
+                        // Create success animation
+                        const checkmark = document.createElement('div');
+                        checkmark.innerHTML = '<i class="fas fa-check"></i>';
+                        checkmark.style.cssText = `
+                            position: absolute;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%) scale(0);
+                            color: white;
+                            font-size: 1.5rem;
+                            animation: checkmarkPop 0.6s ease-out;
+                            pointer-events: none;
+                        `;
+                        
+                        this.style.position = 'relative';
+                        this.appendChild(checkmark);
+                        
+                        setTimeout(() => {
+                            checkmark.remove();
+                        }, 600);
+                    });
+                }
+            });
+        }
+
+        // Add CSS for animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: scale(4);
+                    opacity: 0;
+                }
+            }
+            
+            @keyframes checkmarkPop {
+                0% { transform: translate(-50%, -50%) scale(0); }
+                50% { transform: translate(-50%, -50%) scale(1.2); }
+                100% { transform: translate(-50%, -50%) scale(1); }
+            }
+            
+            .animate-in {
+                animation: slideInUp 0.6s ease-out;
+            }
+            
+            @keyframes slideInUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(30px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Enhanced scroll event handler
+        let ticking = false;
+        function handleScroll() {
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    updateScrollProgress();
+                    handleParallax();
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        }
+
+        // Initialize all enhancements when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check for reduced motion preference
+            const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            
+            if (!prefersReducedMotion) {
+                initFloatingCards();
+                initTypingAnimation();
+                initProductCards();
+                
+                // Add parallax class to hero elements
+                const heroPattern = document.querySelector('.hero-pattern');
+                if (heroPattern) {
+                    heroPattern.classList.add('parallax-element');
+                    heroPattern.dataset.speed = '0.3';
+                }
+            }
+            
+            showProductLoading();
+            
+            // Add scroll listener
+            window.addEventListener('scroll', handleScroll, { passive: true });
+            
+            // Observe elements for animation with stagger
+            const elementsToAnimate = document.querySelectorAll('.category-card, .product-card, .feature-card, .testimonial-card');
+            elementsToAnimate.forEach((el, index) => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(20px)';
+                el.style.transition = `opacity 0.6s ease ${index * 0.1}s, transform 0.6s ease ${index * 0.1}s`;
+                observer.observe(el);
+            });
         });
     </script>
 </body>
