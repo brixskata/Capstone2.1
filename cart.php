@@ -375,10 +375,28 @@ try {
 
         .cart-container {
             background: white;
-            border-radius: 1rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
             margin: 2rem 0;
             overflow: hidden;
+            position: relative;
+        }
+
+        .cart-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--bs-secondary), #a91d42, var(--bs-secondary));
+            background-size: 200% 100%;
+            animation: gradientShift 3s ease-in-out infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
         }
 
         .main-cart-header {
@@ -418,12 +436,39 @@ try {
         .cart-item {
             display: flex;
             align-items: center;
-            padding: 1rem;
+            padding: 1.5rem;
             border-bottom: 1px solid #e9ecef;
-            background: #f8f9fa;
-            border-radius: 0.5rem;
-            margin-bottom: 0.5rem;
-            gap: 1rem;
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 1rem;
+            margin-bottom: 1rem;
+            gap: 1.5rem;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #e9ecef;
+        }
+
+        .cart-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(127,23,52,0.03) 0%, rgba(169,29,66,0.03) 100%);
+            opacity: 0;
+            transition: all 0.3s ease;
+            border-radius: 1rem;
+        }
+
+        .cart-item:hover::before {
+            opacity: 1;
+        }
+
+        .cart-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border-color: var(--bs-secondary);
         }
 
         .cart-item:last-child {
@@ -432,11 +477,20 @@ try {
         }
 
         .product-image {
-            width: 80px;
-            height: 80px;
+            width: 100px;
+            height: 100px;
             object-fit: cover;
-            border-radius: 0.5rem;
-            border: 2px solid #e9ecef;
+            border-radius: 1rem;
+            border: 3px solid #e9ecef;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 2;
+        }
+
+        .cart-item:hover .product-image {
+            transform: scale(1.05);
+            border-color: var(--bs-secondary);
+            box-shadow: 0 8px 20px rgba(127,23,52,0.2);
         }
 
         .product-details {
@@ -472,29 +526,58 @@ try {
         }
 
         .quantity-btn {
-            background: var(--bs-light);
+            background: white;
             border: 2px solid #e9ecef;
             color: var(--bs-secondary);
-            width: 40px;
-            height: 40px;
-            border-radius: 0.5rem;
+            width: 45px;
+            height: 45px;
+            border-radius: 0.75rem;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.3s;
-            font-weight: 600;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-weight: 700;
+            position: relative;
+            overflow: hidden;
+            z-index: 2;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .quantity-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: var(--bs-secondary);
+            border-radius: 50%;
+            transition: all 0.4s ease;
+            transform: translate(-50%, -50%);
+        }
+
+        .quantity-btn:hover:not(:disabled)::before {
+            width: 120%;
+            height: 120%;
         }
 
         .quantity-btn:hover:not(:disabled) {
-            background: var(--bs-secondary);
             color: white;
             border-color: var(--bs-secondary);
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(127,23,52,0.3);
+        }
+
+        .quantity-btn:hover:not(:disabled) i {
+            position: relative;
+            z-index: 1;
         }
 
         .quantity-btn:disabled {
-            opacity: 0.5;
+            opacity: 0.4;
             cursor: not-allowed;
+            transform: none;
         }
 
         .quantity-display {
@@ -566,44 +649,103 @@ try {
         }
 
         .checkout-btn {
-            background: var(--bs-secondary);
+            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
             border: none;
-            padding: 1rem 2rem;
-            border-radius: 0.75rem;
+            padding: 1.2rem 2.5rem;
+            border-radius: 1rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1px;
             font-size: 1.1rem;
-            transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 8px 30px rgba(127, 23, 52, 0.3);
             width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .checkout-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: all 0.6s ease;
+        }
+
+        .checkout-btn:hover:not(:disabled)::before {
+            left: 100%;
         }
 
         .checkout-btn:hover:not(:disabled) {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(127, 23, 52, 0.4);
+            transform: translateY(-4px);
+            box-shadow: 0 15px 40px rgba(127, 23, 52, 0.4);
         }
 
         .checkout-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
+        }
+
+        .checkout-btn:active:not(:disabled) {
+            transform: translateY(-1px);
         }
 
         .empty-cart {
             text-align: center;
-            padding: 4rem 2rem;
+            padding: 5rem 2rem;
             color: #6c757d;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border-radius: 1.5rem;
+            border: 2px dashed #dee2e6;
+            margin: 2rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .empty-cart::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="%23dee2e6" opacity="0.3"/></pattern></defs><rect width="100" height="100" fill="url(%23dots)"/></svg>') repeat;
+            opacity: 0.3;
+        }
+
+        .empty-cart > * {
+            position: relative;
+            z-index: 2;
         }
 
         .empty-cart i {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            color: #dee2e6;
+            font-size: 5rem;
+            margin-bottom: 1.5rem;
+            color: var(--bs-secondary);
+            opacity: 0.4;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
         }
 
         .empty-cart h3 {
             color: var(--bs-secondary);
+            font-weight: 700;
             margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .empty-cart p {
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            opacity: 0.8;
         }
 
         .continue-shopping {
@@ -684,15 +826,126 @@ try {
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
+        /* Enhanced Loading States */
+        .loading-shimmer {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        /* Enhanced Focus States */
+        .quantity-btn:focus,
+        .checkout-btn:focus,
+        .continue-shopping:focus {
+            outline: 3px solid rgba(127, 23, 52, 0.3) !important;
+            outline-offset: 2px !important;
+        }
+
+        /* Enhanced Product Details */
+        .product-details {
+            position: relative;
+            z-index: 2;
+            transition: all 0.3s ease;
+        }
+
+        .cart-item:hover .product-details .product-name {
+            color: var(--bs-secondary);
+            transform: translateX(5px);
+        }
+
+        /* Enhanced Remove Button */
+        .remove-btn {
+            background: white;
+            border: 2px solid #e9ecef;
+            color: var(--bs-danger);
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+            z-index: 2;
+        }
+
+        .remove-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: var(--bs-danger);
+            border-radius: 50%;
+            transition: all 0.4s ease;
+            transform: translate(-50%, -50%);
+        }
+
+        .remove-btn:hover::before {
+            width: 120%;
+            height: 120%;
+        }
+
+        .remove-btn:hover {
+            color: white;
+            border-color: var(--bs-danger);
+            transform: translateY(-2px) scale(1.1);
+            box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3);
+        }
+
+        .remove-btn:hover i {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Enhanced Order Summary */
+        .order-summary {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 2rem;
+            border: 1px solid #e9ecef;
+        }
+
+        /* Reduced Motion Support */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+
+            .cart-container::before,
+            .empty-cart i {
+                animation: none;
+            }
+
+            .cart-item:hover,
+            .quantity-btn:hover,
+            .checkout-btn:hover {
+                transform: none;
+            }
+        }
+
         @media (max-width: 768px) {
             .cart-item {
                 flex-direction: column;
                 gap: 1rem;
                 text-align: center;
+                padding: 1.5rem 1rem;
             }
 
             .product-image {
                 margin-right: 0;
+                width: 80px;
+                height: 80px;
             }
 
             .quantity-controls,
@@ -707,403 +960,31 @@ try {
             .order-summary {
                 position: static;
                 margin-top: 2rem;
+                padding: 2rem 1.5rem;
+            }
+
+            .empty-cart {
+                padding: 3rem 1rem;
+            }
+
+            .empty-cart i {
+                font-size: 3rem;
+            }
+
+            .empty-cart h3 {
+                font-size: 1.5rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .checkout-btn {
+                padding: 1rem 2rem;
+                font-size: 1rem;
+            }
+
+            .quantity-btn {
+                width: 40px;
+                height: 40px;
             }
         }
     </style>
-</head>
-<body>
-    <?php include 'includes/promo_banner.php'; ?>
-
-    <?php include 'includes/user_navbar.php'; ?>
-
-    <div class="container my-5">
-        <!-- Alert Container -->
-        <div id="alert-container"></div>
-
-        <?php if (empty($cart_items)): ?>
-            <div class="cart-container">
-                <div class="empty-cart">
-                    <i class="fas fa-shopping-cart"></i>
-                    <h3>Your cart is empty</h3>
-                    <p class="mb-4">Add some products to your cart before checking out.</p>
-                    <a href="product.php" class="continue-shopping">
-                        <i class="fas fa-shopping-bag me-2"></i>Continue Shopping
-                    </a>
-                </div>
-            </div>
-        <?php else: ?>
-            <div class="cart-container">
-                <div class="main-cart-header">
-                    <h1><i class="fas fa-shopping-cart me-3"></i>Shopping Cart</h1>
-                </div>
-
-                <div class="row p-4">
-                    <!-- Main Cart Items -->
-                    <div class="col-lg-8">
-                        <!-- Cart Items Review -->
-                        <div class="form-section">
-                             <h3 class="section-title">
-                                 <i class="fas fa-shopping-cart"></i>
-                                 Your Order (<?= count($cart_items) ?>)
-                             </h3>
-                            <?php foreach ($cart_items as $item): ?>
-                                <?php   
-                                $product = $item['product'] ?? $item;
-                                $quantity = $item['quantity'] ?? 0;
-                                $total = $item['total'] ?? 0;
-                                ?>
-                                <?php if (is_array($product) && isset($product['id'])): ?>
-                                    <div class="cart-item" data-product-id="<?= $product['id'] ?? 0 ?>">
-                                        <img src="<?= !empty($product['image1']) ? 'admin/' . htmlspecialchars($product['image1']) : 'images/placeholder.jpg' ?>" 
-                                             alt="<?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?>" 
-                                             class="product-image"
-                                             onerror="this.src='images/placeholder.jpg'">
-                                        
-                                        <div class="product-details">
-                                            <div class="product-name"><?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?></div>
-                                            <div class="text-muted">Price: ₱<?= number_format($product['price'] ?? 0, 2) ?></div>
-                                            <div class="stock-info">
-                                                <i class="fas fa-box me-1"></i>
-                                                <?= ($product['stock'] ?? 0) > 0 ? ($product['stock'] ?? 0) . ' in stock' : 'Out of stock' ?>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="quantity-controls">
-                                            <button class="quantity-btn decrease" data-product-id="<?= $product['id'] ?? 0 ?>" 
-                                                    <?= $quantity <= 1 ? 'disabled' : '' ?>>
-                                                <i class="fas fa-minus"></i>
-                                            </button>
-                                            <span class="quantity-display cart-qty" data-product-id="<?= $product['id'] ?? 0 ?>" data-stock="<?= $product['stock'] ?? 0 ?>"><?= $quantity ?></span>
-                                            <button class="quantity-btn increase" data-product-id="<?= $product['id'] ?? 0 ?>" 
-                                                    <?= $quantity >= ($product['stock'] ?? 0) ? 'disabled' : '' ?>>
-                                                <i class="fas fa-plus"></i>
-                                            </button>
-                                        </div>
-                                        
-                                        <div class="product-price">₱<?= number_format($total, 2) ?></div>
-                                        
-                                        <button class="remove-btn remove-item" data-product-id="<?= $product['id'] ?? 0 ?>" title="Remove Item">
-                                            <i class="fas fa-trash-alt"></i>
-                                        </button>
-                                    </div>
-                                <?php endif; ?>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-
-                    <!-- Order Summary Sidebar -->
-                    <div class="col-lg-4">
-                        <div class="order-summary">
-                            <h3 class="summary-title">
-                                <i class="fas fa-receipt me-2"></i>Order Summary
-                            </h3>
-
-                            <div class="summary-row">
-                                <span>Subtotal:</span>
-                                <span class="fw-bold">₱<?= number_format($cart_total, 2) ?></span>
-                            </div>
-
-                            <div class="summary-row">
-                                <span>Shipping:</span>
-                                <span class="text-success fw-bold">FREE</span>
-                            </div>
-
-                            <div class="summary-row">
-                                <span>Tax:</span>
-                                <span class="fw-bold">₱0.00</span>
-                            </div>
-
-                            <div class="summary-row">
-                                <span>Total:</span>
-                                <span id="total-with-shipping">₱<?= number_format($cart_total, 2) ?></span>
-                            </div>
-
-                            <button class="checkout-btn checkout-btn-action">
-                                <i class="fas fa-lock me-2"></i>Secure Checkout
-                            </button>
-
-                            <div class="text-center mt-4">
-                                <small class="text-muted">
-                                    <i class="fas fa-shield-alt me-1"></i>SSL Secure Checkout
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        <?php endif; ?>
-
-        <!-- Recommendations -->
-        <?php if (!empty($recommendations)): ?>
-            <div class="recommendations mt-5">
-                <h3>
-                    <i class="fas fa-heart me-2"></i>You Might Also Like
-                </h3>
-                <div class="row g-4">
-                    <?php foreach ($recommendations as $product): ?>
-                        <?php if (is_array($product) && isset($product['id'])): ?>
-                            <div class="col-sm-6 col-md-4 col-lg-3">
-                                <div class="recommendation-card">
-                                    <img src="<?= !empty($product['image1']) ? 'admin/' . htmlspecialchars($product['image1']) : 'images/placeholder.jpg' ?>"
-                                         alt="<?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?>"
-                                         class="recommendation-image"
-                                         onerror="this.src='images/placeholder.jpg'">
-                                    <h6 class="product-name"><?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?></h6>
-                                    <div class="product-price mb-3">₱<?= number_format($product['price'] ?? 0, 2) ?></div>
-                                    <a href="product.php?id=<?= $product['id'] ?? 0 ?>" class="btn btn-outline-secondary btn-sm">
-                                        <i class="fas fa-eye me-1"></i>View Product
-                                    </a>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        <?php else: ?>
-            <!-- Debug: Show recommendations count -->
-            <div class="recommendations mt-5">
-                <h3>
-                    <i class="fas fa-heart me-2"></i>You Might Also Like
-                </h3>
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    No recommendations available. Cart has <?= count($_SESSION['cart'] ?? []) ?> items.
-                </div>
-            </div>
-        <?php endif; ?>
-    </div>
-
-    <?php include 'includes/user_footer.php'; ?>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    <script>
-        // Show alert function
-        function showAlert(message, type = 'info') {
-            const alertContainer = document.getElementById('alert-container');
-            const alertHtml = `
-                <div class="alert alert-${type} alert-dismissible fade show alert-custom" role="alert">
-                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
-                    ${message}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            `;
-            alertContainer.innerHTML = alertHtml;
-            
-            // Auto-dismiss after 5 seconds
-            setTimeout(() => {
-                const alert = alertContainer.querySelector('.alert');
-                if (alert) {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                }
-            }, 5000);
-        }
-
-        // Loading state management
-        function setLoading(element, loading = true) {
-            if (!element) return;
-            if (loading) {
-                element.classList.add('loading');
-                // Only disable form elements, not divs
-                if (element.tagName === 'BUTTON' || element.tagName === 'INPUT' || element.tagName === 'SELECT') {
-                    element.disabled = true;
-                }
-            } else {
-                element.classList.remove('loading');
-                if (element.tagName === 'BUTTON' || element.tagName === 'INPUT' || element.tagName === 'SELECT') {
-                    element.disabled = false;
-                }
-            }
-        }
-
-        // Quantity control functions
-        document.querySelectorAll('.increase').forEach(button => {
-            button.addEventListener('click', function() {
-                const productId = this.dataset.productId;
-                updateQuantity(productId, 'add');
-            });
-        });
-
-        document.querySelectorAll('.decrease').forEach(button => {
-            button.addEventListener('click', function() {
-                const productId = this.dataset.productId;
-                updateQuantity(productId, 'decrease');
-            });
-        });
-
-        document.querySelectorAll('.remove-item').forEach(button => {
-            button.addEventListener('click', function() {
-                if (confirm('Are you sure you want to remove this item from your cart?')) {
-                    const productId = this.dataset.productId;
-                    removeItem(productId);
-                }
-            });
-        });
-
-        function updateQuantity(productId, action) {
-            const formData = new FormData();
-            formData.append('product_id', productId);
-            formData.append('action', action);
-            formData.append('csrf_token', '<?php echo $csrf_token; ?>');
-
-            // Set loading state
-            const cartItem = document.querySelector(`[data-product-id="${productId}"]`);
-            setLoading(cartItem, true);
-
-            fetch('cart.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const qtySpan = document.querySelector(`.cart-qty[data-product-id="${productId}"]`);
-                    if (qtySpan) {
-                        if (data.quantity > 0) {
-                            qtySpan.textContent = data.quantity;
-                            const itemTotalElement = qtySpan.closest('.cart-item').querySelector('.product-price');
-                            if (itemTotalElement) {
-                                itemTotalElement.textContent = '₱' + Number(data.item_total).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-                            }
-                            
-                            // Update button states
-                            const decreaseBtn = qtySpan.closest('.cart-item').querySelector('.decrease');
-                            const increaseBtn = qtySpan.closest('.cart-item').querySelector('.increase');
-                            const stock = parseInt(qtySpan.getAttribute('data-stock'));
-                            
-                            decreaseBtn.disabled = data.quantity <= 1;
-                            increaseBtn.disabled = data.quantity >= stock;
-                        } else {
-                            const row = qtySpan.closest('.cart-item');
-                            if (row) row.remove();
-                        }
-                    }
-                    
-                    // Update cart total in order summary
-                    const totalElement = document.getElementById('total-with-shipping');
-                    if (totalElement) {
-                        totalElement.textContent = '₱' + Number(data.cart_total).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-                    }
-                    
-                    // Update subtotal in order summary
-                    const subtotalElement = document.querySelector('.summary-row .fw-bold');
-                    if (subtotalElement) {
-                        subtotalElement.textContent = '₱' + Number(data.cart_total).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-                    }
-                    
-                    if (data.cart_qty === 0) {
-                        location.reload();
-                    }
-                } else {
-                    showAlert(data.message || 'An error occurred. Please try again.', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert('An error occurred. Please try again.', 'danger');
-            })
-            .finally(() => {
-                setLoading(cartItem, false);
-            });
-        }
-
-        function removeItem(productId) {
-            const formData = new FormData();
-            formData.append('product_id', productId);
-            formData.append('action', 'delete');
-            formData.append('csrf_token', '<?php echo $csrf_token; ?>');
-
-            const cartItem = document.querySelector(`[data-product-id="${productId}"]`);
-            setLoading(cartItem, true);
-
-            fetch('cart.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const qtySpan = document.querySelector(`.cart-qty[data-product-id="${productId}"]`);
-                    if (qtySpan) {
-                        const row = qtySpan.closest('.cart-item');
-                        if (row) row.remove();
-                    }
-                    
-                    // Update cart total in order summary
-                    const totalElement = document.getElementById('total-with-shipping');
-                    if (totalElement) {
-                        totalElement.textContent = '₱' + Number(data.cart_total).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-                    }
-                    
-                    // Update subtotal in order summary
-                    const subtotalElement = document.querySelector('.summary-row .fw-bold');
-                    if (subtotalElement) {
-                        subtotalElement.textContent = '₱' + Number(data.cart_total).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-                    }
-                    
-                    if (data.cart_qty === 0) {
-                        location.reload();
-                    }
-                    
-                    showAlert('Item removed from cart', 'success');
-                } else {
-                    showAlert(data.message || 'An error occurred. Please try again.', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert('An error occurred. Please try again.', 'danger');
-            })
-            .finally(() => {
-                setLoading(cartItem, false);
-            });
-        }
-
-        // Checkout validation
-        const checkoutBtn = document.querySelector('.checkout-btn-action');
-        if (checkoutBtn) {
-            checkoutBtn.addEventListener('click', function(e) {
-                let valid = true;
-                let message = '';
-
-                document.querySelectorAll('.cart-qty').forEach(span => {
-                    const qty = parseInt(span.textContent.trim(), 10);
-                    const stock = parseInt(span.getAttribute('data-stock'), 10);
-                    const productId = span.getAttribute('data-product-id');
-
-                    if (!isNaN(stock) && qty > stock) {
-                        valid = false;
-                        message += `Product ID ${productId}: Quantity (${qty}) exceeds stock (${stock})\n`;
-                    }
-                });
-
-                if (!valid) {
-                    showAlert("Some items in your cart exceed available stock and cannot be checked out.\n\n" + message, 'danger');
-                    e.preventDefault();
-                    return;
-                }
-
-                window.location.href = 'checkout.php';
-            });
-        }
-
-        // Update cart badge in navbar
-        function updateCartBadge() {
-            fetch('cart_count.php')
-                .then(response => response.text())
-                .then(count => {
-                    const badge = document.querySelector('.cart-badge');
-                    if (badge) {
-                        badge.textContent = count;
-                        badge.style.display = count > 0 ? 'block' : 'none';
-                    }
-                });
-        }
-
-        // Update cart badge on page load
-        updateCartBadge();
-    </script>
-</body>
-</html>

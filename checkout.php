@@ -1,4 +1,3 @@
-
 <?php
 session_start();
 include 'includes/db.php';
@@ -173,10 +172,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
 
         .checkout-container {
             background: white;
-            border-radius: 1rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
             margin: 2rem 0;
             overflow: hidden;
+            position: relative;
+        }
+
+        .checkout-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--bs-secondary), #a91d42, var(--bs-secondary));
+            background-size: 200% 100%;
+            animation: gradientShift 3s ease-in-out infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
         }
 
         .checkout-header {
@@ -195,12 +212,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
         }
 
         .form-section {
-            background: white;
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .form-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--bs-secondary);
+            transform: scaleX(0);
+            transition: transform 0.6s ease;
+        }
+
+        .form-section:hover::before {
+            transform: scaleX(1);
+        }
+
+        .form-section:hover {
+            box-shadow: 0 15px 35px rgba(127,23,52,0.1);
+            transform: translateY(-2px);
         }
 
         .section-title {
@@ -215,15 +256,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
 
         .form-control {
             border: 2px solid #e9ecef;
-            border-radius: 0.5rem;
-            padding: 0.75rem;
+            border-radius: 0.75rem;
+            padding: 1rem;
             font-weight: 500;
-            transition: all 0.3s ease;
+            transition: all 0.4s ease;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
         .form-control:focus {
             border-color: var(--bs-secondary);
             box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.15);
+            transform: translateY(-2px);
+            background: #fafbfc;
+        }
+
+        .form-control:hover:not(:focus) {
+            border-color: #dee2e6;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
 
         .form-control[readonly] {
@@ -290,7 +340,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
 
         .summary-row {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             padding: 0.5rem 0;
             border-bottom: 1px solid #e9ecef;
@@ -394,19 +444,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
         .place-order-btn {
             background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
             border: none;
-            padding: 1rem 2rem;
-            border-radius: 0.75rem;
+            padding: 1.2rem 2.5rem;
+            border-radius: 1rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1px;
             font-size: 1.1rem;
-            transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 8px 30px rgba(127, 23, 52, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .place-order-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: all 0.6s ease;
+        }
+
+        .place-order-btn:hover::before {
+            left: 100%;
         }
 
         .place-order-btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(127, 23, 52, 0.4);
+            transform: translateY(-4px);
+            box-shadow: 0 15px 40px rgba(127, 23, 52, 0.4);
+        }
+
+        .place-order-btn:active {
+            transform: translateY(-1px);
         }
 
         /* Delivery Address Styles */
@@ -435,6 +506,179 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
             cursor: not-allowed;
         }
 
+        /* Enhanced Radio Options */
+        .radio-option {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: block;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .radio-option::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(127,23,52,0.03) 0%, rgba(169,29,66,0.03) 100%);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .radio-option:hover::before {
+            opacity: 1;
+        }
+
+        .radio-option:hover {
+            border-color: var(--bs-secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(127,23,52,0.1);
+        }
+
+        .radio-option input[type="radio"]:checked + div {
+            color: var(--bs-secondary);
+        }
+
+        .radio-option input[type="radio"]:checked ~ * {
+            position: relative;
+            z-index: 2;
+        }
+
+        .radio-option input[type="radio"] {
+            margin-right: 0.75rem;
+            transform: scale(1.2);
+        }
+
+        /* Enhanced GCash Section */
+        .gcash-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-top: 1.5rem;
+            border: 2px dashed #dee2e6;
+            text-align: center;
+        }
+
+        .gcash-qr {
+            max-width: 250px;
+            border-radius: 1rem;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            margin: 1.5rem auto;
+            transition: all 0.3s ease;
+        }
+
+        .gcash-qr:hover {
+            transform: scale(1.05);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.2);
+        }
+
+        /* Enhanced Order Summary */
+        .order-summary {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 2rem;
+            border: 1px solid #e9ecef;
+        }
+
+        /* Enhanced Loading States */
+        .loading-shimmer {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        /* Enhanced Focus States */
+        .form-control:focus,
+        .place-order-btn:focus,
+        .radio-option:focus-within {
+            outline: 3px solid rgba(127, 23, 52, 0.3) !important;
+            outline-offset: 2px !important;
+        }
+
+        /* Enhanced Empty State */
+        .empty-cart {
+            text-align: center;
+            padding: 5rem 2rem;
+            color: #6c757d;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border-radius: 1.5rem;
+            border: 2px dashed #dee2e6;
+            margin: 2rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .empty-cart::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="%23dee2e6" opacity="0.3"/></pattern></defs><rect width="100" height="100" fill="url(%23dots)"/></svg>') repeat;
+            opacity: 0.3;
+        }
+
+        .empty-cart > * {
+            position: relative;
+            z-index: 2;
+        }
+
+        .empty-cart i {
+            font-size: 5rem;
+            margin-bottom: 1.5rem;
+            color: var(--bs-secondary);
+            opacity: 0.4;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .empty-cart h3 {
+            color: var(--bs-secondary);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        /* Reduced Motion Support */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+
+            .checkout-container::before,
+            .empty-cart i {
+                animation: none;
+            }
+
+            .form-section:hover,
+            .radio-option:hover,
+            .place-order-btn:hover {
+                transform: none;
+            }
+        }
+
         @media (max-width: 768px) {
             .checkout-header h1 {
                 font-size: 2rem;
@@ -443,6 +687,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
             .order-summary {
                 position: static;
                 margin-top: 2rem;
+                padding: 2rem 1.5rem;
+            }
+
+            .form-section {
+                padding: 1.5rem;
+            }
+
+            .radio-option {
+                padding: 1rem;
+            }
+
+            .place-order-btn {
+                padding: 1rem 2rem;
+                font-size: 1rem;
+            }
+
+            .empty-cart {
+                padding: 3rem 1rem;
+            }
+
+            .empty-cart i {
+                font-size: 3rem;
+            }
+
+            .empty-cart h3 {
+                font-size: 1.5rem;
             }
         }
     </style>
@@ -489,11 +759,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
                             </h3>
                             <?php foreach ($cart_items as $item): ?>
                                 <div class="cart-item">
-                                    <img src="<?php echo !empty($item['product']['image1']) ? 'admin/' . htmlspecialchars($item['product']['image1']) : 'admin/uploads/placeholder.jpg'; ?>" 
-                                         alt="<?php echo htmlspecialchars($item['product']['name']); ?>" 
-                                         class="product-image">
+                                    <img src="<?php echo !empty($item['product']['image']) ? 'admin/' . htmlspecialchars($item['product']['image']) : 'images/placeholder.jpg'; ?>" 
+                                         alt="<?php echo htmlspecialchars($item['product']['product_name']); ?>" 
+                                         class="product-image"
+                                         onerror="this.src='images/placeholder.jpg'">
                                     <div class="product-details">
-                                        <div class="product-name"><?= htmlspecialchars($item['product']['name']) ?></div>
+                                        <div class="product-name"><?= htmlspecialchars($item['product']['product_name']) ?></div>
                                         <div class="text-muted">Quantity: <?= $item['quantity'] ?></div>
                                     </div>
                                     <div class="product-price">₱<?= number_format($item['product']['price'] * $item['quantity'], 2) ?></div>
