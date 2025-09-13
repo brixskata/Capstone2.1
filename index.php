@@ -191,7 +191,8 @@ try {
         }
 
         .hero-title .text-highlight {
-            color: var(--bs-secondary);
+            color: #b21f66;  /* highlight color */
+  font-weight: bold;
         }
 
         .hero-subtitle {
