@@ -1109,12 +1109,13 @@ try {
             <div class="row g-4">
                 <div class="col-md-6 col-lg-3">
                     <a href="product.php?category=beef" class="text-decoration-none">
-                        <div class="category-card" style="background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('images/beefflank.jpg'); background-size: cover; background-position: center;">
-                            <div class="category-card-content">
-                                <h3 class="category-card-title">BEEF</h3>
-                                <p class="category-card-desc">Premium cuts & quality</p>
-                            </div>
-                        </div>
+                        <div class="category-card" style="background: url('images/beefflank.jpg'); background-size: cover; background-position: center;">
+    <div class="category-card-overlay"></div>
+    <div class="category-card-content">
+        <h3 class="category-card-title">BEEF</h3>
+        <p class="category-card-desc">Premium cuts & quality</p>
+    </div>
+</div>
                     </a>
                 </div>
                 <div class="col-md-6 col-lg-3">
