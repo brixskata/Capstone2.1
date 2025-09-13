@@ -343,15 +343,17 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
         }
 
         .product-desc {
-            font-size: 0.9rem;
-            color: #6c757d;
-            margin-bottom: 1rem;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 1rem;
+    
+    display: -webkit-box;          /* Required for line-clamp */
+    -webkit-line-clamp: 2;         /* Chrome, Edge, Safari */
+    line-clamp: 2;                 /* Standard property (future support) */
+    -webkit-box-orient: vertical;  /* Required for line-clamp */
+    
+    overflow: hidden;              /* Hide extra text */
+}
         .product-price {
             font-size: 1.3rem;
             font-weight: 700;
