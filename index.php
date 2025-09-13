@@ -1032,9 +1032,9 @@ try {
                             100% Fresh & Organic
                         </div>
 
-                        <h1 class="hero-title">
-                            Groceries delivered in <span class="text-highlight">90 minutes</span>
-                        </h1>
+                        <h1>
+  Groceries delivered in <span class="text-highlight">90 minutes</span>
+</h1>
 
                         <p class="hero-subtitle">
                             Get your healthy foods & snacks delivered at your doorsteps all day everyday. 
