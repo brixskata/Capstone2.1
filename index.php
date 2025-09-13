@@ -968,7 +968,49 @@ try {
         }
        
         
-    </style>
+    
+    .category-card {
+      position: relative;
+      width: 250px;
+      height: 180px;
+      border-radius: 12px;
+      overflow: hidden;
+      color: #fff;
+      display: flex;
+      align-items: flex-end;
+      justify-content: left;
+      padding: 20px;
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .category-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.35);
+      z-index: 1;
+    }
+
+    .category-card h3,
+    .category-card p {
+      position: relative;
+      z-index: 2;
+      margin: 0;
+    }
+
+    .category-card h3 {
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+
+    .category-card p {
+      font-size: 0.9em;
+    }
+
+</style>
 </head>
 <body>
 <!-- Promo Banner -->
