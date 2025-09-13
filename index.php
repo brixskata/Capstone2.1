@@ -191,7 +191,7 @@ try {
         }
 
         .text-highlight {
-  color: #b21f66;  /* highlight color */
+  color: #b21f66;  /* Example highlight color */
   font-weight: bold;
 }
 
@@ -397,21 +397,7 @@ try {
             overflow: hidden;
         }
 
-        .category-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, rgba(127,23,52,0.8) 100%);
-            transition: all 0.3s ease;
-            z-index: 1;
-        }
-
-        .category-card:hover::before {
-            background: linear-gradient(135deg, rgba(127,23,52,0.9) 0%, rgba(169,29,66,0.8) 100%);
-        }
+        /* Removed dark overlay to keep images clear */
 
         /* Enhanced Features Section */
         .feature-card {
@@ -720,18 +706,20 @@ try {
             padding: 1.5rem;
             color: white;
             width: 100%;
-            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            background: linear-gradient(transparent, rgba(0,0,0,0.4));
         }
 
         .category-card-title {
             font-size: 1.25rem;
-            font-weight: 700;
+            font-weight: 800;
             margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
         }
 
         .category-card-desc {
             font-size: 0.9rem;
-            opacity: 0.9;
+            opacity: 0.95;
+            text-shadow: 1px 1px 6px rgba(0,0,0,0.7);
         }
 
         /* Featured Products Section */
@@ -968,49 +956,7 @@ try {
         }
        
         
-    
-    .category-card {
-      position: relative;
-      width: 250px;
-      height: 180px;
-      border-radius: 12px;
-      overflow: hidden;
-      color: #fff;
-      display: flex;
-      align-items: flex-end;
-      justify-content: left;
-      padding: 20px;
-      background-size: cover;
-      background-position: center;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-    }
-
-    .category-card::before {
-      content: "";
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.35);
-      z-index: 1;
-    }
-
-    .category-card h3,
-    .category-card p {
-      position: relative;
-      z-index: 2;
-      margin: 0;
-    }
-
-    .category-card h3 {
-      font-size: 1.2em;
-      font-weight: bold;
-    }
-
-    .category-card p {
-      font-size: 0.9em;
-    }
-
-</style>
+    </style>
 </head>
 <body>
 <!-- Promo Banner -->
@@ -1110,17 +1056,16 @@ try {
                 <div class="col-md-6 col-lg-3">
                     <a href="product.php?category=beef" class="text-decoration-none">
                         <div class="category-card" style="background: url('images/beefflank.jpg'); background-size: cover; background-position: center;">
-    <div class="category-card-overlay"></div>
-    <div class="category-card-content">
-        <h3 class="category-card-title">BEEF</h3>
-        <p class="category-card-desc">Premium cuts & quality</p>
-    </div>
-</div>
+                            <div class="category-card-content">
+                                <h3 class="category-card-title">BEEF</h3>
+                                <p class="category-card-desc">Premium cuts & quality</p>
+                            </div>
+                        </div>
                     </a>
                 </div>
                 <div class="col-md-6 col-lg-3">
                     <a href="product.php?category=chicken" class="text-decoration-none">
-                        <div class="category-card" style="background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('images/breast.jpg'); background-size: cover; background-position: center;">
+                        <div class="category-card" style="background: url('images/breast.jpg'); background-size: cover; background-position: center;">
                             <div class="category-card-content">
                                 <h3 class="category-card-title">CHICKEN</h3>
                                 <p class="category-card-desc">Fresh & tender cuts</p>
@@ -1130,7 +1075,7 @@ try {
                 </div>
                 <div class="col-md-6 col-lg-3">
                     <a href="product.php?category=pork" class="text-decoration-none">
-                        <div class="category-card" style="background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('images/porkribs.jpg'); background-size: cover; background-position: center;">
+                        <div class="category-card" style="background: url('images/porkribs.jpg'); background-size: cover; background-position: center;">
                             <div class="category-card-content">
                                 <h3 class="category-card-title">PORK</h3>
                                 <p class="category-card-desc">Quality pork cuts</p>
@@ -1140,7 +1085,7 @@ try {
                 </div>
                 <div class="col-md-6 col-lg-3">
                     <a href="product.php?category=fish" class="text-decoration-none">
-                        <div class="category-card" style="background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('images/bangus.jpg'); background-size: cover; background-position: center;">
+                        <div class="category-card" style="background: url('images/bangus.jpg'); background-size: cover; background-position: center;">
                             <div class="category-card-content">
                                 <h3 class="category-card-title">FISH</h3>
                                 <p class="category-card-desc">Fresh from the sea</p>
