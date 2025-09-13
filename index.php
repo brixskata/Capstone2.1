@@ -979,7 +979,7 @@ try {
                             100% Fresh & Organic
                         </div>
 
-                        <h1>
+                        <h1 style="font-weight: 800;">
   Groceries delivered in <span class="text-highlight">90 minutes</span>
 </h1>
 
