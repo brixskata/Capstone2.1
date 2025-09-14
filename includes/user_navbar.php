@@ -101,30 +101,39 @@ if (!empty($_SESSION['cart'])) {
         </div>
     </div>
 </div>
-
-<!--Navbar -->
+<!-- Navbar -->
 <nav class="navbar navbar-light bg-white border-bottom sticky-top shadow-sm">
-  <div class="container">
-    <a class="navbar-brand fw-bold fs-3" style="color: var(--bs-secondary);" href="index.php">MikeMadz</a>
+  <div class="container d-flex align-items-center justify-content-between">
 
-    <!-- Search Bar (Desktop) -->
-    <div class="search-container d-none d-lg-flex flex-grow-1 mx-4 position-relative">
-      <div class="search-input-wrapper">
-        <i class="fas fa-search search-icon"></i>
-        <input type="text" 
-               class="form-control search-input" 
-               id="searchInput" 
-               placeholder="Search for meat, seafood, and more..."
-               autocomplete="off">
-        <button class="search-clear-btn" id="searchClear" style="display: none;">
-          <i class="fas fa-times"></i>
-        </button>
+    <!-- Logo + Search -->
+    <div class="d-flex align-items-center flex-grow-1" style="gap: 15px;">
+      <!-- Logo -->
+      <a class="navbar-brand d-flex align-items-center mb-0" href="index.php">
+        <img src="images/Mike&MadzLogo (3).png" alt="Mike & Madz Logo" 
+             style="max-height:70px; width:auto;">
+      </a>
+
+      <!-- Search Bar -->
+      <div class="search-container d-none d-lg-flex flex-grow-1">
+        <div class="search-input-wrapper position-relative w-100">
+          <i class="fas fa-search search-icon"></i>
+          <input type="text" 
+                 class="form-control search-input" 
+                 id="searchInput" 
+                 placeholder="Search for meat, seafood, and more..."
+                 autocomplete="off">
+          <button class="search-clear-btn" id="searchClear" style="display: none;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
-      
-      <!-- Search Results Dropdown -->
-      <div class="search-results" id="searchResults" style="display: none;">
-        <div class="search-results-content" id="searchResultsContent">
-          <!-- Search results will be populated here -->
+    </div>
+        
+        <!-- Search Results Dropdown -->
+        <div class="search-results" id="searchResults" style="display: none;">
+          <div class="search-results-content" id="searchResultsContent">
+            <!-- Search results will be populated here -->
+          </div>
         </div>
       </div>
     </div>
@@ -135,10 +144,11 @@ if (!empty($_SESSION['cart'])) {
     </button>
 
     <!-- Desktop Icons -->
-    <div class="d-none d-lg-flex align-items-center gap-4">
+    <div class="d-none d-lg-flex align-items-center gap-4 me-4">
       <a class="text-dark <?php if ($current == 'favorite.php') echo 'fw-bold'; ?>" href="favorite.php">
         <i class="fas fa-heart fs-5"></i>
       </a>
+
       <?php if (isset($_SESSION['user_id'])): ?>
         <a class="text-dark <?php if ($current == 'orders.php') echo 'fw-bold'; ?>" href="orders.php">
           <i class="fas fa-user fs-5"></i>
@@ -148,6 +158,7 @@ if (!empty($_SESSION['cart'])) {
           <i class="fas fa-sign-in-alt fs-5"></i>
         </a>
       <?php endif; ?>
+
       <button class="btn p-0 text-dark position-relative" onclick="toggleCart()">
         <i class="fas fa-shopping-cart fs-5"></i>
         <?php if (!empty($_SESSION['cart'])): ?>
@@ -157,6 +168,7 @@ if (!empty($_SESSION['cart'])) {
         <?php endif; ?>
       </button>
     </div>
+
   </div>
 </nav>
 
