@@ -11,9 +11,9 @@ include 'includes/db.php';
 // Fetch user information using normalized structure
 $user_id = $_SESSION['user_id'];
 $sql = "SELECT u.user_id, u.username, ui.first_name, ui.last_name, ui.email, ui.phone, ui.user_info_id, ui.profile_picture
-        FROM users u 
-        INNER JOIN user_info ui ON u.user_id = ui.user_id 
-        WHERE u.user_id = :user_id";
+FROM users u
+INNER JOIN user_info ui ON u.user_id = ui.user_id
+WHERE u.user_id = :user_id";
 $stmt = $pdo->prepare($sql);
 $stmt->bindParam(':user_id', $user_id);
 $stmt->execute();
@@ -144,52 +144,119 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['address_action'])) {
     }
 }
 
+// Handle rating submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_rating'])) {
+$sql = "INSERT INTO order_ratings (orders_id, user_id, rating, review_text)
+VALUES (:orders_id, :user_id, :rating, :review_text)";
+$stmt = $pdo->prepare($sql);
+$stmt->execute([
+':orders_id' => $_POST['orders_id'],
+':user_id' => $user_id,
+':rating' => $_POST['rating'],
+':review_text' => $_POST['review_text']
+]);
+
+
+header("Location: orders.php?rating_submitted=1");
+exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_rating'])) {
+    $order_id = $_POST['order_id'];
+    $rating = $_POST['rating'];
+    $review_text = $_POST['review_text'] ?? '';
+
+    $sql = "INSERT INTO order_ratings (orders_id, user_id, rating, review_text, created_at)
+            VALUES (:order_id, :user_id, :rating, :review_text, NOW())
+            ON DUPLICATE KEY UPDATE rating = :rating, review_text = :review_text, created_at = NOW()";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([
+        ':order_id' => $order_id,
+        ':user_id' => $user_id,
+        ':rating' => $rating,
+        ':review_text' => $review_text
+    ]);
+
+    header("Location: orders.php?rating_submitted=1");
+    exit;
+}
+
+
 
 // Fetch all orders (current and completed)
-$sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price, 
-               oi.quantity, p.product_name, pp.selling_price as price
-        FROM orders o 
-        LEFT JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
-        LEFT JOIN order_items oi ON o.orders_id = oi.order_id 
-        LEFT JOIN products p ON oi.product_id = p.product_id 
-        LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
-        WHERE o.user_id = :user_id
-        ORDER BY o.created_at DESC";
+$sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price,
+oi.quantity, p.product_name, pp.selling_price as price
+FROM orders o
+LEFT JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+LEFT JOIN order_items oi ON o.orders_id = oi.order_id
+LEFT JOIN products p ON oi.product_id = p.product_id
+LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+WHERE o.user_id = :user_id
+ORDER BY o.created_at DESC";
 $stmt = $pdo->prepare($sql);
 $stmt->bindParam(':user_id', $user_id);
 $stmt->execute();
 $rawOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+
 $allOrders = [];
 foreach ($rawOrders as $row) {
-    $orderId = $row['orders_id'];
-    if (!isset($allOrders[$orderId])) {
-        $allOrders[$orderId] = [
-            'id' => $row['orders_id'],
-            'created_at' => $row['created_at'],
-            'status' => $row['status'],
-            'total_price' => $row['total_price'],
-            'items' => []
-        ];
-    }
+$orderId = $row['orders_id'];
+if (!isset($allOrders[$orderId])) {
+$allOrders[$orderId] = [
+'id' => $row['orders_id'],
+'created_at' => $row['created_at'],
+'status' => $row['status'],
+'total_price' => $row['total_price'],
+'items' => []
+];
+}
 
-    if ($row['product_name']) {
-        $allOrders[$orderId]['items'][] = [
-            'product_name' => $row['product_name'],
-            'quantity' => $row['quantity'],
-            'price' => $row['price']
-        ];
-    }
+
+if ($row['product_name']) {
+$allOrders[$orderId]['items'][] = [
+'product_name' => $row['product_name'],
+'quantity' => $row['quantity'],
+'price' => $row['price']
+];
+}
 }
 
 // Separate current and completed orders
 $currentOrders = array_filter($allOrders, function($order) {
-    return !in_array($order['status'], ['Completed', 'Cancelled']);
+return !in_array($order['status'], ['Completed', 'Cancelled']);
 });
 
+
 $completedOrders = array_filter($allOrders, function($order) {
-    return in_array($order['status'], ['Completed', 'Cancelled']);
+return in_array($order['status'], ['Completed', 'Cancelled']);
 });
+
+
+// Fetch ratings for completed orders
+$orderRatings = [];
+if (!empty($completedOrders)) {
+$orderIds = array_column($completedOrders, 'id');
+
+
+if (!empty($orderIds)) {
+$placeholders = implode(',', array_fill(0, count($orderIds), '?'));
+
+
+$ratingsStmt = $pdo->prepare("
+SELECT orders_id, rating, review_text, created_at
+FROM order_ratings
+WHERE orders_id IN ($placeholders) AND user_id = ?
+");
+$ratingsStmt->execute(array_merge($orderIds, [$user_id]));
+$ratings = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+foreach ($ratings as $rating) {
+$orderRatings[$rating['orders_id']] = $rating;
+}
+}
+}
 
 // Fetch user addresses
 $sql = "SELECT * FROM addresses WHERE user_id = :user_id ORDER BY is_default DESC, date_created DESC";
@@ -197,12 +264,73 @@ $stmt = $pdo->prepare($sql);
 $stmt->bindParam(':user_id', $user_id);
 $stmt->execute();
 $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    /* Order card styling */
+.order-card {
+  background: #fff;
+  padding: 15px;
+  margin: 15px 0;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+/* Status badge */
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.85em;
+  font-weight: bold;
+}
+.status-completed { background: #d4edda; color: #155724; }
+.status-cancelled { background: #f8d7da; color: #721c24; }
+.status-pending   { background: #fff3cd; color: #856404; }
+
+/* Ratings */
+.rating-section { margin-top: 15px; }
+.star-rating {
+  direction: rtl; /* so clicking left to right works */
+  display: inline-flex;
+}
+.star-rating input { display: none; }
+.star-rating label {
+  font-size: 24px;
+  color: #ccc;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.star-rating input:checked ~ label i,
+.star-rating label:hover ~ label i,
+.star-rating label:hover i {
+  color: gold;
+}
+.stars .fa-star {
+  color: #ccc;
+}
+.stars .filled {
+  color: gold;
+}
+.rating-form textarea {
+  display: block;
+  width: 100%;
+  margin: 10px 0;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+.rating-form button {
+  padding: 6px 12px;
+  border: none;
+  background: #007bff;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Your Profile & Orders</title>
@@ -512,6 +640,81 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             color: var(--bs-secondary);
             padding-top: 1rem;
             border-top: 2px solid var(--bs-secondary);
+        }
+
+        /* Rating Section Styles */
+        .rating-section {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .existing-rating {
+            text-align: center;
+        }
+
+        .rating-stars {
+            margin-bottom: 0.5rem;
+        }
+
+        .star-filled {
+            color: #ffc107;
+            margin-right: 2px;
+        }
+
+        .star-empty {
+            color: #dee2e6;
+            margin-right: 2px;
+        }
+
+        .rating-text {
+            margin-left: 0.5rem;
+            font-weight: 600;
+            color: var(--bs-secondary);
+        }
+
+        .rating-review {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+            font-style: italic;
+            color: #6c757d;
+            border-left: 3px solid var(--bs-secondary);
+        }
+
+        .rating-review i {
+            color: var(--bs-secondary);
+            margin-right: 0.5rem;
+        }
+
+        .rating-date {
+            font-size: 0.8rem;
+        }
+
+        .rate-order {
+            text-align: center;
+            padding: 0.5rem 0;
+        }
+
+        .btn-rate {
+            background: var(--bs-secondary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .btn-rate:hover {
+            background: #6b1429;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(127,23,52,0.3);
         }
 
         /* Empty State */
@@ -1087,7 +1290,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <?php foreach (array_slice($currentOrders, 0, 3) as $order): ?>
                                         <div class="recent-order-item">
                                             <div class="order-info">
-                                                <span class="order-number">Order #<?= $order['id'] ?></span>
+                                                <span class="order-number">Order #<?= $order['orders_id'] ?></span>
                                                 <span class="order-date"><?= date('M d, Y', strtotime($order['created_at'])) ?></span>
                                             </div>
                                             <div class="order-status">
@@ -1198,7 +1401,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <div class="order-card">
                                         <div class="order-header">
                                             <div>
-                                                <div class="order-number">Order #<?= $order['id'] ?></div>
+                                                <div class="order-number">Order #<?= $order['orders_id'] ?></div>
                                                 <div class="order-date"><?= date('M d, Y', strtotime($order['created_at'])) ?></div>
                                             </div>
                                             <span class="order-status status-<?= strtolower($order['status']) ?>">
@@ -1234,32 +1437,110 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($completedOrders as $order): ?>
-                                    <div class="order-card">
-                                        <div class="order-header">
-                                            <div>
-                                                <div class="order-number">Order #<?= $order['id'] ?></div>
-                                                <div class="order-date"><?= date('M d, Y', strtotime($order['created_at'])) ?></div>
-                                            </div>
-                                            <span class="order-status status-<?= strtolower($order['status']) ?>">
-                                                <?= $order['status'] ?>
-                                            </span>
-                                        </div>
+<div class="order-card">
+<div class="order-header">
+<div>
+<div class="order-number">Order #<?= $order['id'] ?></div>
+<div class="order-date"><?= date('M d, Y', strtotime($order['created_at'])) ?></div>
+</div>
+<span class="order-status status-<?= strtolower($order['status']) ?>">
+<?= $order['status'] ?>
+</span>
+</div>
 
-                                        <div class="order-items">
-                                            <?php foreach ($order['items'] as $item): ?>
-                                                <div class="order-item">
-                                                    <span class="item-name"><?= htmlspecialchars($item['product_name']) ?> × <?= $item['quantity'] ?></span>
-                                                    <span class="item-price">₱<?= number_format($item['price'] * $item['quantity'], 2) ?></span>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
 
-                                        <div class="order-total">
-                                            Total: ₱<?= number_format($order['total_price'], 2) ?>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
+<div class="order-items">
+<?php foreach ($order['items'] as $item): ?>
+<div class="order-item">
+<span class="item-name"><?= htmlspecialchars($item['product_name']) ?> × <?= $item['quantity'] ?></span>
+<span class="item-price">₱<?= number_format($item['price'] * $item['quantity'], 2) ?></span>
+</div>
+<?php endforeach; ?>
+</div>
+
+
+<div class="order-total">
+Total: ₱<?= number_format($order['total_price'], 2) ?>
+</div>
+
+
+<!-- Rating Section -->
+<?php if (in_array($order['status'], ['Completed'])): ?>
+    <div class="rating-section">
+        <?php if (isset($orderRatings[$order['id']])): ?>
+            <p><strong>Your Rating:</strong> 
+                <span class="stars">
+                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                        <i class="fas fa-star <?= $i <= $orderRatings[$order['id']]['rating'] ? 'filled' : '' ?>"></i>
+                    <?php endfor; ?>
+                </span>
+            </p>
+            <p><em>"<?= htmlspecialchars($orderRatings[$order['id']]['review_text']) ?>"</em></p>
+        <?php else: ?>
+            <form action="orders.php" method="POST" class="rating-form">
+                <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
+                <div class="star-rating" data-order="<?= $order['id'] ?>">
+                    <?php for ($i = 5; $i >= 1; $i--): ?>
+                        <input type="radio" id="star<?= $i ?>-<?= $order['id'] ?>" name="rating" value="<?= $i ?>">
+                        <label for="star<?= $i ?>-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                    <?php endfor; ?>
+                </div>
+                <textarea name="review_text" placeholder="Leave a review..."></textarea>
+                <button type="submit" name="submit_rating">Submit Review</button>
+            </form>
+        <?php endif; ?>
+    </div>
+
+    <!-- Show existing rating -->
+    <div class="existing-rating">
+        <div class="rating-stars">
+            <?php
+            $rating = $orderRatings[$order['id']]['rating'];
+            for ($i = 1; $i <= 5; $i++):
+            ?>
+                <i class="fas fa-star <?= $i <= $rating ? 'star-filled' : 'star-empty' ?>"></i>
+            <?php endfor; ?>
+            <span class="rating-text">(<?= $rating ?>/5)</span>
+        </div>
+
+        <?php if (!empty($orderRatings[$order['id']]['review_text'])): ?>
+            <div class="rating-review">
+                <i class="fas fa-quote-left"></i>
+                <?= htmlspecialchars($orderRatings[$order['id']]['review_text']) ?>
+            </div>
+        <?php endif; ?>
+
+        <small class="rating-date text-muted">
+            Rated on <?= date('M j, Y', strtotime($orderRatings[$order['id']]['created_at'])) ?>
+        </small>
+    </div>
+<?php else: ?>
+    <!-- Show rating form -->
+    <form method="POST" action="orders.php" class="rating-form">
+        <input type="hidden" name="orders_id" value="<?= $order['id'] ?>">
+
+        <label for="rating">Rate this order:</label>
+        <select name="rating" required>
+            <option value="">-- Select --</option>
+            <option value="1">⭐ 1</option>
+            <option value="2">⭐⭐ 2</option>
+            <option value="3">⭐⭐⭐ 3</option>
+            <option value="4">⭐⭐⭐⭐ 4</option>
+            <option value="5">⭐⭐⭐⭐⭐ 5</option>
+        </select>
+
+        <label for="review_text">Review:</label>
+        <textarea name="review_text" rows="2" placeholder="Write your feedback..."></textarea>
+
+        <button type="submit" name="submit_rating">Submit Rating</button>
+    </form>
+<?php endif; ?>
+</div>
+<?php endforeach; ?>
+<?php endif; ?>
+</div>
+
+
                         </div>
                     </div>
 
@@ -1690,5 +1971,20 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             });
         });
     </script>
+    <script>
+document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll(".star-rating").forEach(starBlock => {
+        const stars = starBlock.querySelectorAll("label i");
+        stars.forEach((star, index) => {
+            star.addEventListener("click", () => {
+                stars.forEach((s, i) => {
+                    s.style.color = i >= index ? "gold" : "#ccc";
+                });
+            });
+        });
+    });
+});
+</script>
+
 </body>
 </html>

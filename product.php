@@ -36,12 +36,16 @@ try {
                     uom.name AS uom_name,
                     COALESCE(ps.current_stock, 0) AS stock,
                     COALESCE(pp.selling_price, 0) AS price,
-                    (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+                    (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1,
+                    COALESCE(AVG(pr.rating), 0) AS avg_rating,
+                    COUNT(pr.rating) AS total_ratings
                 FROM products p
                 LEFT JOIN uom uom ON p.uom_id = uom.uom_id
                 LEFT JOIN product_stock ps ON p.product_id = ps.product_id
                 LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+                LEFT JOIN product_ratings pr ON p.product_id = pr.product_id
                 WHERE p.is_archive = 0
+                GROUP BY p.product_id, p.product_name, p.product_description, uom.name, ps.current_stock, pp.selling_price
             ")->fetchAll(PDO::FETCH_ASSOC);
         } else {
             // Get the selected category's ID
@@ -59,12 +63,16 @@ try {
                         uom.name AS uom_name,
                         COALESCE(ps.current_stock, 0) AS stock,
                         COALESCE(pp.selling_price, 0) AS price,
-                        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+                        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1,
+                        COALESCE(AVG(pr.rating), 0) AS avg_rating,
+                        COUNT(pr.rating) AS total_ratings
                     FROM products p
                     LEFT JOIN uom uom ON p.uom_id = uom.uom_id
                     LEFT JOIN product_stock ps ON p.product_id = ps.product_id
                     LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+                    LEFT JOIN product_ratings pr ON p.product_id = pr.product_id
                     WHERE p.category_id = :category_id AND p.is_archive = 0
+                    GROUP BY p.product_id, p.product_name, p.product_description, uom.name, ps.current_stock, pp.selling_price
                 ");
                 $stmt->execute(['category_id' => $categoryData['category_id']]);
                 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -80,12 +88,16 @@ try {
                 uom.name AS uom_name,
                 COALESCE(ps.current_stock, 0) AS stock,
                 COALESCE(pp.selling_price, 0) AS price,
-                (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+                (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1,
+                COALESCE(AVG(pr.rating), 0) AS avg_rating,
+                COUNT(pr.rating) AS total_ratings
             FROM products p
             LEFT JOIN uom uom ON p.uom_id = uom.uom_id
             LEFT JOIN product_stock ps ON p.product_id = ps.product_id
             LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+            LEFT JOIN product_ratings pr ON p.product_id = pr.product_id
             WHERE p.is_archive = 0
+            GROUP BY p.product_id, p.product_name, p.product_description, uom.name, ps.current_stock, pp.selling_price
         ")->fetchAll(PDO::FETCH_ASSOC);
     }
 } catch (PDOException $e) {
@@ -343,17 +355,15 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
         }
 
         .product-desc {
-    font-size: 0.9rem;
-    color: #6c757d;
-    margin-bottom: 1rem;
-    
-    display: -webkit-box;          /* Required for line-clamp */
-    -webkit-line-clamp: 2;         /* Chrome, Edge, Safari */
-    line-clamp: 2;                 /* Standard property (future support) */
-    -webkit-box-orient: vertical;  /* Required for line-clamp */
-    
-    overflow: hidden;              /* Hide extra text */
-}
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 1rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
         .product-price {
             font-size: 1.3rem;
             font-weight: 700;
@@ -1012,6 +1022,35 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                         </div>
 
                         <h3 class="product-title"><?= htmlspecialchars($product['name']) ?></h3>
+                        
+                        <!-- Product Rating -->
+                        <div class="product-rating">
+                            <?php if ($product['total_ratings'] > 0): ?>
+                                <div class="rating-stars">
+                                    <?php 
+                                    $avgRating = round($product['avg_rating'], 1);
+                                    $fullStars = floor($avgRating);
+                                    $hasHalfStar = ($avgRating - $fullStars) >= 0.5;
+                                    
+                                    for ($i = 1; $i <= 5; $i++): 
+                                        if ($i <= $fullStars):
+                                    ?>
+                                        <i class="fas fa-star star-filled"></i>
+                                    <?php elseif ($i == $fullStars + 1 && $hasHalfStar): ?>
+                                        <i class="fas fa-star-half-alt star-filled"></i>
+                                    <?php else: ?>
+                                        <i class="fas fa-star star-empty"></i>
+                                    <?php endif; endfor; ?>
+                                    <span class="rating-score"><?= $avgRating ?></span>
+                                    <span class="rating-count">(<?= $product['total_ratings'] ?>)</span>
+                                </div>
+                            <?php else: ?>
+                                <div class="rating-stars no-rating">
+                                    <span class="no-rating-text">No reviews yet</span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
                         <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
 
                         <div class="product-price">
@@ -1341,7 +1380,50 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                 }
             }
 
-            /* Enhanced focus styles */
+            /* Product Rating Styles */
+        .product-rating {
+            margin: 0.75rem 0;
+            z-index: 2;
+            position: relative;
+        }
+
+        .rating-stars {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .star-filled {
+            color: #ffc107;
+            font-size: 0.9rem;
+        }
+
+        .star-empty {
+            color: #dee2e6;
+            font-size: 0.9rem;
+        }
+
+        .rating-score {
+            font-weight: 600;
+            color: var(--brand-primary);
+            margin-left: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .rating-count {
+            color: #6c757d;
+            font-size: 0.85rem;
+            margin-left: 0.25rem;
+        }
+
+        .no-rating-text {
+            color: #6c757d;
+            font-size: 0.85rem;
+            font-style: italic;
+        }
+
+        /* Enhanced focus styles */
             .product-card:focus-within .btn-primary {
                 opacity: 1;
                 transform: translateY(0);
@@ -1358,3 +1440,274 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
         document.head.appendChild(style);
 
         // Cart functionality is now handled by the shared navbar
+
+        // Add to cart functionality
+        document.querySelectorAll('.add-to-cart-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                const button = this.querySelector('.btn-add-cart');
+                const originalText = button.innerHTML;
+                
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                fetch('cart.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update cart badge and show/hide based on quantity
+                        const cartBadge = document.querySelector('.cart-badge');
+                        if (cartBadge) {
+                            cartBadge.textContent = data.cart_qty;
+                            if (data.cart_qty > 0) {
+                                cartBadge.style.display = 'flex';
+                            } else {
+                                cartBadge.style.display = 'none';
+                            }
+                        } else if (data.cart_qty > 0) {
+                            // Create badge if it doesn't exist and there are items
+                            const cartButton = document.querySelector('[onclick="toggleCart()"]');
+                            if (cartButton) {
+                                const newBadge = document.createElement('span');
+                                newBadge.className = 'cart-badge';
+                                newBadge.textContent = data.cart_qty;
+                                cartButton.appendChild(newBadge);
+                            }
+                        }
+
+                        // Refresh cart content
+                        refreshCartContent();
+
+                        // Show success message
+                        showToast('Product added to cart!', 'success');
+                        
+                        // Reset button
+                        button.disabled = false;
+                        button.innerHTML = originalText;
+                        
+                        // Reset quantity to 1
+                        const quantityInput = this.querySelector('input[name="quantity"]');
+                        if (quantityInput) {
+                            quantityInput.value = 1;
+                        }
+                    } else {
+                        showToast(data.error || 'Failed to add product to cart', 'error');
+                        button.disabled = false;
+                        button.innerHTML = originalText;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Network error. Please try again.', 'error');
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                });
+            });
+        });
+
+        // Function to refresh cart content
+        function refreshCartContent() {
+            fetch('cart_content.php')
+                .then(response => response.text())
+                .then(html => {
+                    const cartBody = document.querySelector('.cart-body');
+                    const cartFooter = document.querySelector('.cart-footer');
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    
+                    // Update cart body
+                    const newCartBody = doc.querySelector('.cart-body');
+                    if (cartBody && newCartBody) {
+                        cartBody.innerHTML = newCartBody.innerHTML;
+                    }
+                    
+                    // Update cart footer
+                    const newCartFooter = doc.querySelector('.cart-footer');
+                    if (newCartFooter) {
+                        if (cartFooter) {
+                            cartFooter.innerHTML = newCartFooter.innerHTML;
+                            cartFooter.style.display = 'block';
+                        } else {
+                            // Create footer if it doesn't exist
+                            const slidingCart = document.querySelector('.sliding-cart');
+                            if (slidingCart) {
+                                slidingCart.appendChild(newCartFooter);
+                            }
+                        }
+                    } else if (cartFooter) {
+                        cartFooter.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error refreshing cart:', error);
+                });
+        }
+
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = 'toast show position-fixed bottom-0 end-0 m-3';
+            toast.style.zIndex = '9999';
+            
+            const bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
+            const icon = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+            
+            toast.innerHTML = `
+                <div class="toast-header ${bgClass} text-white">
+                    <i class="${icon} me-2"></i>
+                    <strong class="me-auto">${type === 'success' ? 'Success' : 'Error'}</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            `;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // Favorite functionality
+        document.querySelectorAll('.btn-favorite').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const productId = this.getAttribute('data-product-id');
+                const isFavorited = this.classList.contains('favorited');
+                
+                fetch('favorite.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'product_id=' + productId
+                })
+                .then(response => response.text())
+                .then(data => {
+                    let message, icon, headerClass;
+                    
+                    if (data === 'added') {
+                        message = 'Added to favorites!';
+                        icon = 'fas fa-heart text-danger';
+                        headerClass = 'bg-success text-white';
+                        
+                        // Update button appearance to show it's favorited
+                        this.classList.add('favorited');
+                        this.style.background = 'var(--bs-danger)';
+                        this.style.color = 'white';
+                        this.style.borderColor = 'var(--bs-danger)';
+                        
+                    } else if (data === 'removed') {
+                        message = 'Removed from favorites!';
+                        icon = 'fas fa-heart-broken text-warning';
+                        headerClass = 'bg-warning text-dark';
+                        
+                        // Update button appearance to show it's not favorited
+                        this.classList.remove('favorited');
+                        this.style.background = 'white';
+                        this.style.color = 'var(--bs-secondary)';
+                        this.style.borderColor = 'var(--bs-secondary)';
+                        
+                    } else if (data === 'not_logged_in') {
+                        message = 'Please log in to add favorites';
+                        icon = 'fas fa-exclamation-circle text-warning';
+                        headerClass = 'bg-warning text-dark';
+                        
+                        // Redirect to login after showing message
+                        setTimeout(() => {
+                            window.location.href = 'login.php';
+                        }, 2000);
+                    } else {
+                        message = 'Something went wrong. Please try again.';
+                        icon = 'fas fa-exclamation-circle text-danger';
+                        headerClass = 'bg-danger text-white';
+                    }
+                    
+                    // Show message
+                    const toast = document.createElement('div');
+                    toast.className = 'toast show position-fixed bottom-0 end-0 m-3';
+                    toast.style.zIndex = '9999';
+                    toast.innerHTML = `
+                        <div class="toast-header ${headerClass}">
+                            <i class="${icon} me-2"></i>
+                            <strong class="me-auto">Favorites</strong>
+                            <button type="button" class="btn-close ${headerClass.includes('text-white') ? 'btn-close-white' : ''}" data-bs-dismiss="toast"></button>
+                        </div>
+                        <div class="toast-body">
+                            ${message}
+                        </div>
+                    `;
+                    document.body.appendChild(toast);
+
+                    setTimeout(() => {
+                        toast.remove();
+                    }, 3000);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    
+                    const toast = document.createElement('div');
+                    toast.className = 'toast show position-fixed bottom-0 end-0 m-3';
+                    toast.style.zIndex = '9999';
+                    toast.innerHTML = `
+                        <div class="toast-header bg-danger text-white">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <strong class="me-auto">Error</strong>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                        </div>
+                        <div class="toast-body">
+                            Network error. Please try again.
+                        </div>
+                    `;
+                    document.body.appendChild(toast);
+
+                    setTimeout(() => {
+                        toast.remove();
+                    }, 3000);
+                });
+            });
+        });
+
+        // --- Cart Item Manipulation Functionality ---
+        // This section adds functionality to update quantity and remove items from the cart
+
+        function updateCartItem(productId, quantity) {
+            fetch('cart.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `product_id=${productId}&action=${quantity > 0 ? 'update' : 'remove'}&quantity=${quantity}`
+            })
+            .then(response => response.text())
+            .then(() => {
+                window.location.reload(); // Reload to reflect changes
+            });
+        }
+
+        // Event listeners for quantity change (plus/minus buttons)
+        document.querySelectorAll('.cart-quantity-update').forEach(button => {
+            button.addEventListener('click', function() {
+                const productId = this.getAttribute('data-product-id');
+                const currentQuantityInput = document.querySelector(`input[name="quantity"][data-product-id="${productId}"]`);
+                let currentQuantity = parseInt(currentQuantityInput.value);
+
+                if (this.classList.contains('fa-plus')) {
+                    currentQuantity++;
+                } else if (this.classList.contains('fa-minus')) {
+                    currentQuantity = Math.max(0, currentQuantity - 1); // Ensure quantity doesn't go below 0
+                }
+                currentQuantityInput.value = currentQuantity;
+                updateCartItem(productId, currentQuantity);
+            });
+        });
+
+        // Event listeners for remove button
+        document.querySelectorAll('.cart-item-remove').forEach(button => {
+            button.addEventListener('click', function() {
+                const productId = this.getAttribute('data-product-id');
+                updateCartItem(productId, 0); // 0 quantity signifies removal
+            });
+        });
+    </script>
+</body>
+</html>

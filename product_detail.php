@@ -19,7 +19,7 @@ if ($product_id <= 0) {
     $error = 'Invalid product ID';
 } else {
     try {
-        // Fetch product details
+        // Fetch product details with ratings
         $stmt = $pdo->prepare("
             SELECT 
                 p.product_id,
@@ -30,14 +30,18 @@ if ($product_id <= 0) {
                 uom.name AS base_uom_name,
                 COALESCE(ps.current_stock, 0) AS stock_kilos,
                 COALESCE(pp.selling_price, 0) AS price_per_kilo,
-                (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+                (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1,
+                COALESCE(AVG(pr.rating), 0) AS avg_rating,
+                COUNT(pr.rating) AS total_ratings
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.category_id
             LEFT JOIN brands b ON p.brand_id = b.id
             LEFT JOIN uom uom ON p.uom_id = uom.uom_id
             LEFT JOIN product_stock ps ON p.product_id = ps.product_id
             LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+            LEFT JOIN product_ratings pr ON p.product_id = pr.product_id
             WHERE p.product_id = ? AND p.is_archive = 0
+            GROUP BY p.product_id, p.product_name, p.product_description, c.category_name, b.name, uom.name, ps.current_stock, pp.selling_price
         ");
         $stmt->execute([$product_id]);
         $product = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -206,6 +210,47 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
             font-weight: 700;
             color: var(--brand-primary);
             margin-bottom: 1rem;
+        }
+
+        /* Product Rating Styles */
+        .product-rating {
+            margin: 1rem 0;
+        }
+
+        .rating-stars {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .star-filled {
+            color: #ffc107;
+            font-size: 1.1rem;
+        }
+
+        .star-empty {
+            color: #dee2e6;
+            font-size: 1.1rem;
+        }
+
+        .rating-score {
+            font-weight: 600;
+            color: var(--brand-primary);
+            margin-left: 0.5rem;
+            font-size: 1rem;
+        }
+
+        .rating-count {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-left: 0.25rem;
+        }
+
+        .no-rating-text {
+            color: #6c757d;
+            font-size: 0.9rem;
+            font-style: italic;
         }
 
         .product-category {
@@ -570,6 +615,35 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                              onerror="this.src='images/placeholder.jpg'">
                         
                         <h1 class="product-title"><?= htmlspecialchars($product['product_name']) ?></h1>
+                        
+                        <!-- Product Rating -->
+                        <div class="product-rating mb-3">
+                            <?php if ($product['total_ratings'] > 0): ?>
+                                <div class="rating-stars">
+                                    <?php 
+                                    $avgRating = round($product['avg_rating'], 1);
+                                    $fullStars = floor($avgRating);
+                                    $hasHalfStar = ($avgRating - $fullStars) >= 0.5;
+                                    
+                                    for ($i = 1; $i <= 5; $i++): 
+                                        if ($i <= $fullStars):
+                                    ?>
+                                        <i class="fas fa-star star-filled"></i>
+                                    <?php elseif ($i == $fullStars + 1 && $hasHalfStar): ?>
+                                        <i class="fas fa-star-half-alt star-filled"></i>
+                                    <?php else: ?>
+                                        <i class="fas fa-star star-empty"></i>
+                                    <?php endif; endfor; ?>
+                                    <span class="rating-score"><?= $avgRating ?></span>
+                                    <span class="rating-count">(<?= $product['total_ratings'] ?> reviews)</span>
+                                </div>
+                            <?php else: ?>
+                                <div class="rating-stars no-rating">
+                                    <span class="no-rating-text">No reviews yet</span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
                         <div class="product-category">
                             <i class="fas fa-tag me-2"></i>
                             <?= htmlspecialchars($product['category_name'] ?? 'Uncategorized') ?>
@@ -881,5 +955,4 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
         updateMaxQuantity();
     </script>
 </body>
-</html>
-
+</html> 

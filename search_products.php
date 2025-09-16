@@ -14,7 +14,7 @@ $search_query = trim($_GET['q']);
 $search_term = '%' . $search_query . '%';
 
 try {
-    // Search for products by name, category, or description
+    // Search for products by name, category, or description with ratings
     $sql = "SELECT 
                 p.product_id,
                 p.product_name,
@@ -26,14 +26,18 @@ try {
                  FROM product_images pi 
                  WHERE pi.product_id = p.product_id 
                  AND pi.is_primary = 1 
-                 LIMIT 1) AS image_url
+                 LIMIT 1) AS image_url,
+                COALESCE(AVG(pr.rating), 0) AS avg_rating,
+                COUNT(pr.rating) AS total_ratings
             FROM products p
             LEFT JOIN product_stock ps ON p.product_id = ps.product_id
             LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+            LEFT JOIN product_ratings pr ON p.product_id = pr.product_id
             WHERE p.is_archive = 0 
             AND (p.product_name LIKE :search_term 
                  OR p.category LIKE :search_term 
                  OR p.description LIKE :search_term)
+            GROUP BY p.product_id, p.product_name, p.category, p.description, ps.current_stock, pp.selling_price
             ORDER BY 
                 CASE 
                     WHEN p.product_name LIKE :exact_match THEN 1
@@ -63,6 +67,8 @@ try {
             'price' => number_format($product['price'], 2),
             'stock' => $product['stock'],
             'image' => $product['image_url'] ? 'admin/' . $product['image_url'] : 'images/placeholder.jpg',
+            'avg_rating' => round($product['avg_rating'], 1),
+            'total_ratings' => $product['total_ratings'],
             'url' => 'product_detail.php?id=' . $product['product_id']
         ];
     }
