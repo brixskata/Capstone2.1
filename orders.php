@@ -144,41 +144,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['address_action'])) {
     }
 }
 
-// Handle rating submission
+// Handle rating submission (accepts order_id or orders_id; validates 1-5)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_rating'])) {
-$sql = "INSERT INTO order_ratings (orders_id, user_id, rating, review_text)
-VALUES (:orders_id, :user_id, :rating, :review_text)";
-$stmt = $pdo->prepare($sql);
-$stmt->execute([
-':orders_id' => $_POST['orders_id'],
-':user_id' => $user_id,
-':rating' => $_POST['rating'],
-':review_text' => $_POST['review_text']
-]);
+    $orderId = $_POST['orders_id'] ?? ($_POST['order_id'] ?? null);
+    $rating  = isset($_POST['rating']) ? (int)$_POST['rating'] : null;
+    $review  = trim($_POST['review_text'] ?? '');
 
+    if ($orderId && $rating && $rating >= 1 && $rating <= 5) {
+        $sql = "INSERT INTO order_ratings (orders_id, user_id, rating, review_text, created_at)
+                VALUES (:orders_id, :user_id, :rating, :review_text, NOW())
+                ON DUPLICATE KEY UPDATE rating = VALUES(rating), review_text = VALUES(review_text), created_at = NOW()";
 
-header("Location: orders.php?rating_submitted=1");
-exit;
-}
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':orders_id'   => $orderId,
+            ':user_id'     => $user_id,
+            ':rating'      => $rating,
+            ':review_text' => $review
+        ]);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_rating'])) {
-    $order_id = $_POST['order_id'];
-    $rating = $_POST['rating'];
-    $review_text = $_POST['review_text'] ?? '';
-
-    $sql = "INSERT INTO order_ratings (orders_id, user_id, rating, review_text, created_at)
-            VALUES (:order_id, :user_id, :rating, :review_text, NOW())
-            ON DUPLICATE KEY UPDATE rating = :rating, review_text = :review_text, created_at = NOW()";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':order_id' => $order_id,
-        ':user_id' => $user_id,
-        ':rating' => $rating,
-        ':review_text' => $review_text
-    ]);
-
-    header("Location: orders.php?rating_submitted=1");
-    exit;
+        header("Location: orders.php?rating_submitted=1");
+        exit;
+    } else {
+        $_SESSION['rating_error'] = 'Please select a rating between 1 and 5.';
+        header("Location: orders.php?rating_error=1");
+        exit;
+    }
 }
 
 
@@ -269,67 +260,6 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    /* Order card styling */
-.order-card {
-  background: #fff;
-  padding: 15px;
-  margin: 15px 0;
-  border-radius: 12px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-}
-
-/* Status badge */
-.status-badge {
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.85em;
-  font-weight: bold;
-}
-.status-completed { background: #d4edda; color: #155724; }
-.status-cancelled { background: #f8d7da; color: #721c24; }
-.status-pending   { background: #fff3cd; color: #856404; }
-
-/* Ratings */
-.rating-section { margin-top: 15px; }
-.star-rating {
-  direction: rtl; /* so clicking left to right works */
-  display: inline-flex;
-}
-.star-rating input { display: none; }
-.star-rating label {
-  font-size: 24px;
-  color: #ccc;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-.star-rating input:checked ~ label i,
-.star-rating label:hover ~ label i,
-.star-rating label:hover i {
-  color: gold;
-}
-.stars .fa-star {
-  color: #ccc;
-}
-.stars .filled {
-  color: gold;
-}
-.rating-form textarea {
-  display: block;
-  width: 100%;
-  margin: 10px 0;
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid #ddd;
-}
-.rating-form button {
-  padding: 6px 12px;
-  border: none;
-  background: #007bff;
-  color: white;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -642,80 +572,30 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             border-top: 2px solid var(--bs-secondary);
         }
 
-        /* Rating Section Styles */
-        .rating-section {
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid #e9ecef;
-        }
+        .rating-form {
+    margin-top: 10px;
+    padding: 12px;
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 10px;
+}
+.rating-form.enhanced { background: #fff; }
 
-        .existing-rating {
-            text-align: center;
-        }
+.star-input { display: inline-flex; gap: 6px; }
+.star-input label.star i {
+    font-size: 22px;
+    color: #ccc;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+.rating-stars .fa-star.star-filled { color: #ffc107; }
+.rating-stars .fa-star.star-empty { color: #e0e0e0; }
 
-        .rating-stars {
-            margin-bottom: 0.5rem;
-        }
-
-        .star-filled {
-            color: #ffc107;
-            margin-right: 2px;
-        }
-
-        .star-empty {
-            color: #dee2e6;
-            margin-right: 2px;
-        }
-
-        .rating-text {
-            margin-left: 0.5rem;
-            font-weight: 600;
-            color: var(--bs-secondary);
-        }
-
-        .rating-review {
-            background: #f8f9fa;
-            padding: 0.75rem;
-            border-radius: 0.5rem;
-            margin: 0.5rem 0;
-            font-style: italic;
-            color: #6c757d;
-            border-left: 3px solid var(--bs-secondary);
-        }
-
-        .rating-review i {
-            color: var(--bs-secondary);
-            margin-right: 0.5rem;
-        }
-
-        .rating-date {
-            font-size: 0.8rem;
-        }
-
-        .rate-order {
-            text-align: center;
-            padding: 0.5rem 0;
-        }
-
-        .btn-rate {
-            background: var(--bs-secondary);
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-        }
-
-        .btn-rate:hover {
-            background: #6b1429;
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(127,23,52,0.3);
-        }
+.rating-review {
+    margin-top: 8px;
+    font-style: italic;
+    color: #555;
+}
 
         /* Empty State */
         .empty-state {
@@ -1290,7 +1170,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <?php foreach (array_slice($currentOrders, 0, 3) as $order): ?>
                                         <div class="recent-order-item">
                                             <div class="order-info">
-                                                <span class="order-number">Order #<?= $order['orders_id'] ?></span>
+                                                <span class="order-number">Order #<?= $order['id'] ?></span>
                                                 <span class="order-date"><?= date('M d, Y', strtotime($order['created_at'])) ?></span>
                                             </div>
                                             <div class="order-status">
@@ -1380,6 +1260,19 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <i class="fas fa-box"></i>
                             My Orders
                         </h2>
+                        
+                        <?php if (isset($_GET['rating_submitted'])): ?>
+    <div class="success-alert">
+        <i class="fas fa-check-circle"></i>
+        Rating submitted successfully!
+    </div>
+<?php elseif (isset($_GET['rating_error']) && !empty($_SESSION['rating_error'])): ?>
+    <div class="success-alert" style="background:#dc3545;">
+        <i class="fas fa-exclamation-circle"></i>
+        <?= htmlspecialchars($_SESSION['rating_error']); unset($_SESSION['rating_error']); ?>
+    </div>
+<?php endif; ?>
+
 
                         <!-- Order Tabs -->
                         <div class="order-tabs">
@@ -1401,7 +1294,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <div class="order-card">
                                         <div class="order-header">
                                             <div>
-                                                <div class="order-number">Order #<?= $order['orders_id'] ?></div>
+                                                <div class="order-number">Order #<?= $order['id'] ?></div>
                                                 <div class="order-date"><?= date('M d, Y', strtotime($order['created_at'])) ?></div>
                                             </div>
                                             <span class="order-status status-<?= strtolower($order['status']) ?>">
@@ -1469,70 +1362,78 @@ Total: ₱<?= number_format($order['total_price'], 2) ?>
     <div class="rating-section">
         <?php if (isset($orderRatings[$order['id']])): ?>
             <p><strong>Your Rating:</strong> 
-                <span class="stars">
+                <div class="rating-stars">
                     <?php for ($i = 1; $i <= 5; $i++): ?>
-                        <i class="fas fa-star <?= $i <= $orderRatings[$order['id']]['rating'] ? 'filled' : '' ?>"></i>
+                        <i class="fas fa-star <?= $i <= (int)$orderRatings[$order['id']]['rating'] ? 'star-filled' : 'star-empty' ?>"></i>
                     <?php endfor; ?>
-                </span>
-            </p>
-            <p><em>"<?= htmlspecialchars($orderRatings[$order['id']]['review_text']) ?>"</em></p>
+                    <span class="rating-text">(<?= (int)$orderRatings[$order['id']]['rating'] ?>/5)</span>
+                </div>
+                <?php if (!empty($orderRatings[$order['id']]['review_text'])): ?>
+                    <div class="rating-review">
+                        <i class="fas fa-quote-left"></i>
+                        <?= htmlspecialchars($orderRatings[$order['id']]['review_text']) ?>
+                    </div>
+                <?php endif; ?>
         <?php else: ?>
-            <form action="orders.php" method="POST" class="rating-form">
+            <form action="orders.php" method="POST" class="rating-form enhanced">
                 <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
-                <div class="star-rating" data-order="<?= $order['id'] ?>">
-                    <?php for ($i = 5; $i >= 1; $i--): ?>
-                        <input type="radio" id="star<?= $i ?>-<?= $order['id'] ?>" name="rating" value="<?= $i ?>">
-                        <label for="star<?= $i ?>-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                <div class="star-input" data-order="<?= $order['id'] ?>">
+                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                        <input type="radio" id="star-<?= $order['id'] ?>-<?= $i ?>" name="rating" value="<?= $i ?>" class="d-none">
+                        <label for="star-<?= $order['id'] ?>-<?= $i ?>" class="star">
+                            <i class="fas fa-star"></i>
+                        </label>
                     <?php endfor; ?>
                 </div>
-                <textarea name="review_text" placeholder="Leave a review..."></textarea>
-                <button type="submit" name="submit_rating">Submit Review</button>
+                <textarea name="review_text" class="form-control mt-2" rows="2" placeholder="Share more about your experience (optional)"></textarea>
+                <button type="submit" name="submit_rating" class="btn btn-primary mt-2">Submit Review</button>
             </form>
         <?php endif; ?>
     </div>
 
     <!-- Show existing rating -->
-    <div class="existing-rating">
+<div class="existing-rating" style="display:none">
+    <?php if (!empty($orderRatings[$order['id']])): ?>
+        <?php 
+            $ratingData = $orderRatings[$order['id']];
+            $rating = $ratingData['rating'] ?? 0;
+            $review = $ratingData['review_text'] ?? '';
+            $ratedAt = !empty($ratingData['created_at']) ? date('M j, Y', strtotime($ratingData['created_at'])) : 'Not rated yet';
+        ?>
+        
         <div class="rating-stars">
-            <?php
-            $rating = $orderRatings[$order['id']]['rating'];
-            for ($i = 1; $i <= 5; $i++):
-            ?>
+            <?php for ($i = 1; $i <= 5; $i++): ?>
                 <i class="fas fa-star <?= $i <= $rating ? 'star-filled' : 'star-empty' ?>"></i>
             <?php endfor; ?>
             <span class="rating-text">(<?= $rating ?>/5)</span>
         </div>
 
-        <?php if (!empty($orderRatings[$order['id']]['review_text'])): ?>
+        <?php if (!empty($review)): ?>
             <div class="rating-review">
                 <i class="fas fa-quote-left"></i>
-                <?= htmlspecialchars($orderRatings[$order['id']]['review_text']) ?>
+                <?= htmlspecialchars($review) ?>
             </div>
         <?php endif; ?>
 
-        <small class="rating-date text-muted">
-            Rated on <?= date('M j, Y', strtotime($orderRatings[$order['id']]['created_at'])) ?>
-        </small>
-    </div>
+        <small class="rating-date text-muted">Rated on <?= $ratedAt ?></small>
+    <?php else: ?>
+        <p class="text-muted">No rating yet.</p>
+    <?php endif; ?>
+</div>
 <?php else: ?>
     <!-- Show rating form -->
-    <form method="POST" action="orders.php" class="rating-form">
+    <form method="POST" action="orders.php" class="rating-form enhanced">
         <input type="hidden" name="orders_id" value="<?= $order['id'] ?>">
-
-        <label for="rating">Rate this order:</label>
-        <select name="rating" required>
-            <option value="">-- Select --</option>
-            <option value="1">⭐ 1</option>
-            <option value="2">⭐⭐ 2</option>
-            <option value="3">⭐⭐⭐ 3</option>
-            <option value="4">⭐⭐⭐⭐ 4</option>
-            <option value="5">⭐⭐⭐⭐⭐ 5</option>
-        </select>
-
-        <label for="review_text">Review:</label>
-        <textarea name="review_text" rows="2" placeholder="Write your feedback..."></textarea>
-
-        <button type="submit" name="submit_rating">Submit Rating</button>
+        <div class="star-input" data-order="<?= $order['id'] ?>">
+            <?php for ($i = 1; $i <= 5; $i++): ?>
+                <input type="radio" id="star-<?= $order['id'] ?>-<?= $i ?>-pending" name="rating" value="<?= $i ?>" class="d-none">
+                <label for="star-<?= $order['id'] ?>-<?= $i ?>-pending" class="star">
+                    <i class="fas fa-star"></i>
+                </label>
+            <?php endfor; ?>
+        </div>
+        <textarea name="review_text" class="form-control mt-2" rows="2" placeholder="Share more about your experience (optional)"></textarea>
+        <button type="submit" name="submit_rating" class="btn btn-primary mt-2">Submit Rating</button>
     </form>
 <?php endif; ?>
 </div>
@@ -1973,15 +1874,29 @@ Total: ₱<?= number_format($order['total_price'], 2) ?>
     </script>
     <script>
 document.addEventListener("DOMContentLoaded", function() {
-    document.querySelectorAll(".star-rating").forEach(starBlock => {
-        const stars = starBlock.querySelectorAll("label i");
-        stars.forEach((star, index) => {
-            star.addEventListener("click", () => {
-                stars.forEach((s, i) => {
-                    s.style.color = i >= index ? "gold" : "#ccc";
-                });
-            });
+    document.querySelectorAll(".star-input").forEach(starBlock => {
+        const labels = starBlock.querySelectorAll("label.star i");
+        labels.forEach((icon, idx) => {
+            icon.addEventListener("mouseenter", () => highlight(idx));
+            icon.addEventListener("click", () => select(idx));
         });
+        starBlock.addEventListener("mouseleave", () => restore());
+
+        function highlight(index) {
+            labels.forEach((i, k) => {
+                i.style.color = k <= index ? "#ffc107" : "#ccc";
+            });
+        }
+        function select(index) {
+            const radio = starBlock.querySelector(`#${starBlock.querySelectorAll('input')[index].id}`);
+            if (radio) radio.checked = true;
+            highlight(index);
+        }
+        function restore() {
+            const checked = [...starBlock.querySelectorAll('input')].findIndex(r => r.checked);
+            highlight(checked);
+        }
+        restore();
     });
 });
 </script>
