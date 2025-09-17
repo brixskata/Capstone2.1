@@ -62,5 +62,45 @@
     if (darkModeToggle) {
       darkModeToggle.addEventListener('click', toggleDarkMode);
     }
+    
+    // Sidebar dropdown functionality - let Bootstrap handle the collapse
+    const dropdownToggles = document.querySelectorAll('[data-bs-toggle="collapse"]');
+    
+    dropdownToggles.forEach(toggle => {
+      toggle.addEventListener('click', function(e) {
+        const arrow = this.querySelector('.dropdown-arrow');
+        
+        // Let Bootstrap handle the collapse, just manage the arrow rotation
+        setTimeout(() => {
+          const targetId = this.getAttribute('data-bs-target');
+          const target = document.querySelector(targetId);
+          
+          if (target && arrow) {
+            if (target.classList.contains('show')) {
+              arrow.style.transform = 'rotate(0deg)';
+            } else {
+              arrow.style.transform = 'rotate(-90deg)';
+            }
+          }
+        }, 10);
+      });
+    });
+    
+    // Auto-expand dropdown if current page is in that section
+    const currentPage = window.location.pathname.split('/').pop();
+    const currentPageLink = document.querySelector(`a[href*="${currentPage}"]`);
+    
+    if (currentPageLink) {
+      const dropdown = currentPageLink.closest('.nav-dropdown');
+      if (dropdown) {
+        dropdown.classList.add('show');
+        const toggle = document.querySelector(`[data-bs-target="#${dropdown.id}"]`);
+        if (toggle) {
+          toggle.setAttribute('aria-expanded', 'true');
+          const arrow = toggle.querySelector('.dropdown-arrow');
+          if (arrow) arrow.style.transform = 'rotate(0deg)';
+        }
+      }
+    }
   });
 </script>

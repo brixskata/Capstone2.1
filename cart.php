@@ -118,6 +118,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['success' => false, 'message' => 'Invalid request']);
         exit;
     }
+    
+    // Check if user is logged in
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['success' => false, 'message' => 'Please log in to add items to cart']);
+        exit;
+    }
 
     $action = $_POST['action'] ?? '';
     $product_id = intval($_POST['product_id'] ?? 0);
@@ -165,6 +171,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 if (isset($_SESSION['cart'][$cart_key])) {
+                    // Check if adding this quantity would exceed stock
+                    $new_total_quantity = $_SESSION['cart'][$cart_key]['quantity'] + $quantity;
+                    
+                    // Re-check stock availability with new total quantity
+                    $stock_available = true;
+                    if ($unit === 'kilo') {
+                        $stock_available = $new_total_quantity <= $product['stock'];
+                    } else if ($unit === 'piece') {
+                        $conversion_rate = floatval($_POST['conversion'] ?? 1);
+                        $kilos_needed = $new_total_quantity * $conversion_rate;
+                        $stock_available = $kilos_needed <= $product['stock'];
+                    } else if ($unit === 'box') {
+                        $stock_available = $new_total_quantity <= 1; // Only one box per selection
+                    }
+                    
+                    if (!$stock_available) {
+                        echo json_encode(['success' => false, 'message' => 'Adding this quantity would exceed available stock. Current in cart: ' . $_SESSION['cart'][$cart_key]['quantity'] . ', trying to add: ' . $quantity . ', available stock: ' . $product['stock']]);
+                        exit;
+                    }
+                    
                     $_SESSION['cart'][$cart_key]['quantity'] += $quantity;
                 } else {
                     $_SESSION['cart'][$cart_key] = [
@@ -179,16 +205,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
 
             case 'decrease':
-                if (isset($_SESSION['cart'][$product_id])) {
-                    $_SESSION['cart'][$product_id]['quantity']--;
-                    if ($_SESSION['cart'][$product_id]['quantity'] <= 0) {
-                        unset($_SESSION['cart'][$product_id]);
+                // Find and decrease the cart item by product_id
+                foreach ($_SESSION['cart'] as $cart_key => $cart_item) {
+                    $item_product_id = $cart_item['product_id'] ?? $cart_key;
+                    // Handle both simple product_id and composite keys
+                    if (is_numeric($item_product_id)) {
+                        $item_product_id = intval($item_product_id);
+                    } else {
+                        // Extract product_id from composite key (e.g., "123_kilo" -> 123)
+                        $item_product_id = intval(explode('_', $item_product_id)[0]);
+                    }
+                    
+                    if ($item_product_id == $product_id) {
+                        $_SESSION['cart'][$cart_key]['quantity']--;
+                        if ($_SESSION['cart'][$cart_key]['quantity'] <= 0) {
+                            unset($_SESSION['cart'][$cart_key]);
+                        }
+                        break;
                     }
                 }
                 break;
 
             case 'delete':
-                unset($_SESSION['cart'][$product_id]);
+                // Find and remove the cart item by product_id
+                foreach ($_SESSION['cart'] as $cart_key => $cart_item) {
+                    $item_product_id = $cart_item['product_id'] ?? $cart_key;
+                    // Handle both simple product_id and composite keys
+                    if (is_numeric($item_product_id)) {
+                        $item_product_id = intval($item_product_id);
+                    } else {
+                        // Extract product_id from composite key (e.g., "123_kilo" -> 123)
+                        $item_product_id = intval(explode('_', $item_product_id)[0]);
+                    }
+                    
+                    if ($item_product_id == $product_id) {
+                        unset($_SESSION['cart'][$cart_key]);
+                        break;
+                    }
+                }
                 break;
 
             case 'update':
@@ -877,6 +931,9 @@ try {
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Loading States -->
+    <?php include 'includes/loading_states.php'; ?>
 
     <script>
         // Show alert function
@@ -950,7 +1007,7 @@ try {
 
             // Set loading state
             const cartItem = document.querySelector(`[data-product-id="${productId}"]`);
-            setLoading(cartItem, true);
+            setCartItemLoading(cartItem, true);
 
             fetch('cart.php', {
                 method: 'POST',
@@ -1005,7 +1062,7 @@ try {
                 showAlert('An error occurred. Please try again.', 'danger');
             })
             .finally(() => {
-                setLoading(cartItem, false);
+                setCartItemLoading(cartItem, false);
             });
         }
 
@@ -1057,7 +1114,7 @@ try {
                 showAlert('An error occurred. Please try again.', 'danger');
             })
             .finally(() => {
-                setLoading(cartItem, false);
+                setCartItemLoading(cartItem, false);
             });
         }
 

@@ -1,5 +1,5 @@
 <?php
-include 'db.php';
+include '../includes/db.php';
 session_start();
 
 // Ensure user is logged in and has admin role

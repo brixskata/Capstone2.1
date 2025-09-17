@@ -1,5 +1,5 @@
 <?php
-include 'db.php';
+include '../includes/db.php';
 session_start();
 
 // Ensure user is logged in and has admin access (Super Admin or Admin)
@@ -78,17 +78,16 @@ foreach ($orders as $order) {
     echo "<!-- Order {$order['id']}: method='" . ($order['payment_method'] ?? 'NULL') . "', proof='" . ($order['payment_proof'] ?? 'NULL') . "' -->\n";
 }
 
-$totalDelivered = $pdo->query("SELECT COUNT(*) FROM delivered_orders")->fetchColumn();
 $stats = $pdo->query("
     SELECT 
         COUNT(*) as total_orders,
         SUM(CASE WHEN os.status_name = 'Pending' THEN 1 ELSE 0 END) as pending_orders,
         SUM(CASE WHEN os.status_name = 'To Ship' THEN 1 ELSE 0 END) as processing_orders,
-        SUM(CASE WHEN os.status_name = 'Shipped' THEN 1 ELSE 0 END) as shipped_orders
+        SUM(CASE WHEN os.status_name = 'Shipped' THEN 1 ELSE 0 END) as shipped_orders,
+        SUM(CASE WHEN os.status_name = 'Completed' THEN 1 ELSE 0 END) as completed_orders
     FROM orders o
     JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
 ")->fetch();
-$stats['delivered_orders'] = $totalDelivered;
 ?>
 
 <!DOCTYPE html>
@@ -207,6 +206,19 @@ $stats['delivered_orders'] = $totalDelivered;
         color: white;
       }
       
+      .btn-received {
+        background-color: #20c997;
+        color: white;
+        cursor: pointer;
+      }
+      
+      .btn-received:hover {
+        background-color: #1aa085;
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+      }
+      
       .btn-completed {
         background-color: #6c757d;
         color: white;
@@ -218,6 +230,47 @@ $stats['delivered_orders'] = $totalDelivered;
         color: white;
         transform: none;
         box-shadow: none;
+      }
+      
+      .btn-waiting {
+        background-color: #ffc107;
+        color: #000;
+        cursor: default;
+        opacity: 0.8;
+      }
+      
+      .btn-waiting:hover {
+        background-color: #ffc107;
+        color: #000;
+        transform: none;
+        box-shadow: none;
+        opacity: 0.8;
+      }
+      
+      /* Modal Styles */
+      .modal-content {
+        border-radius: 12px;
+        border: none;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      }
+      
+      .modal-header {
+        border-radius: 12px 12px 0 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      }
+      
+      .modal-footer {
+        border-radius: 0 0 12px 12px;
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+      }
+      
+      .modal-body .alert {
+        border-radius: 8px;
+        border: none;
+      }
+      
+      .modal-body i {
+        opacity: 0.8;
       }
     </style>
 </head>
@@ -284,7 +337,7 @@ $stats['delivered_orders'] = $totalDelivered;
               <i class="fa fa-check"></i>
             </div>
             <div class="ms-3">
-              <h4 class="fw-bold mb-0"><?php echo $stats['delivered_orders']; ?></h4>
+              <h4 class="fw-bold mb-0"><?php echo $stats['completed_orders']; ?></h4>
               <small class="text-muted text-uppercase">Completed</small>
             </div>
           </div>
@@ -321,7 +374,13 @@ $stats['delivered_orders'] = $totalDelivered;
     <!-- Orders Table -->
     <div class="table-card">
       <div class="card-header bg-transparent border-0 p-4">
-        <h5 class="fw-bold mb-0">Order Transactions</h5>
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="fw-bold mb-0">Order Transactions</h5>
+          <div class="text-muted small">
+            <i class="fas fa-info-circle me-1"></i>
+            <span>Shipped orders wait for customer confirmation before completion</span>
+          </div>
+        </div>
       </div>
       <div class="table-responsive">
         <table class="table table-hover mb-0">
@@ -382,39 +441,30 @@ $stats['delivered_orders'] = $totalDelivered;
                     elseif ($status === 'shipped') $badgeClass = 'text-white';
                     elseif ($status === 'delivered' || $status === 'completed') $badgeClass = 'bg-success';
                   ?>
-                  <span class="badge-status <?= $badgeClass ?>" <?php if($status === 'shipped') echo 'style="background-color: #7F1734;"'; ?>>
+                  <span class="badge-status <?= $badgeClass ?>" <?php if($status === 'shipped') echo 'style="background-color: #7F1734; position: relative;"'; ?>>
                     <?= htmlspecialchars($order['status']) ?>
+                    <?php if($status === 'shipped'): ?>
+                      <i class="fas fa-clock ms-1" style="font-size: 0.8em;" title="Waiting for customer confirmation"></i>
+                    <?php endif; ?>
                   </span>
                 </td>
                 <td class="text-muted"><?= date('M d, Y H:i', strtotime($order['created_at'])) ?></td>
                 <td>
                   <div class="d-flex gap-2">
                     <?php if ($order['status'] == 'Pending'): ?>
-                      <form method="POST" class="d-inline">
-                        <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
-                        <input type="hidden" name="new_status" value="To Ship">
-                        <button type="submit" name="update_status" class="action-btn btn-process">
-                          <i class="fas fa-cog me-1"></i>Process
-                        </button>
-                      </form>
+                      <button type="button" class="action-btn btn-process" data-bs-toggle="modal" data-bs-target="#processModal" data-order-id="<?= $order['id'] ?>" data-customer="<?= htmlspecialchars($order['username']) ?>">
+                        <i class="fas fa-cog me-1"></i>Process
+                      </button>
                     <?php endif; ?>
                     <?php if ($order['status'] == 'To Ship'): ?>
-                      <form method="POST" class="d-inline">
-                        <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
-                        <input type="hidden" name="new_status" value="Shipped">
-                        <button type="submit" name="update_status" class="action-btn btn-ship">
-                          <i class="fas fa-truck me-1"></i>Ship
-                        </button>
-                      </form>
+                      <button type="button" class="action-btn btn-ship" data-bs-toggle="modal" data-bs-target="#shipModal" data-order-id="<?= $order['id'] ?>" data-customer="<?= htmlspecialchars($order['username']) ?>">
+                        <i class="fas fa-truck me-1"></i>Ship
+                      </button>
                     <?php endif; ?>
                     <?php if ($order['status'] == 'Shipped'): ?>
-                      <form method="POST" class="d-inline">
-                        <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
-                        <input type="hidden" name="new_status" value="Completed">
-                        <button type="submit" name="update_status" class="action-btn btn-deliver">
-                          <i class="fas fa-check me-1"></i>Deliver
-                        </button>
-                      </form>
+                      <span class="action-btn btn-waiting" title="Waiting for customer to confirm receipt">
+                        <i class="fas fa-clock me-1"></i>Waiting for Customer
+                      </span>
                     <?php endif; ?>
                     <?php if ($order['status'] == 'Completed'): ?>
                       <span class="action-btn btn-completed">
@@ -468,10 +518,119 @@ $stats['delivered_orders'] = $totalDelivered;
     </div>
   </div>
 
+  <!-- Process Order Modal -->
+  <div class="modal fade" id="processModal" tabindex="-1" aria-labelledby="processModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title" id="processModalLabel">
+            <i class="fas fa-cog me-2"></i>Process Order
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-center mb-3">
+            <i class="fas fa-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+          </div>
+          <p class="text-center mb-3">Are you sure you want to process this order?</p>
+          <div class="alert alert-info">
+            <strong>Order Details:</strong><br>
+            <span id="processOrderId"></span><br>
+            <span id="processCustomer"></span>
+          </div>
+          <p class="text-muted small text-center">This will change the order status to <strong>"To Ship"</strong> and notify the customer.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times me-1"></i>Cancel
+          </button>
+          <form method="POST" class="d-inline" id="processForm">
+            <input type="hidden" name="order_id" id="processOrderIdInput">
+            <input type="hidden" name="new_status" value="To Ship">
+            <button type="submit" name="update_status" class="btn btn-warning">
+              <i class="fas fa-cog me-1"></i>Process Order
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ship Order Modal -->
+  <div class="modal fade" id="shipModal" tabindex="-1" aria-labelledby="shipModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header" style="background-color: #7F1734; color: white;">
+          <h5 class="modal-title" id="shipModalLabel">
+            <i class="fas fa-truck me-2"></i>Ship Order
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-center mb-3">
+            <i class="fas fa-truck text-danger" style="font-size: 3rem;"></i>
+          </div>
+          <p class="text-center mb-3">Are you sure you want to ship this order?</p>
+          <div class="alert alert-info">
+            <strong>Order Details:</strong><br>
+            <span id="shipOrderId"></span><br>
+            <span id="shipCustomer"></span>
+          </div>
+          <p class="text-muted small text-center">This will change the order status to <strong>"Shipped"</strong> and notify the customer that their order is on the way.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times me-1"></i>Cancel
+          </button>
+          <form method="POST" class="d-inline" id="shipForm">
+            <input type="hidden" name="order_id" id="shipOrderIdInput">
+            <input type="hidden" name="new_status" value="Shipped">
+            <button type="submit" name="update_status" class="btn" style="background-color: #7F1734; color: white;">
+              <i class="fas fa-truck me-1"></i>Ship Order
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <?php include 'includes/admin_scripts.php'; ?>
   
   <script>
+    // Handle modal data population
+    document.addEventListener('DOMContentLoaded', function() {
+      // Process Modal
+      const processModal = document.getElementById('processModal');
+      if (processModal) {
+        processModal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          const orderId = button.getAttribute('data-order-id');
+          const customer = button.getAttribute('data-customer');
+          
+          document.getElementById('processOrderId').textContent = 'Order #' + orderId;
+          document.getElementById('processCustomer').textContent = 'Customer: ' + customer;
+          document.getElementById('processOrderIdInput').value = orderId;
+        });
+      }
+
+      // Ship Modal
+      const shipModal = document.getElementById('shipModal');
+      if (shipModal) {
+        shipModal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          const orderId = button.getAttribute('data-order-id');
+          const customer = button.getAttribute('data-customer');
+          
+          document.getElementById('shipOrderId').textContent = 'Order #' + orderId;
+          document.getElementById('shipCustomer').textContent = 'Customer: ' + customer;
+          document.getElementById('shipOrderIdInput').value = orderId;
+        });
+      }
+
+    });
+
     function viewPaymentProof(orderId, paymentProof) {
       console.log('Opening payment proof modal for order:', orderId, 'proof:', paymentProof);
       const modal = new bootstrap.Modal(document.getElementById('paymentProofModal'));

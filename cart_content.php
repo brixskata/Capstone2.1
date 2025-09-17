@@ -92,34 +92,55 @@ if (!empty($_SESSION['cart'])) {
 }
 ?>
 
-<div class="cart-body">
-    <?php if (empty($cart_items)): ?>
-        <div class="empty-cart">
-            <i class="fas fa-shopping-cart"></i>
-            <h5>Your cart is empty</h5>
-            <p>Add some products to get started!</p>
-        </div>
-    <?php else: ?>
+<?php if (empty($cart_items)): ?>
+    <div class="empty-cart text-center py-5">
+        <i class="fas fa-shopping-cart text-muted" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+        <h5 class="text-muted">Your cart is empty</h5>
+        <p class="text-muted small">Add some products to get started!</p>
+        <button class="btn btn-outline-secondary btn-sm" onclick="closeCart(); window.location.href='product.php'">
+            <i class="fas fa-shopping-bag me-1"></i>Browse Products
+        </button>
+    </div>
+<?php else: ?>
+    <div class="cart-items-container">
         <?php foreach ($cart_items as $item): ?>
-            <div class="cart-item">
-                <div class="cart-item-info">
-                    <div class="cart-item-name"><?= htmlspecialchars($item['product']['name']) ?></div>
-                    <div class="cart-item-details">Qty: <?= $item['quantity'] ?></div>
+            <div class="cart-item-sliding" data-product-id="<?= $item['product']['id'] ?>">
+                <div class="item-image">
+                    <img src="<?= !empty($item['product']['image1']) ? 'admin/' . htmlspecialchars($item['product']['image1']) : 'images/placeholder.jpg' ?>" 
+                         alt="<?= htmlspecialchars($item['product']['name']) ?>" 
+                         class="cart-item-img"
+                         onerror="this.src='images/placeholder.jpg'">
                 </div>
-                <div class="cart-item-price">₱<?= number_format($item['total'], 2) ?></div>
+                
+                <div class="item-details">
+                    <div class="item-name"><?= htmlspecialchars($item['product']['name']) ?></div>
+                    <div class="item-price">₱<?= number_format($item['product']['price'], 2) ?> each</div>
+                    <div class="item-stock text-muted small">
+                        <i class="fas fa-box me-1"></i>
+                        <?= $item['product']['stock'] > 0 ? $item['product']['stock'] . ' in stock' : 'Out of stock' ?>
+                    </div>
+                </div>
+                
+                <div class="item-controls">
+                    <div class="quantity-controls">
+                        <button class="quantity-btn decrease-cart" data-product-id="<?= $item['product']['id'] ?>" 
+                                <?= $item['quantity'] <= 1 ? 'disabled' : '' ?>>
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <span class="quantity-display"><?= $item['quantity'] ?></span>
+                        <button class="quantity-btn increase-cart" data-product-id="<?= $item['product']['id'] ?>" 
+                                <?= $item['quantity'] >= $item['product']['stock'] ? 'disabled' : '' ?>>
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="item-total">₱<?= number_format($item['total'], 2) ?></div>
+                    
+                    <button class="remove-cart-item" data-product-id="<?= $item['product']['id'] ?>" title="Remove Item">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
             </div>
         <?php endforeach; ?>
-    <?php endif; ?>
-</div>
-
-<?php if (!empty($cart_items)): ?>
-    <div class="cart-footer">
-        <div class="cart-total">
-            Total: ₱<?= number_format($cart_total, 2) ?>
-        </div>
-        <button class="btn-checkout" onclick="window.location.href='checkout.php'">
-            <i class="fas fa-credit-card me-2"></i>
-            Proceed to Checkout
-        </button>
     </div>
 <?php endif; ?>

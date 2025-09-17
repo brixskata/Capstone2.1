@@ -1,5 +1,5 @@
 <?php
-include 'db.php';
+include '../includes/db.php';
 include '../includes/log_history.php';
 include '../includes/permissions.php';
 session_start();

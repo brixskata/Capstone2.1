@@ -1,6 +1,6 @@
 <?php
 session_start();
-include 'db.php';
+include '../includes/db.php';
 
 // Ensure user is logged in and has admin role
 if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
