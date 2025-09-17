@@ -1,6 +1,6 @@
 <?php
 session_start();
-include 'db.php';
+include '../includes/db.php';
 include '../includes/permissions.php';
 
 // Ensure user is logged in and has admin access

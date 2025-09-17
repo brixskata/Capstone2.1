@@ -37,6 +37,30 @@ try {
 } catch (PDOException $e) {
     $featuredProducts = [];
 }
+
+// Fetch customer testimonials from order ratings
+$testimonials = [];
+try {
+    $stmt = $pdo->query("
+        SELECT 
+            o.rating,
+            o.review,
+            o.created_at,
+            u.username,
+            COALESCE(ui.first_name, u.username) as first_name,
+            COALESCE(ui.last_name, '') as last_name,
+            ui.profile_picture
+        FROM order_ratings o
+        JOIN users u ON o.user_id = u.user_id
+        LEFT JOIN user_info ui ON u.user_id = ui.user_id
+        WHERE o.review IS NOT NULL AND TRIM(o.review) != ''
+        ORDER BY o.created_at DESC
+        LIMIT 6
+    ");
+    $testimonials = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $testimonials = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -503,6 +527,46 @@ try {
             margin-bottom: 1rem;
         }
 
+        .btn-add-cart {
+            background: linear-gradient(135deg, #7F1734 0%, #a91d42 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(127, 23, 52, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-add-cart::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-add-cart:hover::before {
+            left: 100%;
+        }
+
+        .btn-add-cart:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(127, 23, 52, 0.4);
+            color: white;
+        }
+
+        .btn-add-cart:active {
+            transform: translateY(0);
+        }
+
         .add-to-cart-form {
             margin-top: auto;
             padding-top: 1rem;
@@ -597,6 +661,14 @@ try {
             color: white;
             font-weight: 600;
             margin-right: 1rem;
+            flex-shrink: 0;
+        }
+
+        .testimonial-avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
         }
 
         .testimonial-rating {
@@ -810,28 +882,24 @@ try {
                     <?php foreach ($featuredProducts as $product): ?>
                         <div class="col-md-6 col-lg-3">
                             <div class="product-card">
-                                <div class="product-badge">
-                                    Featured
+                                    <div class="product-badge">
+                                        Featured
+                                    </div>
+
+                                    <img data-src="<?= !empty($product['image1']) ? 'admin/' . htmlspecialchars($product['image1']) : 'images/placeholder.jpg' ?>" alt="<?= htmlspecialchars($product['name']) ?>" class="product-image lazy lazy-placeholder" onerror="this.src='images/placeholder.jpg'" onclick="window.location.href='product_detail.php?id=<?= $product['id'] ?>'" style="cursor: pointer;">
+
+                                    <h3 class="product-title" onclick="window.location.href='product_detail.php?id=<?= $product['id'] ?>'" style="cursor: pointer;"><?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?></h3>
+                                    <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
+
+                                    <div class="product-price">₱<?= number_format($product['price'], 2) ?></div>
+                                    <div class="product-stock">Stock: <?= (int)$product['stock'] ?> available</div>
+
+                                    <div class="mt-3">
+                                        <button type="button" class="btn-add-cart" onclick="addToCart(<?= $product['id'] ?>, 1)">
+                                            <i class="fas fa-cart-plus me-2"></i>Add to Cart
+                                        </button>
+                                    </div>
                                 </div>
-
-                                <img src="<?= !empty($product['image1']) ? 'admin/' . htmlspecialchars($product['image1']) : 'images/placeholder.jpg' ?>" alt="<?= htmlspecialchars($product['name']) ?>" class="product-image" onerror="this.src='images/placeholder.jpg'">
-
-                                <h3 class="product-title"><?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?></h3>
-                                <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
-
-                                <div class="product-price">₱<?= number_format($product['price'], 2) ?></div>
-                                <div class="product-stock">Stock: <?= (int)$product['stock'] ?> available</div>
-
-                                <form class="add-to-cart-form" method="post" action="cart.php">
-                                    <input type="hidden" name="product_id" value="<?= (int)$product['id'] ?>">
-                                    <input type="hidden" name="action" value="add">
-                                    <input type="hidden" name="quantity" value="1">
-                                    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
-                                    <button type="submit" class="btn-add-cart">
-                                        <i class="fas fa-cart-plus me-2"></i>Add to Cart
-                                    </button>
-                                </form>
-                            </div>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -897,60 +965,89 @@ try {
             </div>
 
             <div class="row g-4">
-                <div class="col-md-4">
-                    <div class="testimonial-card">
-                        <div class="testimonial-header">
-                            <div class="testimonial-avatar">M</div>
-                            <div>
-                                <h4 class="mb-1">Marion Brix</h4>
-                                <div class="testimonial-rating">
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
+                <?php if (empty($testimonials)): ?>
+                    <!-- Fallback testimonials if no real ratings exist -->
+                    <div class="col-md-4">
+                        <div class="testimonial-card">
+                            <div class="testimonial-header">
+                                <div class="testimonial-avatar">M</div>
+                                <div>
+                                    <h4 class="mb-1">Marion Brix</h4>
+                                    <div class="testimonial-rating">
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                    </div>
                                 </div>
                             </div>
+                            <p class="testimonial-text">"Nice Nice!"</p>
                         </div>
-                        <p class="testimonial-text">"Nice Nice!"</p>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="testimonial-card">
-                        <div class="testimonial-header">
-                            <div class="testimonial-avatar">J</div>
-                            <div>
-                                <h4 class="mb-1">Jay</h4>
-                                <div class="testimonial-rating">
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
+                    <div class="col-md-4">
+                        <div class="testimonial-card">
+                            <div class="testimonial-header">
+                                <div class="testimonial-avatar">J</div>
+                                <div>
+                                    <h4 class="mb-1">Jay</h4>
+                                    <div class="testimonial-rating">
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                    </div>
                                 </div>
                             </div>
+                            <p class="testimonial-text">"Angas!"</p>
                         </div>
-                        <p class="testimonial-text">"Angas!"</p>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="testimonial-card">
-                        <div class="testimonial-header">
-                            <div class="testimonial-avatar">E</div>
-                            <div>
-                                <h4 class="mb-1">Ekko</h4>
-                                <div class="testimonial-rating">
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
+                    <div class="col-md-4">
+                        <div class="testimonial-card">
+                            <div class="testimonial-header">
+                                <div class="testimonial-avatar">E</div>
+                                <div>
+                                    <h4 class="mb-1">Ekko</h4>
+                                    <div class="testimonial-rating">
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star"></i>
+                                    </div>
                                 </div>
                             </div>
+                            <p class="testimonial-text">"Solid"</p>
                         </div>
-                        <p class="testimonial-text">"Solid"</p>
                     </div>
-                </div>
+                <?php else: ?>
+                    <?php foreach ($testimonials as $testimonial): ?>
+                        <div class="col-md-4">
+                            <div class="testimonial-card">
+                                <div class="testimonial-header">
+                                    <div class="testimonial-avatar">
+                                        <?php if (!empty($testimonial['profile_picture'])): ?>
+                                            <img src="<?= htmlspecialchars($testimonial['profile_picture']) ?>" alt="<?= htmlspecialchars($testimonial['first_name']) ?>" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                                        <?php else: ?>
+                                            <?= strtoupper(substr($testimonial['first_name'], 0, 1)) ?>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div>
+                                        <h4 class="mb-1"><?= htmlspecialchars(trim($testimonial['first_name'] . ' ' . $testimonial['last_name'])) ?></h4>
+                                        <div class="testimonial-rating">
+                                            <?php for ($i = 1; $i <= 5; $i++): ?>
+                                                <i class="fas fa-star <?= $i <= $testimonial['rating'] ? 'text-warning' : 'text-muted' ?>"></i>
+                                            <?php endfor; ?>
+                                        </div>
+                                        <small class="text-muted"><?= date('M d, Y', strtotime($testimonial['created_at'])) ?></small>
+                                    </div>
+                                </div>
+                                <p class="testimonial-text">"<?= htmlspecialchars($testimonial['review']) ?>"</p>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </div>
     </section>
@@ -1123,6 +1220,77 @@ try {
             el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
             observer.observe(el);
         });
+
+        // Add to cart function
+        function addToCart(productId, quantity) {
+            const formData = new FormData();
+            formData.append('product_id', productId);
+            formData.append('action', 'add');
+            formData.append('quantity', quantity);
+            formData.append('csrf_token', '<?= $_SESSION['csrf_token'] ?? '' ?>');
+            
+            fetch('cart.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Product added to cart!', 'success');
+                    updateCartBadge();
+                } else {
+                    showToast(data.error || 'Failed to add product to cart', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Network error. Please try again.', 'error');
+            });
+        }
+
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = 'toast show position-fixed bottom-0 end-0 m-3';
+            toast.style.zIndex = '9999';
+            
+            const bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
+            const icon = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+            
+            toast.innerHTML = `
+                <div class="toast-header ${bgClass} text-white">
+                    <i class="${icon} me-2"></i>
+                    <strong class="me-auto">${type === 'success' ? 'Success' : 'Error'}</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            `;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        function updateCartBadge() {
+            fetch('cart_count.php')
+                .then(response => response.text())
+                .then(count => {
+                    const cartBadge = document.querySelector('.cart-badge');
+                    if (cartBadge) {
+                        cartBadge.textContent = count;
+                        if (parseInt(count) > 0) {
+                            cartBadge.style.display = 'flex';
+                        } else {
+                            cartBadge.style.display = 'none';
+                        }
+                    }
+                });
+        }
     </script>
+    
+    <!-- Lazy Loading Script -->
+    <script src="includes/lazy_loading.js"></script>
 </body>
 </html>

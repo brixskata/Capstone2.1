@@ -5,11 +5,8 @@ include 'includes/db.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
     $email = htmlspecialchars(trim($_POST['email']));
     $password = trim($_POST['password']);
-    $agreed_terms = isset($_POST['agree_terms']) ? true : false;
-
-    if (!$agreed_terms) {
-        $_SESSION['error'] = "Please agree to the Terms and Conditions.";
-    } else if (empty($email) || empty($password)) {
+    
+    if (empty($email) || empty($password)) {
         $_SESSION['error'] = "All fields are required.";
     } else {
         try {
@@ -66,92 +63,97 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - MikeMadz</title>
+    <title>Sign In - MikeMadz</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bs-primary: #ffffff;
-            --bs-secondary: #7F1734;
-            --bs-success: #198754;
-            --bs-danger: #dc3545;
-            --bs-warning: #ffc107;
-            --bs-info: #0dcaf0;
-            --bs-light: #f8f9fa;
-            --bs-dark: #212529;
-        }
-
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            background: #ffffff;
             min-height: 100vh;
+            margin: 0;
+            padding: 0;
         }
 
         .auth-container {
-            min-height: calc(100vh - 200px);
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2rem 0;
+            padding: 2rem;
+            position: relative;
         }
 
         .auth-card {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(127, 23, 52, 0.1);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
             overflow: hidden;
-            max-width: 900px;
+            max-width: 450px;
             width: 100%;
-            margin: 0 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
-        .auth-left {
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
-            color: white;
-            padding: 3rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+        .auth-header {
             text-align: center;
-            min-height: 600px;
-        }
-
-        .auth-right {
-            padding: 3rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-height: 600px;
-        }
-
-        .brand-logo {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
+            padding: 3rem 3rem 2rem;
+            background: linear-gradient(135deg, #7F1734 0%, #a91d42 100%);
             color: white;
         }
 
-        .brand-subtitle {
-            font-size: 1.1rem;
+        .logo-container {
+            margin-bottom: 1.5rem;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1rem;
+            display: block;
+            filter: brightness(0) invert(1);
+        }
+
+        .auth-header .brand-name {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.5px;
+            color: white !important;
+        }
+
+        .auth-header .brand-tagline {
+            font-size: 0.95rem;
             opacity: 0.9;
-            margin-bottom: 2rem;
-            line-height: 1.6;
+            margin-top: 0.5rem;
+            font-weight: 400;
+            color: white !important;
+        }
+
+        .logo-container .brand-tagline:first-of-type {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.5px;
+        }
+
+        .card-title,
+        .form-subtitle {
+            color: white !important;
         }
 
         .auth-form {
-            max-width: 400px;
-            margin: 0 auto;
-            width: 100%;
+            padding: 3rem;
         }
 
         .form-title {
-            color: var(--bs-secondary);
-            font-size: 2rem;
-            font-weight: 700;
+            color: #212529;
+            font-size: 1.75rem;
+            font-weight: 600;
             margin-bottom: 0.5rem;
             text-align: center;
         }
@@ -160,6 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             color: #6c757d;
             text-align: center;
             margin-bottom: 2rem;
+            font-size: 0.95rem;
         }
 
         .form-group {
@@ -168,18 +171,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
         }
 
         .form-control {
-            padding: 0.75rem 1rem 0.75rem 3rem;
+            padding: 1rem 1rem 1rem 3rem;
             border: 2px solid #e9ecef;
-            border-radius: 12px;
+            border-radius: 16px;
             font-size: 1rem;
             transition: all 0.3s ease;
-            background-color: #f8f9fa;
+            background-color: rgba(248, 249, 250, 0.8);
+            backdrop-filter: blur(10px);
+            font-weight: 400;
         }
 
         .form-control:focus {
-            border-color: var(--bs-secondary);
-            box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
+            border-color: #7F1734;
+            box-shadow: 0 0 0 3px rgba(127, 23, 52, 0.1);
             background-color: white;
+            outline: none;
         }
 
         .form-icon {
@@ -188,34 +194,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             top: 50%;
             transform: translateY(-50%);
             color: #6c757d;
-            font-size: 1.1rem;
+            font-size: 1rem;
+            z-index: 2;
         }
 
         .btn-login {
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
+            background: #7F1734;
             border: none;
-            padding: 0.75rem 2rem;
-            border-radius: 12px;
+            padding: 1rem 2rem;
+            border-radius: 16px;
             font-weight: 600;
             font-size: 1rem;
             transition: all 0.3s ease;
             width: 100%;
             margin-bottom: 1rem;
+            color: white;
         }
 
         .btn-login:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(127, 23, 52, 0.3);
-            background: linear-gradient(135deg, #a91d42 0%, var(--bs-secondary) 100%);
+            box-shadow: 0 15px 30px rgba(127, 23, 52, 0.3);
+            background: #6b1429;
+            color: white;
         }
 
         .btn-register {
             background: transparent;
-            border: 2px solid var(--bs-secondary);
-            color: var(--bs-secondary);
-            padding: 0.75rem 2rem;
-            border-radius: 12px;
-            font-weight: 600;
+            border: 2px solid #e9ecef;
+            color: #6c757d;
+            padding: 1rem 2rem;
+            border-radius: 16px;
+            font-weight: 500;
             font-size: 1rem;
             transition: all 0.3s ease;
             width: 100%;
@@ -225,9 +234,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
         }
 
         .btn-register:hover {
-            background: var(--bs-secondary);
-            color: white;
-            transform: translateY(-2px);
+            background: #f8f9fa;
+            color: #7F1734;
+            border-color: #7F1734;
+            transform: translateY(-1px);
         }
 
         .alert {
@@ -247,45 +257,39 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             color: #0f5132;
         }
 
-        .terms-container {
-            display: flex;
-            align-items: flex-start;
-            margin-bottom: 1.5rem;
-        }
-
-        .terms-container input[type="checkbox"] {
-            margin-right: 0.5rem;
-            margin-top: 0.25rem;
-        }
-
-        .terms-container label {
-            font-size: 0.9rem;
-            color: #6c757d;
-            line-height: 1.4;
-        }
-
-        .terms-container a {
-            color: var(--bs-secondary);
-            text-decoration: none;
-        }
-
-        .terms-container a:hover {
-            text-decoration: underline;
-        }
-
-        .verification-link {
+        .terms-notice {
             text-align: center;
-            margin-top: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: rgba(248, 249, 250, 0.6);
+            border-radius: 12px;
+            border: 1px solid rgba(233, 236, 239, 0.5);
+            backdrop-filter: blur(10px);
         }
 
-        .verification-link a {
-            color: var(--bs-secondary);
+        .terms-notice a {
+            color: #7F1734;
             text-decoration: none;
-            font-size: 0.9rem;
+            font-weight: 500;
         }
 
-        .verification-link a:hover {
+        .terms-notice a:hover {
             text-decoration: underline;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            z-index: 2;
+        }
+
+        .toggle-password:hover {
+            color: #7F1734;
         }
 
         .divider {
@@ -306,93 +310,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
         }
 
         .divider span {
-            background: white;
+            background: rgba(255, 255, 255, 0.95);
             padding: 0 1rem;
-        }
-
-        .toggle-password {
-            position: absolute;
-            right: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #6c757d;
-            cursor: pointer;
-            transition: color 0.3s ease;
-        }
-
-        .toggle-password:hover {
-            color: var(--bs-secondary);
-        }
-
-        /* Terms Modal */
-        .modal-content {
-            border-radius: 15px;
-            border: none;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-        }
-
-        .modal-header {
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
-            color: white;
-            border-radius: 15px 15px 0 0;
-        }
-
-        .btn-close {
-            filter: invert(1);
-        }
-
-        .terms-text {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .terms-text p {
-            margin-bottom: 0.75rem;
-            line-height: 1.6;
-        }
-
-        /* Feature highlights */
-        .feature-item {
-            display: flex;
-            align-items: center;
-            margin-bottom: 1rem;
-            opacity: 0.9;
-        }
-
-        .feature-icon {
-            width: 40px;
-            height: 40px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 1rem;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .auth-left {
-                display: none;
-            }
-            
-            .auth-right {
-                padding: 2rem 1.5rem;
-            }
-            
-            .auth-card {
-                margin: 0 0.5rem;
-            }
-        }
-
-        @media (max-width: 576px) {
-            .form-title {
-                font-size: 1.75rem;
-            }
-            
-            .brand-logo {
-                font-size: 2rem;
-            }
         }
     </style>
 </head>
@@ -402,167 +321,66 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
 
     <div class="auth-container">
         <div class="auth-card">
-            <div class="row g-0">
-                <!-- Left Side - Branding -->
-                <div class="col-lg-6">
-                    <div class="auth-left">
-                        <div>
-                            <div class="brand-logo">
-                                <i class="fas fa-store me-2"></i>MikeMadz
-                            </div>
-                            <p class="brand-subtitle">
-                                Your trusted online store for quality products and excellent service. Join thousands of satisfied customers today.
-                            </p>
-                        </div>
-                        
-                        <div class="w-100">
-                            <div class="feature-item">
-                                <div class="feature-icon">
-                                    <i class="fas fa-shipping-fast"></i>
-                                </div>
-                                <div>
-                                    <strong>Fast Delivery</strong><br>
-                                    <small>Quick and reliable shipping</small>
-                                </div>
-                            </div>
-                            <div class="feature-item">
-                                <div class="feature-icon">
-                                    <i class="fas fa-shield-alt"></i>
-                                </div>
-                                <div>
-                                    <strong>Secure Shopping</strong><br>
-                                    <small>Your data is safe with us</small>
-                                </div>
-                            </div>
-                            <div class="feature-item">
-                                <div class="feature-icon">
-                                    <i class="fas fa-heart"></i>
-                                </div>
-                                <div>
-                                    <strong>Quality Products</strong><br>
-                                    <small>Hand-picked items just for you</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right Side - Login Form -->
-                <div class="col-lg-6">
-                    <div class="auth-right">
-                        <div class="auth-form">
-                            <h2 class="form-title">Welcome Back!</h2>
-                            <p class="form-subtitle">Sign in to your account to continue shopping</p>
-
-                            <!-- Error/Success Messages -->
-                            <?php if (isset($_SESSION['error'])): ?>
-                                <div class="alert alert-danger">
-                                    <i class="fas fa-exclamation-circle me-2"></i>
-                                    <?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
-                                </div>
-                            <?php endif; ?>
-
-                            <?php if (isset($_SESSION['success'])): ?>
-                                <div class="alert alert-success">
-                                    <i class="fas fa-check-circle me-2"></i>
-                                    <?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
-                                </div>
-                            <?php endif; ?>
-
-                                                            
-                            <!-- Login Form -->
-                            <form action="login.php" method="POST">
-                                <div class="form-group">
-                                    <i class="fas fa-envelope form-icon"></i>
-                                    <input type="email" name="email" class="form-control" placeholder="Email Address" required>
-                                </div>
-
-                                <div class="form-group">
-                                    <i class="fas fa-lock form-icon"></i>
-                                    <input type="password" name="password" id="password" class="form-control" placeholder="Password" required>
-                                    <i class="fas fa-eye toggle-password" onclick="togglePassword()"></i>
-                                </div>
-
-                                <div class="form-group text-sm text-muted">
-                                    <label>
-                                        <input type="checkbox" name="agree_terms">
-                                        By signing in, you agree to our
-                                        <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal" class="text-primary">Terms and Conditions</a>.
-                                    </label>
-                                </div>
-
-                                <button type="submit" name="login" class="btn btn-primary btn-login">
-                                    <i class="fas fa-sign-in-alt me-2"></i>Sign In
-                                </button>
-                            </form>
-
-                            <div class="divider">
-                                <span>or</span>
-                            </div>
-
-                            <a href="register.php" class="btn btn-register">
-                                <i class="fas fa-user-plus me-2"></i>Create New Account
-                            </a>
-
-                            <div class="verification-link">
-                                <a href="email_verification.php">
-                                    <i class="fas fa-envelope me-1"></i>
-                                    Need to verify your email?
-                                </a>
-                            </div>
-                        </div>
-                    </div>
+            <!-- Header with Logo -->
+            <div class="auth-header">
+                <div class="logo-container">
+                    <img src="images/logo.png" alt="MikeMadz Logo" class="logo">
+                    <p class="brand-tagline">MikeMadz</p>
+                    <p class="brand-tagline">Premium Quality Products</p>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Terms and Conditions Modal -->
-    <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="termsModalLabel">
-                        <i class="fas fa-file-contract me-2"></i>Terms and Conditions
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="terms-text">
-                        <p><strong>1. Acceptance of Terms</strong><br>
-                        By using MikeMadz, you agree to these terms and conditions and our privacy policy.</p>
-                        
-                        <p><strong>2. User Account</strong><br>
-                        You must be at least 18 years old to create an account. You are responsible for maintaining the security of your account credentials.</p>
-                        
-                        <p><strong>3. Privacy Policy</strong><br>
-                        Your personal information will be handled according to our privacy policy. We respect your privacy and protect your data.</p>
-                        
-                        <p><strong>4. Account Security</strong><br>
-                        You are responsible for maintaining the confidentiality of your account and password. Notify us immediately of any unauthorized use.</p>
-                        
-                        <p><strong>5. Prohibited Activities</strong><br>
-                        We reserve the right to suspend accounts that violate our terms, engage in fraudulent activities, or misuse our services.</p>
-                        
-                        <p><strong>6. Product Information</strong><br>
-                        All purchases are subject to availability. Prices and product information are subject to change without notice.</p>
-                        
-                        <p><strong>7. Order Processing</strong><br>
-                        Orders are processed in the order received. We reserve the right to refuse or cancel orders at our discretion.</p>
-                        
-                        <p><strong>8. Accurate Information</strong><br>
-                        You agree to provide accurate and complete information when creating your account and placing orders.</p>
-                        
-                        <p><strong>9. Changes to Terms</strong><br>
-                        We reserve the right to modify these terms at any time. Continued use of our services constitutes acceptance of new terms.</p>
-                        
-                        <p><strong>10. Contact Information</strong><br>
-                        If you have any questions about these terms, please contact our customer support team.</p>
+            <!-- Login Form -->
+            <div class="auth-form">
+                <h2 class="form-title">Welcome Back</h2>
+                <p class="form-subtitle">Sign in to your account</p>
+
+                <!-- Error/Success Messages -->
+                <?php if (isset($_SESSION['error'])): ?>
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
                     </div>
+                <?php endif; ?>
+
+                <?php if (isset($_SESSION['success'])): ?>
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Login Form -->
+                <form method="POST" action="login.php">
+                    <div class="form-group">
+                        <i class="fas fa-envelope form-icon"></i>
+                        <input type="email" name="email" class="form-control" placeholder="Email Address" required>
+                    </div>
+
+                    <div class="form-group">
+                        <i class="fas fa-lock form-icon"></i>
+                        <input type="password" name="password" id="password" class="form-control" placeholder="Password" required>
+                        <i class="fas fa-eye toggle-password" onclick="togglePassword()"></i>
+                    </div>
+
+                    <div class="terms-notice">
+                        <small class="text-muted">
+                            By signing in, you agree to our Terms and Conditions
+                        </small>
+                    </div>
+
+                    <button type="submit" name="login" class="btn btn-primary btn-login">
+                        <i class="fas fa-sign-in-alt me-2"></i>Sign In
+                    </button>
+                </form>
+
+                <div class="divider">
+                    <span>or</span>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
+
+                <a href="register.php" class="btn btn-register">
+                    <i class="fas fa-user-plus me-2"></i>Create New Account
+                </a>
             </div>
         </div>
     </div>
@@ -574,7 +392,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
         // Toggle password visibility
         function togglePassword() {
             const password = document.getElementById('password');
-            const toggleIcon = document.querySelector('.toggle-password');
+            const toggleIcon = password.nextElementSibling;
             
             if (password.type === 'password') {
                 password.type = 'text';
@@ -586,22 +404,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                 toggleIcon.classList.add('fa-eye');
             }
         }
-
-     
-
-        // Auto-hide alerts after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            const alerts = document.querySelectorAll('.alert');
-            alerts.forEach(function(alert) {
-                setTimeout(function() {
-                    alert.style.transition = 'opacity 0.5s ease-out';
-                    alert.style.opacity = '0';
-                    setTimeout(function() {
-                        alert.remove();
-                    }, 500);
-                }, 5000);
-            });
-        });
     </script>
 </body>
 </html>

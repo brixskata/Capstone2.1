@@ -1,10 +1,10 @@
 <?php
-include 'db.php';
+include '../includes/db.php';
 include_once '../includes/log_history.php';
 session_start();
 
-// Ensure user is logged in and has admin role
-if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
+// Ensure user is logged in and has admin or super_admin role
+if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
     header("Location: login_admin.php");
     exit;
 }

@@ -348,6 +348,7 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
             margin-bottom: 1rem;
             display: -webkit-box;
             -webkit-line-clamp: 2;
+            line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
@@ -378,21 +379,56 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
         }
 
         .btn-add-cart {
-            background: var(--brand-gradient);
+            background: linear-gradient(135deg, #7F1734 0%, #a91d42 100%);
             color: white;
             border: none;
-            padding: 0.6rem 1.2rem;
+            padding: 0.75rem 1.5rem;
             border-radius: 0.75rem;
             font-weight: 600;
+            font-size: 0.9rem;
             transition: all 0.3s ease;
-            margin-right: 0.5rem;
+            width: 100%;
             box-shadow: 0 4px 15px rgba(127, 23, 52, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-add-cart::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-add-cart:hover::before {
+            left: 100%;
         }
 
         .btn-add-cart:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(127, 23, 52, 0.4);
             color: white;
+        }
+
+        .btn-add-cart:active {
+            transform: translateY(0);
+        }
+
+        .btn-out-of-stock {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            width: 100%;
+            cursor: not-allowed;
+            opacity: 0.7;
         }
 
         .btn-favorite {
@@ -565,6 +601,7 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
         <!-- Products Grid -->
         <div class="row g-4">
             <?php foreach ($products as $product): ?>
+                <!-- Debug: Product ID = <?= $product['id'] ?> -->
                 <div class="col-md-6 col-lg-4 col-xl-3">
                     <div class="product-card">
                         <!-- Stock Badge -->
@@ -577,7 +614,7 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                         <?php endif; ?>
 
                         <!-- Product Images Carousel -->
-                        <div class="swiper mySwiper">
+                        <div class="swiper mySwiper" data-product-id="<?= $product['id'] ?>" style="cursor: pointer;">
                             <div class="swiper-wrapper">
                                 <?php if (!empty($product['image1'])): ?>
                                     <div class="swiper-slide">
@@ -594,7 +631,7 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                             <div class="swiper-pagination"></div>
                         </div>
 
-                        <h3 class="product-title"><?= htmlspecialchars($product['name']) ?></h3>
+                        <h3 class="product-title" onclick="window.location.href='product_detail.php?id=<?= $product['id'] ?>'" style="cursor: pointer;"><?= htmlspecialchars($product['name']) ?></h3>
                         <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
 
                         <div class="product-price">
@@ -614,15 +651,17 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
 
                         <?php if ($product['stock'] > 0): ?>
                             <div class="d-flex align-items-center gap-2">
-                                <a href="product_detail.php?id=<?= $product['id'] ?>" class="btn btn-primary flex-grow-1">
-                                    <i class="fas fa-eye me-2"></i>View Details
-                                </a>
+                                <button type="button" class="btn-add-cart flex-grow-1" onclick="addToCart(<?= $product['id'] ?>, 1, event)">
+                                    <i class="fas fa-cart-plus me-2"></i>Add to Cart
+                                </button>
                                 <button type="button" class="btn-favorite <?= in_array($product['id'], $user_favorites) ? 'favorited' : '' ?>" data-product-id="<?= $product['id'] ?>">
                                     <i class="fas fa-heart"></i>
                                 </button>
                             </div>
                         <?php else: ?>
-                            <button class="btn btn-secondary" disabled>Out of Stock</button>
+                            <button class="btn-out-of-stock" disabled>
+                                <i class="fas fa-times-circle me-2"></i>Out of Stock
+                            </button>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -642,6 +681,8 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
         // Initialize Swiper
         document.addEventListener("DOMContentLoaded", function () {
             document.querySelectorAll(".mySwiper").forEach((el) => {
+                const productId = el.getAttribute('data-product-id');
+                
                 new Swiper(el, {
                     loop: true,
                     autoplay: {
@@ -652,11 +693,99 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                         el: el.querySelector(".swiper-pagination"),
                         clickable: true,
                     },
+                    on: {
+                        click: function(swiper, event) {
+                            console.log('Swiper clicked. Product ID:', productId);
+                            if (productId) {
+                                console.log('Navigating to product_detail.php?id=' + productId);
+                                window.location.href = 'product_detail.php?id=' + productId;
+                            }
+                        }
+                    }
                 });
+                
+                // Remove the onclick attribute to prevent conflicts
+                el.removeAttribute('onclick');
             });
         });
 
         // Cart functionality is now handled by the shared navbar
+
+        // Add to cart function
+        function addToCart(productId, quantity, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            
+            console.log('Add to cart called with productId:', productId, 'quantity:', quantity);
+            const formData = new FormData();
+            formData.append('product_id', productId);
+            formData.append('action', 'add');
+            formData.append('quantity', quantity);
+            formData.append('csrf_token', '<?= $_SESSION['csrf_token'] ?? '' ?>');
+            
+            fetch('cart.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Product added to cart!', 'success');
+                    updateCartBadge();
+                } else {
+                    showToast(data.error || 'Failed to add product to cart', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Network error. Please try again.', 'error');
+            });
+            
+            return false;
+        }
+
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = 'toast show position-fixed bottom-0 end-0 m-3';
+            toast.style.zIndex = '9999';
+            
+            const bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
+            const icon = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+            
+            toast.innerHTML = `
+                <div class="toast-header ${bgClass} text-white">
+                    <i class="${icon} me-2"></i>
+                    <strong class="me-auto">${type === 'success' ? 'Success' : 'Error'}</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            `;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        function updateCartBadge() {
+            fetch('cart_count.php')
+                .then(response => response.text())
+                .then(count => {
+                    const cartBadge = document.querySelector('.cart-badge');
+                    if (cartBadge) {
+                        cartBadge.textContent = count;
+                        if (parseInt(count) > 0) {
+                            cartBadge.style.display = 'flex';
+                        } else {
+                            cartBadge.style.display = 'none';
+                        }
+                    }
+                });
+        }
 
         // Add to cart functionality
         document.querySelectorAll('.add-to-cart-form').forEach(form => {

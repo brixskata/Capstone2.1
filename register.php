@@ -4,20 +4,22 @@ include 'includes/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $username = htmlspecialchars(trim($_POST['username']));
+    $first_name = htmlspecialchars(trim($_POST['first_name']));
+    $last_name = htmlspecialchars(trim($_POST['last_name']));
     $email = htmlspecialchars(trim($_POST['email']));
     $password = trim($_POST['password']);
     $confirm_password = trim($_POST['confirm_password']);
-    $agreed_terms = isset($_POST['agree_terms']) ? true : false;
-
     // Validate fields
-    if (!$agreed_terms) {
-        $_SESSION['error'] = "Please agree to the Terms and Conditions";
-    } else if (empty($username) || empty($email) || empty($password) || empty($confirm_password)) {
+    if (empty($username) || empty($first_name) || empty($last_name) || empty($email) || empty($password) || empty($confirm_password)) {
         $_SESSION['error'] = "All fields are required.";
     } else if ($password !== $confirm_password) {
         $_SESSION['error'] = "Passwords do not match.";
     } else if (strlen($password) < 6) {
         $_SESSION['error'] = "Password must be at least 6 characters long.";
+    } else if (strlen($first_name) < 2) {
+        $_SESSION['error'] = "First name must be at least 2 characters long.";
+    } else if (strlen($last_name) < 2) {
+        $_SESSION['error'] = "Last name must be at least 2 characters long.";
     } else {
         // Check if user already exists (check username in users table and email in user_info table)
         $stmt = $pdo->prepare("SELECT 1 FROM users WHERE username = :username");
@@ -40,16 +42,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $pdo->beginTransaction();
             try {
                 // Insert user into users table (without email)
-                $stmt = $pdo->prepare("INSERT INTO users (username, password, is_verified, is_active, usertype_id) VALUES (:username, :password, 0, 1, NULL)");
+                $stmt = $pdo->prepare("INSERT INTO users (username, password, email_verified, is_active, usertype_id) VALUES (:username, :password, 0, 1, NULL)");
                 $stmt->bindParam(':username', $username);
                 $stmt->bindParam(':password', $hashed_password);
                 $stmt->execute();
                 
                 $newUserId = $pdo->lastInsertId();
                 
-                // Insert user info into user_info table (with email)
-                $stmt = $pdo->prepare("INSERT INTO user_info (user_id, email) VALUES (:user_id, :email)");
+                // Insert user info into user_info table (with email, first_name, last_name)
+                $stmt = $pdo->prepare("INSERT INTO user_info (user_id, first_name, last_name, email) VALUES (:user_id, :first_name, :last_name, :email)");
                 $stmt->bindParam(':user_id', $newUserId);
+                $stmt->bindParam(':first_name', $first_name);
+                $stmt->bindParam(':last_name', $last_name);
                 $stmt->bindParam(':email', $email);
                 $stmt->execute();
                 
@@ -75,12 +79,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register - MikeMadz</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* Cache buster: <?= time() ?> */
         :root {
             --bs-primary: #ffffff;
             --bs-secondary: #7F1734;
@@ -94,72 +102,136 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            background: #ffffff;
             min-height: 100vh;
+            margin: 0;
+            padding: 0;
         }
 
         .auth-container {
-            min-height: calc(100vh - 200px);
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2rem 0;
+            padding: 2rem;
+            position: relative;
         }
 
         .auth-card {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(127, 23, 52, 0.1);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
             overflow: hidden;
-            max-width: 900px;
+            max-width: 450px;
             width: 100%;
-            margin: 0 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
-        .auth-left {
+        .auth-header {
+            text-align: center;
+            padding: 3rem 3rem 2rem;
             background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
             color: white;
-            padding: 3rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            min-height: 700px;
         }
 
-        .auth-right {
-            padding: 3rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-height: 700px;
+        .logo-container {
+            margin-bottom: 1.5rem;
         }
 
-        .brand-logo {
-            font-size: 2.5rem;
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1rem;
+            display: block;
+            filter: brightness(0) invert(1);
+        }
+
+        .auth-header .brand-name {
+            font-size: 2rem;
             font-weight: 700;
-            margin-bottom: 1rem;
-            color: white;
+            margin: 0;
+            letter-spacing: -0.5px;
+            color: white !important;
         }
 
-        .brand-subtitle {
-            font-size: 1.1rem;
+        .auth-header h1.brand-name {
+            color: white !important;
+        }
+
+        .logo-container .brand-name {
+            color: white !important;
+        }
+
+        .auth-header .logo-container h1.brand-name {
+            color: white !important;
+        }
+
+        .brand-name {
+            color: white !important;
+        }
+
+        * .brand-name {
+            color: white !important;
+        }
+
+        h1.brand-name {
+            color: white !important;
+        }
+
+        /* Ultra-specific overrides */
+        .auth-card .auth-header .logo-container h1.brand-name {
+            color: white !important;
+        }
+
+        .auth-card .auth-header h1.brand-name {
+            color: white !important;
+        }
+
+        .auth-card .auth-header .brand-name {
+            color: white !important;
+        }
+
+        /* Force white with multiple selectors */
+        .auth-header h1[class*="brand"] {
+            color: white !important;
+        }
+
+        .auth-header [class*="brand-name"] {
+            color: white !important;
+        }
+
+        .auth-header .brand-tagline {
+            font-size: 0.95rem;
             opacity: 0.9;
-            margin-bottom: 2rem;
-            line-height: 1.6;
+            margin-top: 0.5rem;
+            font-weight: 400;
+            color: white !important;
+        }
+
+        /* Make the first brand-tagline (MikeMadz) bigger */
+        .logo-container .brand-tagline:first-of-type {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.5px;
+        }
+
+        /* Fix Bootstrap conflicts */
+        .card-title,
+        .form-subtitle {
+            color: white !important;
         }
 
         .auth-form {
-            max-width: 400px;
-            margin: 0 auto;
-            width: 100%;
+            padding: 3rem;
         }
 
         .form-title {
-            color: var(--bs-secondary);
-            font-size: 2rem;
-            font-weight: 700;
+            color: var(--bs-dark);
+            font-size: 1.75rem;
+            font-weight: 600;
             margin-bottom: 0.5rem;
             text-align: center;
         }
@@ -168,6 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             color: #6c757d;
             text-align: center;
             margin-bottom: 2rem;
+            font-size: 0.95rem;
         }
 
         .form-group {
@@ -175,19 +248,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             margin-bottom: 1.5rem;
         }
 
+        .form-group .row {
+            margin-bottom: 0;
+        }
+
+        .form-group .row .form-group {
+            margin-bottom: 1.5rem;
+        }
+
         .form-control {
-            padding: 0.75rem 1rem 0.75rem 3rem;
+            padding: 1rem 1rem 1rem 3rem;
             border: 2px solid #e9ecef;
-            border-radius: 12px;
+            border-radius: 16px;
             font-size: 1rem;
             transition: all 0.3s ease;
-            background-color: #f8f9fa;
+            background-color: rgba(248, 249, 250, 0.8);
+            backdrop-filter: blur(10px);
+            font-weight: 400;
         }
 
         .form-control:focus {
             border-color: var(--bs-secondary);
-            box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
+            box-shadow: 0 0 0 3px rgba(127, 23, 52, 0.1);
             background-color: white;
+            outline: none;
         }
 
         .form-icon {
@@ -196,34 +280,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             top: 50%;
             transform: translateY(-50%);
             color: #6c757d;
-            font-size: 1.1rem;
+            font-size: 1rem;
+            z-index: 2;
         }
 
         .btn-register {
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
+            background: var(--bs-secondary);
             border: none;
-            padding: 0.75rem 2rem;
-            border-radius: 12px;
+            padding: 1rem 2rem;
+            border-radius: 16px;
             font-weight: 600;
             font-size: 1rem;
             transition: all 0.3s ease;
             width: 100%;
             margin-bottom: 1rem;
+            color: white;
         }
 
         .btn-register:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(127, 23, 52, 0.3);
-            background: linear-gradient(135deg, #a91d42 0%, var(--bs-secondary) 100%);
+            box-shadow: 0 15px 30px rgba(127, 23, 52, 0.3);
+            background: #6b1429;
+            color: white;
         }
 
         .btn-login {
             background: transparent;
-            border: 2px solid var(--bs-secondary);
-            color: var(--bs-secondary);
-            padding: 0.75rem 2rem;
-            border-radius: 12px;
-            font-weight: 600;
+            border: 2px solid #e9ecef;
+            color: #6c757d;
+            padding: 1rem 2rem;
+            border-radius: 16px;
+            font-weight: 500;
             font-size: 1rem;
             transition: all 0.3s ease;
             width: 100%;
@@ -233,9 +320,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         .btn-login:hover {
-            background: var(--bs-secondary);
-            color: white;
-            transform: translateY(-2px);
+            background: #f8f9fa;
+            color: var(--bs-secondary);
+            border-color: var(--bs-secondary);
+            transform: translateY(-1px);
         }
 
         .alert {
@@ -255,29 +343,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             color: #0f5132;
         }
 
-        .terms-container {
-            display: flex;
-            align-items: flex-start;
+        .terms-notice {
+            text-align: center;
             margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: rgba(248, 249, 250, 0.6);
+            border-radius: 12px;
+            border: 1px solid rgba(233, 236, 239, 0.5);
+            backdrop-filter: blur(10px);
         }
 
-        .terms-container input[type="checkbox"] {
-            margin-right: 0.5rem;
-            margin-top: 0.25rem;
-        }
-
-        .terms-container label {
-            font-size: 0.9rem;
-            color: #6c757d;
-            line-height: 1.4;
-        }
-
-        .terms-container a {
+        .terms-notice a {
             color: var(--bs-secondary);
             text-decoration: none;
+            font-weight: 500;
         }
 
-        .terms-container a:hover {
+        .terms-notice a:hover {
             text-decoration: underline;
         }
 
@@ -412,57 +494,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     <div class="auth-container">
         <div class="auth-card">
-            <div class="row g-0">
-                <!-- Left Side - Branding -->
-                <div class="col-lg-6">
-                    <div class="auth-left">
-                        <div>
-                            <div class="brand-logo">
-                                <i class="fas fa-store me-2"></i>MikeMadz
-                            </div>
-                            <p class="brand-subtitle">
-                                Join our community of satisfied customers and enjoy quality products with excellent service.
-                            </p>
-                        </div>
-                        
-                        <div class="w-100">
-                            <div class="feature-item">
-                                <div class="feature-icon">
-                                    <i class="fas fa-user-plus"></i>
-                                </div>
-                                <div>
-                                    <strong>Easy Registration</strong><br>
-                                    <small>Quick and simple sign-up process</small>
-                                </div>
-                            </div>
-                            <div class="feature-item">
-                                <div class="feature-icon">
-                                    <i class="fas fa-shield-alt"></i>
-                                </div>
-                                <div>
-                                    <strong>Secure Account</strong><br>
-                                    <small>Your information is protected</small>
-                                </div>
-                            </div>
-                            <div class="feature-item">
-                                <div class="feature-icon">
-                                    <i class="fas fa-gift"></i>
-                                </div>
-                                <div>
-                                    <strong>Exclusive Offers</strong><br>
-                                    <small>Special deals for members</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            <!-- Header with Logo -->
+            <div class="auth-header">
+                <div class="logo-container">
+                    <img src="images/logo.png" alt="MikeMadz Logo" class="logo">
+                    <p class="brand-tagline">MikeMadz</p>
+                    <p class="brand-tagline">Premium Quality Products</p>
                 </div>
+            </div>
 
-                <!-- Right Side - Register Form -->
-                <div class="col-lg-6">
-                    <div class="auth-right">
-                        <div class="auth-form">
-                            <h2 class="form-title">Create Account</h2>
-                            <p class="form-subtitle">Join MikeMadz and start shopping today</p>
+            <!-- Registration Form -->
+            <div class="auth-form">
+                <h2 class="form-title">Create Account</h2>
+                <p class="form-subtitle">Join our community and start shopping</p>
 
                             <!-- Error/Success Messages -->
                             <?php if (isset($_SESSION['error'])): ?>
@@ -481,8 +525,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                             <!-- Registration Form -->
                             <form method="POST" action="register.php">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <i class="fas fa-user form-icon"></i>
+                                            <input type="text" name="first_name" class="form-control" placeholder="First Name" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <i class="fas fa-user form-icon"></i>
+                                            <input type="text" name="last_name" class="form-control" placeholder="Last Name" required>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="form-group">
-                                    <i class="fas fa-user form-icon"></i>
+                                    <i class="fas fa-at form-icon"></i>
                                     <input type="text" name="username" class="form-control" placeholder="Username" required>
                                 </div>
 
@@ -504,11 +563,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     <i class="fas fa-eye toggle-password" onclick="togglePassword('confirm_password')"></i>
                                 </div>
 
-                                <div class="terms-container">
-                                    <input type="checkbox" name="agree_terms" id="agree_terms" required>
-                                    <label for="agree_terms">
-                                        I agree to the <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">Terms & Conditions</a>
-                                    </label>
+                                <div class="terms-notice">
+                                    <small class="text-muted">
+                                        By creating an account, you agree to our <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">Terms & Conditions</a>
+                                    </small>
                                 </div>
 
                                 <button type="submit" name="register" class="btn btn-primary btn-register">
@@ -520,12 +578,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 <span>or</span>
                             </div>
 
-                            <a href="login.php" class="btn btn-login">
-                                <i class="fas fa-sign-in-alt me-2"></i>Already have an account? Sign In
-                            </a>
-                        </div>
-                    </div>
-                </div>
+                <a href="login.php" class="btn btn-login">
+                    <i class="fas fa-sign-in-alt me-2"></i>Already have an account? Sign In
+                </a>
             </div>
         </div>
     </div>
@@ -654,12 +709,44 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         // Form validation feedback
         document.querySelector('form').addEventListener('submit', function(e) {
+            const firstName = document.querySelector('input[name="first_name"]').value;
+            const lastName = document.querySelector('input[name="last_name"]').value;
+            const username = document.querySelector('input[name="username"]').value;
+            const email = document.querySelector('input[name="email"]').value;
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirm_password').value;
             
+            // Validate required fields
+            if (!firstName || !lastName || !username || !email || !password || !confirmPassword) {
+                e.preventDefault();
+                alert('All fields are required!');
+                return;
+            }
+            
+            // Validate name lengths
+            if (firstName.length < 2) {
+                e.preventDefault();
+                alert('First name must be at least 2 characters long!');
+                return;
+            }
+            
+            if (lastName.length < 2) {
+                e.preventDefault();
+                alert('Last name must be at least 2 characters long!');
+                return;
+            }
+            
+            // Validate password match
             if (password !== confirmPassword) {
                 e.preventDefault();
                 alert('Passwords do not match!');
+                return;
+            }
+            
+            // Validate password length
+            if (password.length < 6) {
+                e.preventDefault();
+                alert('Password must be at least 6 characters long!');
                 return;
             }
             

@@ -1,6 +1,6 @@
 
 <?php 
-include 'db.php';
+include '../includes/db.php';
 session_start();
 
 // Ensure user is logged in and has admin access (Super Admin or Admin)
@@ -107,6 +107,98 @@ try {
 		GROUP BY os.status_name 
 		ORDER BY order_count DESC");
 	$orderStatusData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+	// Product movement analysis (last 30 days)
+	$stmt = $pdo->query("SELECT 
+		p.product_id,
+		p.product_name,
+		COUNT(sm.stockmovement_id) as total_movements,
+		COALESCE(ps.current_stock, 0) as current_stock
+		FROM products p
+		LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+		LEFT JOIN stock_movements sm ON p.product_id = sm.product_id 
+			AND sm.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+		WHERE p.is_archive = 0
+		GROUP BY p.product_id, p.product_name, ps.current_stock
+		ORDER BY total_movements DESC
+	");
+	$movement_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+	// Classify products by movement - removed medium moving category
+	$fast_moving = 0;
+	$slow_moving = 0;
+	$non_moving = 0;
+
+	foreach ($movement_analysis as $product) {
+		$movement_rate = $product['total_movements'] > 0 ? round(($product['total_movements'] / 30) * 100, 1) : 0;
+		
+		if ($product['total_movements'] == 0) {
+			$non_moving++;
+		} elseif ($movement_rate > 7 || $product['total_movements'] > 6) {
+			$fast_moving++;
+		} else {
+			$slow_moving++;
+		}
+	}
+
+	$movement_categories = [
+		'Fast Moving' => $fast_moving,
+		'Slow Moving' => $slow_moving,
+		'Non Moving' => $non_moving
+	];
+
+	// Top selling products (last 30 days)
+	$stmt = $pdo->query("SELECT 
+		p.product_name,
+		SUM(oi.quantity) as total_sold,
+		SUM(oi.quantity * oi.price) as total_revenue
+		FROM order_items oi
+		JOIN products p ON oi.product_id = p.product_id
+		JOIN orders o ON oi.order_id = o.orders_id
+		WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+		AND p.is_archive = 0
+		GROUP BY p.product_id, p.product_name
+		ORDER BY total_sold DESC
+		LIMIT 10
+	");
+	$topSellingProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+	// Daily sales data (last 30 days)
+	$stmt = $pdo->query("SELECT 
+		DATE(created_at) as sale_date,
+		COUNT(*) as order_count,
+		SUM(total_price) as daily_revenue
+		FROM orders
+		WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+		GROUP BY DATE(created_at)
+		ORDER BY sale_date DESC
+	");
+	$dailySalesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+	// Customer registration trend (last 12 months)
+	$stmt = $pdo->query("SELECT 
+		DATE_FORMAT(date_created, '%Y-%m') as month,
+		COUNT(*) as new_users
+		FROM users
+		WHERE date_created >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+		GROUP BY DATE_FORMAT(date_created, '%Y-%m')
+		ORDER BY month ASC
+	");
+	$userRegistrationData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+	// Inventory value by category
+	$stmt = $pdo->query("SELECT 
+		c.category_name,
+		SUM(COALESCE(ps.current_stock, 0) * COALESCE(pp.cost_price, 0)) as category_value
+		FROM categories c
+		LEFT JOIN products p ON c.category_id = p.category_id AND p.is_archive = 0
+		LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+		LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+		GROUP BY c.category_id, c.category_name
+		HAVING category_value > 0
+		ORDER BY category_value DESC
+	");
+	$inventoryValueData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (Exception $e) {
 	echo "Error: " . $e->getMessage();
@@ -223,127 +315,183 @@ try {
     <!-- Page Header -->
     <div class="mb-5">
       <h1 class="page-title">
-        <i class="fas fa-tachometer-alt text-primary me-3"></i>Dashboard Analytics
+        <i class="fas fa-tachometer-alt me-3" style="color: #7F1734;"></i>Dashboard 
       </h1>
      
     </div>
 
-    <!-- Key Metrics Cards -->
-    <div class="row g-4 mb-5">
-      <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-          <div class="metric-icon bg-info">
-            <i class="fas fa-box"></i>
+    <!-- Key Metrics Summary -->
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="chart-container">
+          <div class="chart-header">
+            <h5 class="fw-bold mb-0">
+              <i class="fas fa-tachometer-alt me-2" style="color: #7F1734;"></i>Key Performance Indicators
+            </h5>
+            <small class="text-muted">Essential business metrics at a glance</small>
           </div>
-          <h3 class="fw-bold mb-1"><?php echo number_format($totalProducts); ?></h3>
-          <p class="text-muted mb-0">Active Products</p>
-        </div>
-      </div>
-      
-      <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-          <div class="metric-icon bg-success">
-            <i class="fas fa-peso-sign"></i>
+          <div class="chart-body">
+            <div class="row g-3">
+              <div class="col-md-2 col-6">
+                <div class="text-center">
+                  <h4 class="fw-bold text-info mb-1"><?php echo number_format($totalProducts); ?></h4>
+                  <small class="text-muted">Active Products</small>
+                </div>
+              </div>
+              <div class="col-md-2 col-6">
+                <div class="text-center">
+                  <h4 class="fw-bold text-success mb-1">₱<?php echo number_format($totalCompletedSales, 0); ?></h4>
+                  <small class="text-muted">Total Revenue</small>
+                </div>
+              </div>
+              <div class="col-md-2 col-6">
+                <div class="text-center">
+                  <h4 class="fw-bold mb-1" style="color: #7F1734;"><?php echo number_format($totalUsers); ?></h4>
+                  <small class="text-muted">Users</small>
+                </div>
+              </div>
+              <div class="col-md-2 col-6">
+                <div class="text-center">
+                  <h4 class="fw-bold text-warning mb-1"><?php echo number_format($totalStock); ?></h4>
+                  <small class="text-muted">In Stock</small>
+                </div>
+              </div>
+              <div class="col-md-2 col-6">
+                <div class="text-center">
+                  <h4 class="fw-bold text-danger mb-1"><?php echo $lowStockProducts ? count($lowStockProducts) : 0; ?></h4>
+                  <small class="text-muted">Low Stock</small>
+                </div>
+              </div>
+              <div class="col-md-2 col-6">
+                <div class="text-center">
+                  <h4 class="fw-bold text-primary mb-1"><?php echo $movement_categories['Fast Moving']; ?></h4>
+                  <small class="text-muted">Fast Moving</small>
+                </div>
+              </div>
+            </div>
+            <hr class="my-3">
+            <div class="row g-3">
+              <div class="col-md-3 col-6">
+                <div class="text-center">
+                  <h5 class="fw-bold text-warning mb-1"><?php echo $pendingOrders; ?></h5>
+                  <small class="text-muted">Pending Orders</small>
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <div class="text-center">
+                  <h5 class="fw-bold text-info mb-1"><?php echo $processingOrders; ?></h5>
+                  <small class="text-muted">Processing</small>
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <div class="text-center">
+                  <h5 class="fw-bold mb-1" style="color: #7F1734;"><?php echo $shippedOrders; ?></h5>
+                  <small class="text-muted">Shipped</small>
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <div class="text-center">
+                  <h5 class="fw-bold text-secondary mb-1"><?php echo $movement_categories['Non Moving']; ?></h5>
+                  <small class="text-muted">Non-Moving</small>
+                </div>
+              </div>
+            </div>
           </div>
-          <h3 class="fw-bold mb-1">₱<?php echo number_format($totalCompletedSales, 2); ?></h3>
-          <p class="text-muted mb-0">Total Revenue</p>
-        </div>
-      </div>
-      
-      <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-          <div class="metric-icon" style="background-color: #7F1734;">
-            <i class="fas fa-users"></i>
-          </div>
-          <h3 class="fw-bold mb-1"><?php echo number_format($totalUsers); ?></h3>
-          <p class="text-muted mb-0">Registered Users</p>
-        </div>
-      </div>
-      
-      <div class="col-xl-3 col-md-6">
-        <div class="metric-card">
-          <div class="metric-icon bg-warning">
-            <i class="fas fa-cubes"></i>
-          </div>
-          <h3 class="fw-bold mb-1"><?php echo number_format($totalStock); ?></h3>
-          <p class="text-muted mb-0">Items in Stock</p>
         </div>
       </div>
     </div>
 
-    <!-- Analytics Charts - Moved to Top -->
+    <!-- Row 1: Daily Sales Trend (Full Width) -->
     <div class="row g-4 mb-5">
-      <!-- Sales Trend Line Chart -->
-      <div class="col-lg-8">
+      <!-- Daily Sales Trend -->
+      <div class="col-12">
         <div class="chart-container">
           <div class="chart-header">
             <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-line text-success me-2"></i>Sales Trend Analysis
+              <i class="fas fa-chart-line me-2" style="color: #7F1734;"></i>Daily Sales Trend
             </h5>
-            <small class="text-muted">Monthly revenue over the last 12 months</small>
+            <small class="text-muted">Daily revenue and order count (last 30 days)</small>
           </div>
           <div class="chart-body">
-            <canvas id="salesTrendChart" height="120"></canvas>
+            <canvas id="dailySalesChart" height="200"></canvas>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Product Categories Pie Chart -->
+    <!-- Row 2: Product Distribution and User Registration Trend -->
+    <div class="row g-4 mb-5">
+      <!-- Product Distribution Pie Chart -->
       <div class="col-lg-4">
         <div class="chart-container">
           <div class="chart-header">
             <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-pie text-warning me-2"></i>Product Distribution
+              <i class="fas fa-chart-pie me-2" style="color: #7F1734;"></i>Product Distribution
             </h5>
             <small class="text-muted">Products by category</small>
           </div>
-          <div class="chart-body">
+          <div class="chart-body" style="height: 300px;">
             <canvas id="categoriesChart"></canvas>
           </div>
         </div>
       </div>
+
+      <!-- User Registration Trend -->
+      <div class="col-lg-8">
+        <div class="chart-container">
+          <div class="chart-header">
+            <h5 class="fw-bold mb-0">
+              <i class="fas fa-user-plus me-2" style="color: #7F1734;"></i>User Registration Trend
+            </h5>
+            <small class="text-muted">New users per month (last 12 months)</small>
+          </div>
+          <div class="chart-body" style="height: 300px;">
+            <canvas id="userRegistrationChart"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Order Status Overview -->
+    <!-- Row 3: Top Selling Products and Product Movement Analysis -->
     <div class="row g-4 mb-5">
-      <div class="col-md-4">
-        <div class="metric-card text-center">
-          <div class="metric-icon bg-warning mx-auto">
-            <i class="fas fa-clock"></i>
+      <!-- Top Selling Products Chart -->
+      <div class="col-lg-6">
+        <div class="chart-container">
+          <div class="chart-header">
+            <h5 class="fw-bold mb-0">
+              <i class="fas fa-trophy me-2" style="color: #7F1734;"></i>Top Selling Products
+            </h5>
+            <small class="text-muted">Best sellers in last 30 days</small>
           </div>
-          <h4 class="fw-bold"><?php echo $pendingOrders; ?></h4>
-          <p class="text-muted">Pending Orders</p>
+          <div class="chart-body">
+            <canvas id="topSellingChart" height="200"></canvas>
+          </div>
         </div>
       </div>
-      
-      <div class="col-md-4">
-        <div class="metric-card text-center">
-          <div class="metric-icon bg-info mx-auto">
-            <i class="fas fa-spinner"></i>
+
+      <!-- Product Movement Analysis Chart -->
+      <div class="col-lg-6">
+        <div class="chart-container">
+          <div class="chart-header">
+            <h5 class="fw-bold mb-0">
+              <i class="fas fa-chart-donut me-2" style="color: #7F1734;"></i>Product Movement Analysis
+            </h5>
+            <small class="text-muted">Product performance over last 30 days</small>
           </div>
-          <h4 class="fw-bold"><?php echo $processingOrders; ?></h4>
-          <p class="text-muted">Processing Orders</p>
-        </div>
-      </div>
-      
-      <div class="col-md-4">
-        <div class="metric-card text-center">
-          <div class="metric-icon mx-auto" style="background-color: #7F1734;">
-            <i class="fas fa-shipping-fast"></i>
+          <div class="chart-body">
+            <canvas id="movementAnalysisChart" height="200"></canvas>
           </div>
-          <h4 class="fw-bold"><?php echo $shippedOrders; ?></h4>
-          <p class="text-muted">Shipped Orders</p>
         </div>
       </div>
     </div>
 
-    <!-- Order Status Bar Chart -->
+    <!-- Row 4: Order Status Bar Chart (Full Width) -->
     <div class="row g-4 mb-5">
       <div class="col-12">
         <div class="chart-container">
           <div class="chart-header">
             <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-bar text-info me-2"></i>Order Status Overview
+              <i class="fas fa-chart-bar me-2" style="color: #7F1734;"></i>Order Status Overview
             </h5>
             <small class="text-muted">Distribution of orders by current status</small>
           </div>
@@ -353,6 +501,25 @@ try {
         </div>
       </div>
     </div>
+
+    <!-- Row 5: Inventory Value by Category (Full Width) -->
+    <div class="row g-4 mb-5">
+      <div class="col-12">
+        <div class="chart-container">
+          <div class="chart-header">
+            <h5 class="fw-bold mb-0">
+              <i class="fas fa-chart-bar me-2" style="color: #7F1734;"></i>Inventory Value by Category
+            </h5>
+            <small class="text-muted">Total inventory value distribution across categories</small>
+          </div>
+          <div class="chart-body">
+            <canvas id="inventoryValueChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
 
     <!-- Data Tables -->
     <div class="row g-4">
@@ -406,7 +573,7 @@ try {
         <div class="table-modern">
           <div class="chart-header">
             <h5 class="fw-bold mb-0 text-danger">
-              <i class="fas fa-exclamation-triangle me-2"></i>Stock Alerts
+              <i class="fas fa-exclamation-triangle me-2" style="color: #7F1734;"></i>Stock Alerts
             </h5>
             <small class="text-muted">Products running low</small>
           </div>
@@ -451,110 +618,6 @@ try {
     Chart.defaults.font.family = 'Inter, Segoe UI, sans-serif';
     Chart.defaults.color = '#6c757d';
     
-    // Sales Trend Line Chart
-    const salesCtx = document.getElementById('salesTrendChart').getContext('2d');
-    new Chart(salesCtx, {
-        type: 'line',
-        data: {
-            labels: [
-                <?php 
-                $months = [];
-                $sales = [];
-                // Ensure we have data for the last 12 months, filling gaps with 0
-                $allMonths = [];
-                for ($i = 11; $i >= 0; $i--) {
-                    $month = date('Y-m', strtotime("-$i months"));
-                    $allMonths[$month] = 0;
-                }
-                
-                foreach ($salesData as $data) {
-                    $allMonths[$data['month']] = floatval($data['total_sales']);
-                }
-                
-                foreach ($allMonths as $month => $sale) {
-                    $months[] = "'" . date('M Y', strtotime($month . '-01')) . "'";
-                    $sales[] = $sale;
-                }
-                echo implode(', ', $months);
-                ?>
-            ],
-            datasets: [{
-                label: 'Monthly Revenue (₱)',
-                data: [<?php echo implode(', ', $sales); ?>],
-                borderColor: '#198754',
-                backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointBackgroundColor: '#198754',
-                pointBorderColor: '#ffffff',
-                pointBorderWidth: 3,
-                pointRadius: 6,
-                pointHoverRadius: 8,
-                pointHoverBackgroundColor: '#198754',
-                pointHoverBorderColor: '#ffffff',
-                pointHoverBorderWidth: 3
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        font: {
-                            size: 13,
-                            weight: 'bold'
-                        },
-                        padding: 20
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#ffffff',
-                    cornerRadius: 8,
-                    padding: 12
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.1)',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return '₱' + new Intl.NumberFormat('en-PH').format(value);
-                        },
-                        font: {
-                            size: 12
-                        },
-                        padding: 10
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false,
-                        drawBorder: false
-                    },
-                    ticks: {
-                        font: {
-                            size: 12
-                        },
-                        padding: 10
-                    }
-                }
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            }
-        }
-    });
 
     // Product Categories Pie Chart
     const categoriesCtx = document.getElementById('categoriesChart').getContext('2d');
@@ -591,7 +654,7 @@ try {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
                     position: 'bottom',
@@ -732,6 +795,346 @@ try {
             interaction: {
                 intersect: false,
                 mode: 'index'
+            }
+        }
+    });
+
+    // Product Movement Analysis Chart (Doughnut Chart)
+    const movementAnalysisCtx = document.getElementById('movementAnalysisChart').getContext('2d');
+    new Chart(movementAnalysisCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Fast Moving', 'Slow Moving', 'Non Moving'],
+            datasets: [{
+                data: [
+                    <?php echo $movement_categories['Fast Moving']; ?>,
+                    <?php echo $movement_categories['Slow Moving']; ?>,
+                    <?php echo $movement_categories['Non Moving']; ?>
+                ],
+                backgroundColor: [
+                    '#28a745',
+                    '#ff5722',
+                    '#6c757d'
+                ],
+                borderColor: '#ffffff',
+                borderWidth: 3,
+                hoverBorderWidth: 4,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        font: {
+                            size: 12
+                        },
+                        usePointStyle: true,
+                        pointStyle: 'circle'
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    cornerRadius: 8,
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return context.label + ': ' + context.parsed + ' products (' + percentage + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Top Selling Products Chart (Horizontal Bar Chart)
+    const topSellingCtx = document.getElementById('topSellingChart').getContext('2d');
+    const topSellingData = <?php echo json_encode($topSellingProducts); ?>;
+    const productNames = topSellingData.map(item => 
+        item.product_name.length > 20 ? item.product_name.substring(0, 20) + '...' : item.product_name
+    );
+    const soldQuantities = topSellingData.map(item => parseInt(item.total_sold));
+
+    new Chart(topSellingCtx, {
+        type: 'bar',
+        data: {
+            labels: productNames,
+            datasets: [{
+                label: 'Units Sold',
+                data: soldQuantities,
+                backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                borderColor: '#28a745',
+                borderWidth: 2,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                },
+                y: {
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    cornerRadius: 8,
+                    padding: 12
+                }
+            }
+        }
+    });
+
+    // Daily Sales Trend Chart (Line Chart)
+    const dailySalesCtx = document.getElementById('dailySalesChart').getContext('2d');
+    const dailySalesData = <?php echo json_encode($dailySalesData); ?>;
+    const dates = dailySalesData.map(item => new Date(item.sale_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })).reverse();
+    const dailyRevenues = dailySalesData.map(item => parseFloat(item.daily_revenue)).reverse();
+    const dailyOrderCounts = dailySalesData.map(item => parseInt(item.order_count)).reverse();
+
+    new Chart(dailySalesCtx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Daily Revenue (₱)',
+                data: dailyRevenues,
+                borderColor: '#007bff',
+                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                tension: 0.4,
+                fill: true,
+                yAxisID: 'y'
+            }, {
+                label: 'Order Count',
+                data: dailyOrderCounts,
+                borderColor: '#28a745',
+                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                tension: 0.4,
+                fill: false,
+                yAxisID: 'y1'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return '₱' + new Intl.NumberFormat('en-PH').format(value);
+                        }
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    beginAtZero: true,
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    cornerRadius: 8,
+                    padding: 12
+                }
+            }
+        }
+    });
+
+    // User Registration Trend Chart (Bar Chart)
+    const userRegistrationCtx = document.getElementById('userRegistrationChart').getContext('2d');
+    const userRegistrationData = <?php echo json_encode($userRegistrationData); ?>;
+    
+    // Ensure we have data for the last 12 months
+    const allMonths = [];
+    for (let i = 11; i >= 0; i--) {
+        const month = new Date();
+        month.setMonth(month.getMonth() - i);
+        allMonths.push(month.toISOString().slice(0, 7));
+    }
+    
+    const monthLabels = allMonths.map(month => {
+        const date = new Date(month + '-01');
+        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    });
+    
+    const userCounts = allMonths.map(month => {
+        const data = userRegistrationData.find(item => item.month === month);
+        return data ? parseInt(data.new_users) : 0;
+    });
+
+    new Chart(userRegistrationCtx, {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [{
+                label: 'New Users',
+                data: userCounts,
+                backgroundColor: 'rgba(13, 202, 240, 0.8)',
+                borderColor: '#0dcaf0',
+                borderWidth: 2,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    },
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    cornerRadius: 8,
+                    padding: 12
+                }
+            }
+        }
+    });
+
+    // Inventory Value by Category Chart (Bar Chart)
+    const inventoryValueCtx = document.getElementById('inventoryValueChart').getContext('2d');
+    const inventoryValueData = <?php echo json_encode($inventoryValueData); ?>;
+    const categoryNames = inventoryValueData.map(item => item.category_name);
+    const categoryValues = inventoryValueData.map(item => parseFloat(item.category_value));
+
+    new Chart(inventoryValueCtx, {
+        type: 'bar',
+        data: {
+            labels: categoryNames,
+            datasets: [{
+                label: 'Inventory Value (₱)',
+                data: categoryValues,
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 205, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(153, 102, 255, 0.8)',
+                    'rgba(255, 159, 64, 0.8)',
+                    'rgba(199, 199, 199, 0.8)',
+                    'rgba(83, 102, 255, 0.8)'
+                ],
+                borderColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40',
+                    '#C7C7C7',
+                    '#5366FF'
+                ],
+                borderWidth: 2,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return '₱' + new Intl.NumberFormat('en-PH').format(value);
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    cornerRadius: 8,
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            return 'Value: ₱' + new Intl.NumberFormat('en-PH').format(context.parsed.y);
+                        }
+                    }
+                }
             }
         }
     });

@@ -10,6 +10,12 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
+    // Verify CSRF token
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        echo 'invalid_token';
+        exit;
+    }
+    
     $productId = $_POST['product_id'];
     $userId = $_SESSION['user_id'];
     

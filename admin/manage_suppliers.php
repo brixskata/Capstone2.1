@@ -1,5 +1,5 @@
 <?php
-include 'db.php';
+include '../includes/db.php';
 include_once '../includes/log_history.php';
 session_start();
 
@@ -88,6 +88,7 @@ if (isset($_GET['unarchive']) && isset($_GET['id'])) {
     exit;
 }
 
+
 // Handle supplier deletion
 if (isset($_GET['delete']) && isset($_GET['id'])) {
     $supplierId = intval($_GET['id']);
@@ -114,11 +115,41 @@ if (isset($_GET['delete']) && isset($_GET['id'])) {
     exit;
 }
 
-// Fetch active suppliers
-$activeSuppliers = $pdo->query("SELECT supplier_id AS id, name, phone, email, CONCAT_WS(', ', address_line, city, country) AS address, notes FROM suppliers WHERE is_archive = 0 ORDER BY name")->fetchAll();
+// Fetch active suppliers with their products
+$activeSuppliers = $pdo->query("
+    SELECT 
+        s.supplier_id AS id, 
+        s.name, 
+        s.phone, 
+        s.email, 
+        CONCAT_WS(', ', s.address_line, s.city, s.country) AS address, 
+        s.notes,
+        GROUP_CONCAT(DISTINCT p.product_name ORDER BY p.product_name SEPARATOR ', ') AS products,
+        COUNT(DISTINCT p.product_id) AS product_count
+    FROM suppliers s
+    LEFT JOIN products p ON s.supplier_id = p.supplier_id AND p.is_archive = 0
+    WHERE s.is_archive = 0
+    GROUP BY s.supplier_id, s.name, s.phone, s.email, s.address_line, s.city, s.country, s.notes
+    ORDER BY s.name
+")->fetchAll();
 
-// Fetch archived suppliers
-$archivedSuppliers = $pdo->query("SELECT supplier_id AS id, name, phone, email, CONCAT_WS(', ', address_line, city, country) AS address, notes FROM suppliers WHERE is_archive = 1 ORDER BY name")->fetchAll();
+// Fetch archived suppliers with their products
+$archivedSuppliers = $pdo->query("
+    SELECT 
+        s.supplier_id AS id, 
+        s.name, 
+        s.phone, 
+        s.email, 
+        CONCAT_WS(', ', s.address_line, s.city, s.country) AS address, 
+        s.notes,
+        GROUP_CONCAT(DISTINCT p.product_name ORDER BY p.product_name SEPARATOR ', ') AS products,
+        COUNT(DISTINCT p.product_id) AS product_count
+    FROM suppliers s
+    LEFT JOIN products p ON s.supplier_id = p.supplier_id AND p.is_archive = 0
+    WHERE s.is_archive = 1
+    GROUP BY s.supplier_id, s.name, s.phone, s.email, s.address_line, s.city, s.country, s.notes
+    ORDER BY s.name
+")->fetchAll();
 ?>
 
 <!DOCTYPE html>
@@ -234,6 +265,28 @@ $archivedSuppliers = $pdo->query("SELECT supplier_id AS id, name, phone, email, 
                   <?php endif; ?>
                 </div>
 
+                <!-- Products Section -->
+                <div class="mt-3">
+                  <div class="d-flex align-items-center mb-2">
+                    <i class="fa fa-box me-2 text-primary"></i>
+                    <span class="fw-semibold text-dark">Products Supplied</span>
+                    <span class="badge bg-primary ms-2"><?= $supplier['product_count'] ?></span>
+                  </div>
+                  <?php if (!empty($supplier['products'])): ?>
+                    <div class="p-2 bg-light rounded">
+                      <small class="text-muted">
+                        <?= htmlspecialchars($supplier['products']) ?>
+                      </small>
+                    </div>
+                  <?php else: ?>
+                    <div class="p-2 bg-warning bg-opacity-10 rounded border border-warning">
+                      <small class="text-warning">
+                        <i class="fa fa-exclamation-triangle me-1"></i>No products assigned
+                      </small>
+                    </div>
+                  <?php endif; ?>
+                </div>
+
                 <?php if (!empty($supplier['notes'])): ?>
                   <div class="mt-3 p-2 bg-light rounded">
                     <small class="text-muted"><?= htmlspecialchars($supplier['notes']) ?></small>
@@ -290,6 +343,28 @@ $archivedSuppliers = $pdo->query("SELECT supplier_id AS id, name, phone, email, 
                   <?php endif; ?>
                   <?php if ($supplier['address']): ?>
                     <div class="mb-1"><i class="fa fa-map-marker me-2"></i><?= htmlspecialchars($supplier['address']) ?></div>
+                  <?php endif; ?>
+                </div>
+
+                <!-- Products Section -->
+                <div class="mt-3">
+                  <div class="d-flex align-items-center mb-2">
+                    <i class="fa fa-box me-2 text-primary"></i>
+                    <span class="fw-semibold text-dark">Products Supplied</span>
+                    <span class="badge bg-primary ms-2"><?= $supplier['product_count'] ?></span>
+                  </div>
+                  <?php if (!empty($supplier['products'])): ?>
+                    <div class="p-2 bg-light rounded">
+                      <small class="text-muted">
+                        <?= htmlspecialchars($supplier['products']) ?>
+                      </small>
+                    </div>
+                  <?php else: ?>
+                    <div class="p-2 bg-warning bg-opacity-10 rounded border border-warning">
+                      <small class="text-warning">
+                        <i class="fa fa-exclamation-triangle me-1"></i>No products assigned
+                      </small>
+                    </div>
                   <?php endif; ?>
                 </div>
 

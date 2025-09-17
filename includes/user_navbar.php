@@ -15,6 +15,15 @@ if (!isset($_SESSION['cart'])) {
 // Include DB connection
 include_once 'db.php';
 
+// Check ID verification status
+$id_verified = false;
+if (isset($_SESSION['user_id'])) {
+    $stmt = $pdo->prepare("SELECT id_verified FROM users WHERE user_id = ?");
+    $stmt->execute([$_SESSION['user_id']]);
+    $user_verification = $stmt->fetch(PDO::FETCH_ASSOC);
+    $id_verified = $user_verification && $user_verification['id_verified'];
+}
+
 // Prepare cart items and total
 $cart_items = [];
 $cart_total = 0;
@@ -87,16 +96,22 @@ if (!empty($_SESSION['cart'])) {
         <!-- Cart content will be loaded here dynamically -->
     </div>
     <div class="cart-footer" id="cartFooter" style="display: none;">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <span class="fw-bold">Total:</span>
-            <span class="fw-bold cart-total">₱0.00</span>
+        <div class="cart-summary">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="fw-bold">Subtotal:</span>
+                <span class="fw-bold cart-subtotal">₱0.00</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="fw-bold">Total:</span>
+                <span class="fw-bold cart-total text-primary">₱0.00</span>
+            </div>
         </div>
         <div class="d-grid gap-2">
-            <button class="btn btn-primary" onclick="window.location.href='cart.php'">
-                <i class="fas fa-shopping-cart me-2"></i>View Cart
+            <button class="btn btn-outline-secondary" onclick="closeCart(); window.location.href='cart.php'">
+                <i class="fas fa-shopping-cart me-2"></i>View Full Cart
             </button>
-            <button class="btn btn-success" onclick="window.location.href='checkout.php'">
-                <i class="fas fa-credit-card me-2"></i>Checkout
+            <button class="btn btn-success" onclick="closeCart(); window.location.href='checkout.php'">
+                <i class="fas fa-credit-card me-2"></i>Proceed to Checkout
             </button>
         </div>
     </div>
@@ -326,22 +341,19 @@ if (!empty($_SESSION['cart'])) {
           .then(response => response.json())
           .then(data => {
               const cartFooter = document.getElementById('cartFooter');
+              const cartSubtotal = document.querySelector('.cart-subtotal');
               const cartTotal = document.querySelector('.cart-total');
               
-              if (data.has_items) {
+              if (data.total > 0) {
                   cartFooter.style.display = 'block';
-                  if (cartTotal) {
-                      cartTotal.textContent = '₱' + data.total.toLocaleString('en-US', { 
-                          minimumFractionDigits: 2, 
-                          maximumFractionDigits: 2 
-                      });
-                  }
+                  if (cartSubtotal) cartSubtotal.textContent = '₱' + data.total.toFixed(2);
+                  if (cartTotal) cartTotal.textContent = '₱' + data.total.toFixed(2);
               } else {
                   cartFooter.style.display = 'none';
               }
           })
           .catch(error => {
-              console.error('Error loading cart total:', error);
+              console.error('Error updating cart footer:', error);
           });
   }
 
@@ -635,35 +647,224 @@ if (!empty($_SESSION['cart'])) {
       width: 100%;
       right: -100%;
     }
-    .cart-item {
-        flex-wrap: wrap;
-        justify-content: center;
-        text-align: center;
-        gap: 0.5rem;
+    
+    .cart-item-sliding {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 1rem;
+      padding: 1.5rem;
     }
+    
     .item-image {
-        margin-bottom: 0.5rem;
+      margin-bottom: 0.5rem;
     }
+    
+    .cart-item-img {
+      width: 80px;
+      height: 80px;
+    }
+    
     .item-details {
-        width: 100%;
+      width: 100%;
+      text-align: center;
     }
+    
     .item-controls {
-        width: 100%;
-        flex-direction: row;
-        justify-content: space-around;
-        margin-top: 0.5rem;
-        align-items: center;
+      width: 100%;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.5rem;
     }
+    
     .quantity-controls {
-        flex-direction: row;
+      order: 1;
     }
-    .remove-btn {
-        margin-top: 0;
+    
+    .item-total {
+      order: 2;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    
+    .remove-cart-item {
+      order: 3;
+    }
+    
+    .cart-header {
+      padding: 1rem;
+    }
+    
+    .cart-header h4 {
+      font-size: 1.25rem;
+    }
+    
+    .cart-footer {
+      padding: 1rem;
     }
   }
 
+  /* New Cart Item Styles */
+  .cart-item-sliding {
+    display: flex;
+    align-items: flex-start;
+    padding: 1rem;
+    border-bottom: 1px solid #e9ecef;
+    background: white;
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+    gap: 0.75rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+
+  .cart-item-sliding:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+
+  .cart-item-sliding:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+  }
+
+  .cart-item-img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 0.5rem;
+    border: 2px solid #e9ecef;
+    flex-shrink: 0;
+  }
+
+  .item-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .item-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--bs-secondary);
+    margin-bottom: 0.25rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .item-price {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+  }
+
+  .item-stock {
+    font-size: 0.75rem;
+    color: #6c757d;
+  }
+
+  .item-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 100px;
+  }
+
+  .quantity-controls {
+    display: flex;
+    align-items: center;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    overflow: hidden;
+    background: white;
+  }
+
+  .quantity-btn {
+    background: #f8f9fa;
+    border: none;
+    padding: 0.375rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    line-height: 1;
+    transition: all 0.2s ease;
+    color: var(--bs-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+  }
+
+  .quantity-btn:hover:not(:disabled) {
+    background: var(--bs-secondary);
+    color: white;
+  }
+
+  .quantity-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .quantity-display {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: center;
+    background: white;
+    color: var(--bs-dark);
+    border-left: 1px solid #dee2e6;
+    border-right: 1px solid #dee2e6;
+  }
+
+  .item-total {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--bs-secondary);
+    text-align: center;
+  }
+
+  .remove-cart-item {
+    background: none;
+    border: none;
+    color: var(--bs-danger);
+    cursor: pointer;
+    padding: 0.375rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .remove-cart-item:hover {
+    background: #f8d7da;
+    color: #721c24;
+  }
+
+  .cart-items-container {
+    padding: 0.5rem 0;
+  }
+
+  .cart-summary {
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid #e9ecef;
+  }
+
   /* Animation for cart items */
-  .cart-item {
+  .cart-item-sliding {
     animation: slideInCart 0.3s ease-out;
   }
 

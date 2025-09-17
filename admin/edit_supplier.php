@@ -1,5 +1,5 @@
 <?php
-include 'db.php';
+include '../includes/db.php';
 include_once '../includes/log_history.php';
 session_start();
 

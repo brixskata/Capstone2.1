@@ -4,7 +4,7 @@ if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
 
-include 'db.php'; // Include the database connection
+include '../includes/db.php'; // Include the database connection
 
 // Check if form is submitted
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {

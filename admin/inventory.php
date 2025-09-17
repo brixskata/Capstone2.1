@@ -1,6 +1,6 @@
 
 <?php
-include 'db.php';
+include '../includes/db.php';
 include_once '../includes/log_history.php';
 session_start();
 
@@ -193,6 +193,99 @@ try {
     $total_inventory_value = 0;
 }
 
+// Prepare chart data
+// Category distribution
+$stmt = $pdo->query("
+    SELECT 
+        c.category_name,
+        COUNT(p.product_id) as product_count,
+        SUM(COALESCE(ps.current_stock, 0)) as total_stock
+    FROM categories c
+    LEFT JOIN products p ON c.category_id = p.category_id AND p.is_archive = 0
+    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+    GROUP BY c.category_id, c.category_name
+    HAVING product_count > 0
+    ORDER BY product_count DESC
+");
+$category_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Stock status distribution
+$stock_status_data = [
+    'In Stock' => count(array_filter($products, fn($p) => (int)$p['stock'] > (int)($p['reorder_point'] ?? 10))),
+    'Low Stock' => count(array_filter($products, fn($p) => (int)$p['stock'] <= (int)($p['reorder_point'] ?? 10) && (int)$p['stock'] > 0)),
+    'Out of Stock' => count(array_filter($products, fn($p) => (int)$p['stock'] === 0))
+];
+
+// Recent stock movements (last 7 days)
+$stmt = $pdo->query("
+    SELECT 
+        DATE(sm.created_at) as movement_date,
+        COUNT(sm.stockmovement_id) as movement_count,
+        SUM(CASE WHEN sm.quantity > 0 THEN sm.quantity ELSE 0 END) as stock_in,
+        SUM(CASE WHEN sm.quantity < 0 THEN ABS(sm.quantity) ELSE 0 END) as stock_out
+    FROM stock_movements sm
+    WHERE sm.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+    GROUP BY DATE(sm.created_at)
+    ORDER BY movement_date
+");
+$movement_trend = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Top products by stock value
+$stmt = $pdo->query("
+    SELECT 
+        p.product_name,
+        COALESCE(ps.current_stock, 0) as current_stock,
+        COALESCE(pp.cost_price, 0) as cost_price,
+        (COALESCE(ps.current_stock, 0) * COALESCE(pp.cost_price, 0)) as stock_value
+    FROM products p
+    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+    LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+    WHERE p.is_archive = 0 AND COALESCE(ps.current_stock, 0) > 0
+    ORDER BY stock_value DESC
+    LIMIT 10
+");
+$top_products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Product movement analysis (last 30 days)
+$stmt = $pdo->query("
+    SELECT 
+        p.product_id,
+        p.product_name,
+        COUNT(sm.stockmovement_id) as total_movements,
+        COALESCE(ps.current_stock, 0) as current_stock
+    FROM products p
+    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+    LEFT JOIN stock_movements sm ON p.product_id = sm.product_id 
+        AND sm.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    WHERE p.is_archive = 0
+    GROUP BY p.product_id, p.product_name, ps.current_stock
+    ORDER BY total_movements DESC
+");
+$movement_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Classify products by movement - removed medium moving category
+$fast_moving = 0;
+$slow_moving = 0;
+$non_moving = 0;
+
+foreach ($movement_analysis as $product) {
+    $movement_rate = $product['total_movements'] > 0 ? round(($product['total_movements'] / 30) * 100, 1) : 0;
+    
+    if ($product['total_movements'] == 0) {
+        $non_moving++;
+    } elseif ($movement_rate > 7 || $product['total_movements'] > 6) {
+        $fast_moving++;
+    } else {
+        $slow_moving++;
+    }
+}
+
+$movement_categories = [
+    'Fast Moving' => $fast_moving,
+    'Slow Moving' => $slow_moving,
+    'Non Moving' => $non_moving
+];
+
 // Fetch recent stock movements
 $stmt = $pdo->query("
     SELECT sm.*, p.product_name as product_name, COALESCE(ps.current_stock,0) as current_stock
@@ -213,6 +306,7 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <title>Inventory Management</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <?php include 'includes/admin_styles.php'; ?>
       <style>
       .stat-card {
@@ -284,16 +378,68 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="d-flex justify-content-between align-items-center mb-4">
       <div>
         <h1 class="h3 fw-bold text-dark mb-2">
-          <i class="fa fa-warehouse me-3" style="color: #7F1734;"></i>Inventory Management
+          <i class="fa fa-warehouse me-3" style="color: #7F1734;"></i>Inventory Overview
         </h1>
+        <p class="text-muted">Monitor inventory status and access management tools</p>
       </div>
-      <div class="d-flex gap-2">
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#restockModal">
-          <i class="fa fa-plus-circle me-1"></i> Record Restocking
-        </button>
-        <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#adjustStockModal">
-          <i class="fa fa-edit me-1"></i> Stock Adjustment
-        </button>
+    </div>
+
+    <!-- Quick Access Cards -->
+    <div class="row g-4 mb-4">
+      <div class="col-lg-3 col-md-6">
+        <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='restocking.php'">
+          <div class="d-flex align-items-center">
+            <div class="stat-icon bg-success">
+              <i class="fa fa-plus-circle"></i>
+            </div>
+            <div class="ms-3">
+              <h5 class="fw-bold mb-1">Restocking</h5>
+              <small class="text-muted">Record new stock entries</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-lg-3 col-md-6">
+        <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='stock_adjustment.php'">
+          <div class="d-flex align-items-center">
+            <div class="stat-icon bg-info">
+              <i class="fa fa-edit"></i>
+            </div>
+            <div class="ms-3">
+              <h5 class="fw-bold mb-1">Stock Adjustment</h5>
+              <small class="text-muted">Correct discrepancies</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-lg-3 col-md-6">
+        <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='stock_levels.php'">
+          <div class="d-flex align-items-center">
+            <div class="stat-icon bg-warning">
+              <i class="fa fa-chart-line"></i>
+            </div>
+            <div class="ms-3">
+              <h5 class="fw-bold mb-1">Stock Levels</h5>
+              <small class="text-muted">Monitor real-time levels</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-lg-3 col-md-6">
+        <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='stock_movements.php'">
+          <div class="d-flex align-items-center">
+            <div class="stat-icon bg-primary">
+              <i class="fa fa-exchange-alt"></i>
+            </div>
+            <div class="ms-3">
+              <h5 class="fw-bold mb-1">Stock Movements</h5>
+              <small class="text-muted">Track product performance</small>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -356,6 +502,103 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
     </div>
 
+    <!-- Charts Section -->
+    <!-- Row 3: Product Movement Categories and Stock Status Distribution -->
+    <div class="row g-4 mb-4">
+      <!-- Product Movement Categories -->
+      <div class="col-lg-6">
+        <div class="table-card">
+          <div class="card-header bg-transparent border-0 p-4">
+            <h5 class="fw-bold mb-0">
+              <i class="fa fa-chart-bar me-2" style="color: #7F1734;"></i>Product Movement Categories (Last 30 Days)
+            </h5>
+          </div>
+          <div class="p-4">
+            <canvas id="movementCategoriesChart" height="300"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stock Status Distribution Chart -->
+      <div class="col-lg-6">
+        <div class="table-card">
+          <div class="card-header bg-transparent border-0 p-4">
+            <h5 class="fw-bold mb-0">
+              <i class="fa fa-chart-donut me-2" style="color: #7F1734;"></i>Stock Status Distribution
+            </h5>
+          </div>
+          <div class="p-4">
+            <canvas id="stockStatusChart" height="300"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 4: Stock Movement Trend (Full Width) -->
+    <div class="row g-4 mb-4">
+      <!-- Stock Movement Trend Chart -->
+      <div class="col-12">
+        <div class="table-card">
+          <div class="card-header bg-transparent border-0 p-4">
+            <h5 class="fw-bold mb-0">
+              <i class="fa fa-chart-line me-2" style="color: #7F1734;"></i>Stock Movement Trend (Last 7 Days)
+            </h5>
+          </div>
+          <div class="p-4">
+            <canvas id="movementTrendChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 5: Top Products Value and Movement Distribution -->
+    <div class="row g-4 mb-4">
+      <!-- Top Products by Value -->
+      <div class="col-lg-6">
+        <div class="table-card">
+          <div class="card-header bg-transparent border-0 p-4">
+            <h5 class="fw-bold mb-0">
+              <i class="fa fa-trophy me-2" style="color: #7F1734;"></i>Top Products by Stock Value
+            </h5>
+          </div>
+          <div class="p-4">
+            <canvas id="topProductsChart" height="300"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Movement Distribution -->
+      <div class="col-lg-6">
+        <div class="table-card">
+          <div class="card-header bg-transparent border-0 p-4">
+            <h5 class="fw-bold mb-0">
+              <i class="fa fa-chart-pie me-2" style="color: #7F1734;"></i>Movement Distribution
+            </h5>
+          </div>
+          <div class="p-4">
+            <canvas id="movementDistributionChart" height="300"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 6: Category Distribution (Full Width) -->
+    <div class="row g-4 mb-4">
+      <!-- Category Distribution Chart -->
+      <div class="col-12">
+        <div class="table-card">
+          <div class="card-header bg-transparent border-0 p-4">
+            <h5 class="fw-bold mb-0">
+              <i class="fa fa-chart-pie me-2" style="color: #7F1734;"></i>Products by Category
+            </h5>
+          </div>
+          <div class="p-4">
+            <canvas id="categoryChart" height="300"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Inventory Table -->
     <div class="table-card">
       <div class="card-header bg-transparent border-0 p-4">
@@ -406,12 +649,15 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </td>
                 <td>
                   <div class="btn-group" role="group">
-                    <button class="btn btn-sm btn-success" onclick="openRestockModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>')">
-                      Restock
-                    </button>
-                    <button class="btn btn-sm btn-info" onclick="openAdjustModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>', <?= (int)$product['stock'] ?>)">
-                      Adjust
-                    </button>
+                    <a href="restocking.php" class="btn btn-sm btn-success">
+                      <i class="fa fa-plus me-1"></i>Restock
+                    </a>
+                    <a href="stock_adjustment.php" class="btn btn-sm btn-info">
+                      <i class="fa fa-edit me-1"></i>Adjust
+                    </a>
+                    <a href="stock_levels.php" class="btn btn-sm btn-warning">
+                      <i class="fa fa-chart-line me-1"></i>Levels
+                    </a>
                   </div>
                 </td>
               </tr>
@@ -422,157 +668,342 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
   </main>
 
-  <!-- Restocking Modal -->
-  <div class="modal fade" id="restockModal" tabindex="-1">
-    <div class="modal-dialog">
-      <form action="inventory.php" method="POST">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Record Restocking</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <input type="hidden" name="restock" value="1">
-            <div class="mb-3">
-              <label class="form-label">Product</label>
-              <select name="product_id" class="form-select" required>
-                <option value="">Select Product</option>
-                <?php foreach ($products as $product): ?>
-                  <option value="<?= $product['id'] ?>"><?= htmlspecialchars($product['name']) ?> (Current: <?= $product['stock'] ?>)</option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Supplier</label>
-              <select name="supplier_id" class="form-select" required>
-                <option value="">Select Supplier</option>
-                <?php foreach ($suppliers as $supplier): ?>
-                  <option value="<?= $supplier['id'] ?>"><?= htmlspecialchars($supplier['name']) ?></option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label class="form-label">Quantity Added</label>
-                  <input type="number" name="quantity_added" class="form-control" required>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label class="form-label">Cost per Unit</label>
-                  <input type="number" step="0.01" name="cost_per_unit" class="form-control" required>
-                </div>
-              </div>
-            </div>
-            <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label class="form-label">Restock Date</label>
-                  <input type="date" name="restock_date" class="form-control" required>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label class="form-label">Expected Delivery</label>
-                  <input type="date" name="expected_delivery" class="form-control">
-                </div>
-              </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Notes</label>
-              <textarea name="notes" class="form-control" rows="3"></textarea>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-success">Record Restocking</button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Stock Adjustment Modal -->
-  <div class="modal fade" id="adjustStockModal" tabindex="-1">
-    <div class="modal-dialog">
-      <form action="inventory.php" method="POST">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Stock Adjustment</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <input type="hidden" name="adjust_stock" value="1">
-            <div class="mb-3">
-              <label class="form-label">Product</label>
-              <select name="product_id" id="adjustProductId" class="form-select" required>
-                <option value="">Select Product</option>
-                <?php foreach ($products as $product): ?>
-                  <option value="<?= $product['id'] ?>" data-stock="<?= $product['stock'] ?>"><?= htmlspecialchars($product['name']) ?> (Current: <?= $product['stock'] ?>)</option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label class="form-label">Adjustment Type</label>
-                  <select name="adjustment_type" class="form-select" required>
-                    <option value="add">Add Stock</option>
-                    <option value="subtract">Subtract Stock</option>
-                    <option value="set">Set Stock Level</option>
-                  </select>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label class="form-label">Quantity</label>
-                  <input type="number" name="quantity" class="form-control" required>
-                </div>
-              </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Reason</label>
-              <select name="reason" class="form-select" required>
-                <option value="">Select Reason</option>
-                <option value="Damaged Items">Damaged Items</option>
-                <option value="Counting Error">Counting Error</option>
-                <option value="Theft/Loss">Theft/Loss</option>
-                <option value="Quality Control">Quality Control</option>
-                <option value="Manual Correction">Manual Correction</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Notes</label>
-              <textarea name="notes" class="form-control" rows="3"></textarea>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-info">Adjust Stock</button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <?php include 'includes/admin_scripts.php'; ?>
   <script>
-    function openRestockModal(productId, productName) {
-      const modal = new bootstrap.Modal(document.getElementById('restockModal'));
-      const select = document.querySelector('#restockModal select[name="product_id"]');
-      if (select) select.value = productId;
-      modal.show();
-    }
+    // Chart.js configuration
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.color = '#6c757d';
 
-    function openAdjustModal(productId, productName, currentStock) {
-      const modal = new bootstrap.Modal(document.getElementById('adjustStockModal'));
-      const select = document.querySelector('#adjustStockModal select[name="product_id"]');
-      if (select) select.value = productId;
-      modal.show();
-    }
+    // Category Distribution Chart (Pie Chart)
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    new Chart(categoryCtx, {
+      type: 'pie',
+      data: {
+        labels: <?= json_encode(array_column($category_data, 'category_name')) ?>,
+        datasets: [{
+          data: <?= json_encode(array_column($category_data, 'product_count')) ?>,
+          backgroundColor: [
+            '#FF6384',
+            '#36A2EB',
+            '#FFCE56',
+            '#4BC0C0',
+            '#9966FF',
+            '#FF9F40',
+            '#FF6384',
+            '#C9CBCF'
+          ],
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              padding: 20,
+              usePointStyle: true
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Stock Status Distribution Chart (Doughnut Chart)
+    const stockStatusCtx = document.getElementById('stockStatusChart').getContext('2d');
+    new Chart(stockStatusCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['In Stock', 'Low Stock', 'Out of Stock'],
+        datasets: [{
+          data: [
+            <?= $stock_status_data['In Stock'] ?>,
+            <?= $stock_status_data['Low Stock'] ?>,
+            <?= $stock_status_data['Out of Stock'] ?>
+          ],
+          backgroundColor: [
+            '#28a745',
+            '#ffc107',
+            '#dc3545'
+          ],
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              padding: 20,
+              usePointStyle: true
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Stock Movement Trend Chart (Line Chart)
+    const movementTrendCtx = document.getElementById('movementTrendChart').getContext('2d');
+    const movementData = <?= json_encode($movement_trend) ?>;
+    const dates = movementData.map(item => new Date(item.movement_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    const stockInData = movementData.map(item => parseInt(item.stock_in));
+    const stockOutData = movementData.map(item => parseInt(item.stock_out));
+
+    new Chart(movementTrendCtx, {
+      type: 'line',
+      data: {
+        labels: dates,
+        datasets: [{
+          label: 'Stock In',
+          data: stockInData,
+          borderColor: '#28a745',
+          backgroundColor: 'rgba(40, 167, 69, 0.1)',
+          tension: 0.4,
+          fill: true
+        }, {
+          label: 'Stock Out',
+          data: stockOutData,
+          borderColor: '#dc3545',
+          backgroundColor: 'rgba(220, 53, 69, 0.1)',
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: {
+              color: 'rgba(0,0,0,0.1)'
+            }
+          },
+          x: {
+            grid: {
+              color: 'rgba(0,0,0,0.1)'
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              usePointStyle: true,
+              padding: 20
+            }
+          }
+        }
+      }
+    });
+
+    // Top Products by Value Chart (Horizontal Bar Chart)
+    const topProductsCtx = document.getElementById('topProductsChart').getContext('2d');
+    const topProductsData = <?= json_encode($top_products) ?>;
+    const productNames = topProductsData.map(item => item.product_name.length > 15 ? item.product_name.substring(0, 15) + '...' : item.product_name);
+    const stockValues = topProductsData.map(item => parseFloat(item.stock_value));
+
+    new Chart(topProductsCtx, {
+      type: 'bar',
+      data: {
+        labels: productNames,
+        datasets: [{
+          label: 'Stock Value (₱)',
+          data: stockValues,
+          backgroundColor: 'rgba(127, 23, 52, 0.8)',
+          borderColor: '#7F1734',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        scales: {
+          x: {
+            beginAtZero: true,
+            grid: {
+              color: 'rgba(0,0,0,0.1)'
+            },
+            ticks: {
+              callback: function(value) {
+                return '₱' + value.toLocaleString();
+              }
+            }
+          },
+          y: {
+            grid: {
+              color: 'rgba(0,0,0,0.1)'
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return 'Value: ₱' + context.parsed.x.toLocaleString();
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Product Movement Categories Chart (Bar Chart)
+    const movementCategoriesCtx = document.getElementById('movementCategoriesChart').getContext('2d');
+    new Chart(movementCategoriesCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Fast Moving', 'Slow Moving', 'Non Moving'],
+        datasets: [{
+          label: 'Number of Products',
+          data: [
+            <?= $movement_categories['Fast Moving'] ?>,
+            <?= $movement_categories['Slow Moving'] ?>,
+            <?= $movement_categories['Non Moving'] ?>
+          ],
+          backgroundColor: [
+            'rgba(40, 167, 69, 0.8)',
+            'rgba(255, 87, 34, 0.8)',
+            'rgba(108, 117, 125, 0.8)'
+          ],
+          borderColor: [
+            '#28a745',
+            '#ff5722',
+            '#6c757d'
+          ],
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            },
+            grid: {
+              color: 'rgba(0,0,0,0.1)'
+            }
+          },
+          x: {
+            grid: {
+              color: 'rgba(0,0,0,0.1)'
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                const percentage = ((context.parsed.y / total) * 100).toFixed(1);
+                return context.label + ': ' + context.parsed.y + ' products (' + percentage + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Movement Distribution Chart (Pie Chart)
+    const movementDistributionCtx = document.getElementById('movementDistributionChart').getContext('2d');
+    new Chart(movementDistributionCtx, {
+      type: 'pie',
+      data: {
+        labels: ['Fast Moving', 'Slow Moving', 'Non Moving'],
+        datasets: [{
+          data: [
+            <?= $movement_categories['Fast Moving'] ?>,
+            <?= $movement_categories['Slow Moving'] ?>,
+            <?= $movement_categories['Non Moving'] ?>
+          ],
+          backgroundColor: [
+            '#28a745',
+            '#ff5722',
+            '#6c757d'
+          ],
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              padding: 20,
+              usePointStyle: true,
+              generateLabels: function(chart) {
+                const data = chart.data;
+                if (data.labels.length && data.datasets.length) {
+                  const dataset = data.datasets[0];
+                  const total = dataset.data.reduce((a, b) => a + b, 0);
+                  return data.labels.map((label, i) => {
+                    const value = dataset.data[i];
+                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                    return {
+                      text: `${label}: ${value} (${percentage}%)`,
+                      fillStyle: dataset.backgroundColor[i],
+                      strokeStyle: dataset.borderColor[i],
+                      lineWidth: dataset.borderWidth,
+                      pointStyle: 'circle',
+                      hidden: false,
+                      index: i
+                    };
+                  });
+                }
+                return [];
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                return context.label + ': ' + context.parsed + ' products (' + percentage + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
   </script>
 </body>
 </html>

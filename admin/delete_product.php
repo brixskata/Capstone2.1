@@ -1,5 +1,5 @@
 <?php
-include 'db.php';
+include '../includes/db.php';
 session_start();
 
 if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {

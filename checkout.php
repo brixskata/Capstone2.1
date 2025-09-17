@@ -11,6 +11,29 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
+// Check if user has verified ID
+$stmt = $pdo->prepare("SELECT id_verified FROM users WHERE user_id = ?");
+$stmt->execute([$user_id]);
+$user_verification = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$user_verification || !$user_verification['id_verified']) {
+    $_SESSION['verification_required'] = "Please verify your ID before placing an order.";
+    header('Location: id_verification.php');
+    exit;
+}
+
+// Check if user has a default address
+$address_stmt = $pdo->prepare("SELECT * FROM addresses WHERE user_id = :user_id AND is_default = 1 LIMIT 1");
+$address_stmt->execute(['user_id' => $user_id]);
+$default_address = $address_stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$default_address) {
+    $_SESSION['address_required'] = "Please add a delivery address before placing an order. You'll be redirected to add your address.";
+    $_SESSION['show_address_modal'] = true; // Flag to auto-open address modal
+    header('Location: orders.php');
+    exit;
+}
+
 // Fetch user profile info using normalized structure
 $stmt = $pdo->prepare("SELECT u.user_id, u.username, ui.email, ui.first_name, ui.last_name, ui.phone 
                        FROM users u 
@@ -19,10 +42,7 @@ $stmt = $pdo->prepare("SELECT u.user_id, u.username, ui.email, ui.first_name, ui
 $stmt->execute(['user_id' => $user_id]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Fetch user's default address
-$address_stmt = $pdo->prepare("SELECT * FROM addresses WHERE user_id = :user_id AND is_default = 1 LIMIT 1");
-$address_stmt->execute(['user_id' => $user_id]);
-$default_address = $address_stmt->fetch(PDO::FETCH_ASSOC);
+// Default address already fetched above for validation
 
 // Fetch the products in the cart
 $cart_items = [];

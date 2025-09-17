@@ -27,24 +27,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
         $upload_dir = 'uploads/';
         $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
         $max_size = 5 * 1024 * 1024; // 5MB
         
         $file_type = $_FILES['profile_picture']['type'];
         $file_size = $_FILES['profile_picture']['size'];
+        $file_name = $_FILES['profile_picture']['name'];
+        $file_tmp = $_FILES['profile_picture']['tmp_name'];
+        $file_extension = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
         
-        if (in_array($file_type, $allowed_types) && $file_size <= $max_size) {
-            $file_extension = pathinfo($_FILES['profile_picture']['name'], PATHINFO_EXTENSION);
-            $new_filename = 'profile_' . $user_id . '_' . time() . '.' . $file_extension;
+        // Enhanced validation
+        $errors = [];
+        
+        // Check file size
+        if ($file_size > $max_size) {
+            $errors[] = "File size must be less than 5MB";
+        }
+        
+        // Check file type by MIME type
+        if (!in_array($file_type, $allowed_types)) {
+            $errors[] = "Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed";
+        }
+        
+        // Check file extension
+        if (!in_array($file_extension, $allowed_extensions)) {
+            $errors[] = "Invalid file extension";
+        }
+        
+        // Check if file is actually an image
+        $image_info = getimagesize($file_tmp);
+        if ($image_info === false) {
+            $errors[] = "File is not a valid image";
+        }
+        
+        // Check for malicious file content
+        $file_content = file_get_contents($file_tmp);
+        if (strpos($file_content, '<?php') !== false || strpos($file_content, '<script') !== false) {
+            $errors[] = "File contains potentially malicious content";
+        }
+        
+        if (empty($errors)) {
+            // Create upload directory if it doesn't exist
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0755, true);
+            }
+            
+            $new_filename = 'profile_' . $user_id . '_' . time() . '_' . uniqid() . '.' . $file_extension;
             $upload_path = $upload_dir . $new_filename;
             
-            if (move_uploaded_file($_FILES['profile_picture']['tmp_name'], $upload_path)) {
+            if (move_uploaded_file($file_tmp, $upload_path)) {
                 // Delete old profile picture if it's not the default
                 $old_picture = $user['profile_picture'] ?? '';
                 if ($old_picture && $old_picture !== 'uploads/default.png' && file_exists($old_picture)) {
                     unlink($old_picture);
                 }
                 $profile_picture = $upload_path;
+                $_SESSION['success'] = "Profile picture updated successfully";
+            } else {
+                $_SESSION['error'] = "Failed to upload profile picture";
             }
+        } else {
+            $_SESSION['error'] = implode(', ', $errors);
         }
     }
     
@@ -514,6 +557,27 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             border-top: 2px solid var(--bs-secondary);
         }
 
+        /* Order Actions */
+        .order-actions {
+            text-align: right;
+            padding-top: 1rem;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .order-actions .btn {
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .order-actions .btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .order-actions .badge {
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+        }
+
         /* Empty State */
         .empty-state {
             text-align: center;
@@ -888,6 +952,32 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             filter: invert(1);
         }
 
+        /* Confirm Order Modal Styles */
+        .confirm-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--bs-success);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            color: white;
+            font-size: 2rem;
+        }
+
+        .confirm-title {
+            color: var(--bs-secondary);
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .confirm-message {
+            color: #6c757d;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+
         /* Logout Modal Styles */
         .logout-icon {
             width: 80px;
@@ -912,6 +1002,52 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             color: #6c757d;
             font-size: 1rem;
             margin-bottom: 0;
+        }
+
+        #confirmOrderModal .modal-content {
+            border-radius: 1rem;
+            border: none;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+
+        #confirmOrderModal .modal-header {
+            background: var(--bs-success);
+            color: white;
+            border-radius: 1rem 1rem 0 0;
+            border-bottom: none;
+        }
+
+        #confirmOrderModal .modal-body {
+            padding: 2rem;
+        }
+
+        #confirmOrderModal .modal-footer {
+            border-top: 1px solid #e9ecef;
+            padding: 1.5rem 2rem;
+        }
+
+        #confirmOrderModal .btn-success {
+            background: var(--bs-success);
+            border-color: var(--bs-success);
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        #confirmOrderModal .btn-success:hover {
+            background: #157347;
+            border-color: #157347;
+            transform: translateY(-1px);
+        }
+
+        #confirmOrderModal .btn-secondary {
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        #confirmOrderModal .btn-secondary:hover {
+            transform: translateY(-1px);
         }
 
         #logoutModal .modal-content {
@@ -1004,6 +1140,66 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 width: 100%;
                 justify-content: flex-end;
             }
+        }
+
+        /* Star Rating Styles */
+        .star-rating {
+            display: flex;
+            flex-direction: row-reverse;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .star-rating input[type="radio"] {
+            display: none;
+        }
+
+        .star-rating label {
+            font-size: 1.2rem;
+            color: #ddd;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .star-rating label:hover,
+        .star-rating label:hover ~ label,
+        .star-rating input[type="radio"]:checked ~ label {
+            color: #ffc107;
+        }
+
+        .rating-section {
+            border-top: 1px solid #e9ecef;
+            padding-top: 1rem;
+        }
+
+        .rating-display {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .rating-stars {
+            font-size: 1.1rem;
+        }
+
+        .rating-review {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            border-left: 3px solid #007bff;
+        }
+
+        .rating-form {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #e9ecef;
+        }
+
+        .rating-form h6 {
+            color: #495057;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -1218,6 +1414,87 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                         <div class="order-total">
                                             Total: ₱<?= number_format($order['total_price'], 2) ?>
                                         </div>
+
+                                        <!-- Order Actions -->
+                                        <?php if ($order['status'] === 'Shipped'): ?>
+                                            <div class="order-actions mt-3">
+                                                <div class="alert alert-info mb-2 py-2">
+                                                    <small><i class="fas fa-info-circle me-1"></i>Click below to confirm you have received your order and complete the transaction.</small>
+                                                </div>
+                                                <button type="button" class="btn btn-success btn-sm" 
+                                                        data-bs-toggle="modal" data-bs-target="#confirmOrderModal" 
+                                                        data-order-id="<?= $order['id'] ?>" 
+                                                        data-order-total="₱<?= number_format($order['total_price'], 2) ?>">
+                                                    <i class="fas fa-check-circle me-2"></i>Confirm Order Received
+                                                </button>
+                                            </div>
+                                        <?php elseif ($order['status'] === 'Completed'): ?>
+                                            <div class="order-actions mt-3">
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-check-circle me-1"></i>Completed
+                                                </span>
+                                                
+                                                <!-- Rating Section -->
+                                                <div class="rating-section mt-3" id="rating-section-<?= $order['id'] ?>">
+                                                    <?php
+                                                    // Check if user has already rated this order
+                                                    $rating_stmt = $pdo->prepare("SELECT rating, review FROM order_ratings WHERE order_id = ? AND user_id = ?");
+                                                    $rating_stmt->execute([$order['id'], $user_id]);
+                                                    $existing_rating = $rating_stmt->fetch(PDO::FETCH_ASSOC);
+                                                    ?>
+                                                    
+                                                    <?php if ($existing_rating): ?>
+                                                        <!-- Show existing rating -->
+                                                        <div class="existing-rating">
+                                                            <div class="rating-display">
+                                                                <span class="rating-stars">
+                                                                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                                                                        <i class="fas fa-star <?= $i <= $existing_rating['rating'] ? 'text-warning' : 'text-muted' ?>"></i>
+                                                                    <?php endfor; ?>
+                                                                </span>
+                                                                <span class="rating-text ms-2">Your Rating: <?= $existing_rating['rating'] ?>/5</span>
+                                                            </div>
+                                                            <?php if ($existing_rating['review']): ?>
+                                                                <div class="rating-review mt-2">
+                                                                    <small class="text-muted">Your Review:</small>
+                                                                    <p class="mb-0"><?= htmlspecialchars($existing_rating['review']) ?></p>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                            <button class="btn btn-sm btn-outline-primary mt-2" onclick="editRating(<?= $order['id'] ?>)">
+                                                                <i class="fas fa-edit me-1"></i>Edit Rating
+                                                            </button>
+                                                        </div>
+                                                    <?php else: ?>
+                                                        <!-- Show rating form -->
+                                                        <div class="rating-form">
+                                                            <h6 class="mb-2">Rate this order:</h6>
+                                                            <form class="rating-form-inline" onsubmit="submitRating(event, <?= $order['id'] ?>)">
+                                                                <div class="rating-input mb-2">
+                                                                    <div class="star-rating">
+                                                                        <input type="radio" name="rating-<?= $order['id'] ?>" value="5" id="star5-<?= $order['id'] ?>">
+                                                                        <label for="star5-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                        <input type="radio" name="rating-<?= $order['id'] ?>" value="4" id="star4-<?= $order['id'] ?>">
+                                                                        <label for="star4-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                        <input type="radio" name="rating-<?= $order['id'] ?>" value="3" id="star3-<?= $order['id'] ?>">
+                                                                        <label for="star3-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                        <input type="radio" name="rating-<?= $order['id'] ?>" value="2" id="star2-<?= $order['id'] ?>">
+                                                                        <label for="star2-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                        <input type="radio" name="rating-<?= $order['id'] ?>" value="1" id="star1-<?= $order['id'] ?>">
+                                                                        <label for="star1-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="mb-2">
+                                                                    <textarea class="form-control form-control-sm" name="review-<?= $order['id'] ?>" placeholder="Write a review (optional)" rows="2" maxlength="500"></textarea>
+                                                                </div>
+                                                                <button type="submit" class="btn btn-sm btn-primary">
+                                                                    <i class="fas fa-star me-1"></i>Submit Rating
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -1257,6 +1534,66 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                         <div class="order-total">
                                             Total: ₱<?= number_format($order['total_price'], 2) ?>
                                         </div>
+                                        
+                                        <!-- Rating Section for Completed Orders -->
+                                        <div class="rating-section mt-3" id="rating-section-<?= $order['id'] ?>">
+                                            <?php
+                                            // Check if user has already rated this order
+                                            $rating_stmt = $pdo->prepare("SELECT rating, review FROM order_ratings WHERE order_id = ? AND user_id = ?");
+                                            $rating_stmt->execute([$order['id'], $user_id]);
+                                            $existing_rating = $rating_stmt->fetch(PDO::FETCH_ASSOC);
+                                            ?>
+                                            
+                                            <?php if ($existing_rating): ?>
+                                                <!-- Show existing rating -->
+                                                <div class="existing-rating">
+                                                    <div class="rating-display">
+                                                        <span class="rating-stars">
+                                                            <?php for ($i = 1; $i <= 5; $i++): ?>
+                                                                <i class="fas fa-star <?= $i <= $existing_rating['rating'] ? 'text-warning' : 'text-muted' ?>"></i>
+                                                            <?php endfor; ?>
+                                                        </span>
+                                                        <span class="rating-text ms-2">Your Rating: <?= $existing_rating['rating'] ?>/5</span>
+                                                    </div>
+                                                    <?php if ($existing_rating['review']): ?>
+                                                        <div class="rating-review mt-2">
+                                                            <small class="text-muted">Your Review:</small>
+                                                            <p class="mb-0"><?= htmlspecialchars($existing_rating['review']) ?></p>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="editRating(<?= $order['id'] ?>)">
+                                                        <i class="fas fa-edit me-1"></i>Edit Rating
+                                                    </button>
+                                                </div>
+                                            <?php else: ?>
+                                                <!-- Show rating form -->
+                                                <div class="rating-form">
+                                                    <h6 class="mb-2">Rate this order:</h6>
+                                                    <form class="rating-form-inline" onsubmit="submitRating(event, <?= $order['id'] ?>)">
+                                                        <div class="rating-input mb-2">
+                                                            <div class="star-rating">
+                                                                <input type="radio" name="rating-<?= $order['id'] ?>" value="5" id="star5-<?= $order['id'] ?>">
+                                                                <label for="star5-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                <input type="radio" name="rating-<?= $order['id'] ?>" value="4" id="star4-<?= $order['id'] ?>">
+                                                                <label for="star4-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                <input type="radio" name="rating-<?= $order['id'] ?>" value="3" id="star3-<?= $order['id'] ?>">
+                                                                <label for="star3-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                <input type="radio" name="rating-<?= $order['id'] ?>" value="2" id="star2-<?= $order['id'] ?>">
+                                                                <label for="star2-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                <input type="radio" name="rating-<?= $order['id'] ?>" value="1" id="star1-<?= $order['id'] ?>">
+                                                                <label for="star1-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="mb-2">
+                                                            <textarea class="form-control form-control-sm" name="review-<?= $order['id'] ?>" placeholder="Write a review (optional)" rows="2" maxlength="500"></textarea>
+                                                        </div>
+                                                        <button type="submit" class="btn btn-sm btn-primary">
+                                                            <i class="fas fa-star me-1"></i>Submit Rating
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -1289,6 +1626,15 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <i class="fas fa-check-circle"></i>
                                 Address deleted successfully!
                             </div>
+                        <?php endif; ?>
+
+                        <?php if (isset($_SESSION['address_required'])): ?>
+                            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <?= $_SESSION['address_required'] ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                            <?php unset($_SESSION['address_required']); ?>
                         <?php endif; ?>
 
                         <div class="addresses-header">
@@ -1358,6 +1704,77 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <?php endif; ?>
 
                         <div class="account-content">
+                            <!-- ID Verification Status -->
+                            <?php
+                            // Check ID verification status
+                            $stmt = $pdo->prepare("SELECT id_verified FROM users WHERE user_id = ?");
+                            $stmt->execute([$user_id]);
+                            $user_verification = $stmt->fetch(PDO::FETCH_ASSOC);
+                            $id_verified = $user_verification && $user_verification['id_verified'];
+                            
+                            // Get verification details if exists
+                            $stmt = $pdo->prepare("SELECT * FROM customer_id_verification WHERE user_id = ?");
+                            $stmt->execute([$user_id]);
+                            $verification_details = $stmt->fetch(PDO::FETCH_ASSOC);
+                            ?>
+                            
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <div class="card <?= $id_verified ? 'border-success' : 'border-warning' ?>">
+                                        <div class="card-header <?= $id_verified ? 'bg-success text-white' : 'bg-warning text-dark' ?>">
+                                            <h5 class="mb-0">
+                                                <i class="fas fa-id-card me-2"></i>
+                                                ID Verification Status
+                                            </h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <?php if ($id_verified): ?>
+                                                <div class="d-flex align-items-center text-success">
+                                                    <i class="fas fa-check-circle me-2" style="font-size: 1.5rem;"></i>
+                                                    <div>
+                                                        <h6 class="mb-1">Verified</h6>
+                                                        <p class="mb-0">Your ID has been verified. You can place orders.</p>
+                                                        <?php if ($verification_details): ?>
+                                                            <small class="text-muted">
+                                                                Verified on: <?= date('M d, Y', strtotime($verification_details['verified_at'])) ?>
+                                                            </small>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="d-flex align-items-center text-warning">
+                                                    <i class="fas fa-exclamation-triangle me-2" style="font-size: 1.5rem;"></i>
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="mb-1">Verification Required</h6>
+                                                        <p class="mb-2">You need to verify your ID before placing orders.</p>
+                                                        <?php if ($verification_details): ?>
+                                                            <div class="mb-2">
+                                                                <strong>Status:</strong> 
+                                                                <span class="badge <?= $verification_details['status'] === 'pending' ? 'bg-warning' : ($verification_details['status'] === 'approved' ? 'bg-success' : 'bg-danger') ?>">
+                                                                    <?= ucfirst($verification_details['status']) ?>
+                                                                </span>
+                                                            </div>
+                                                            <?php if ($verification_details['status'] === 'rejected' && $verification_details['rejection_reason']): ?>
+                                                                <div class="alert alert-danger mb-2">
+                                                                    <strong>Rejection Reason:</strong><br>
+                                                                    <?= htmlspecialchars($verification_details['rejection_reason']) ?>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <div>
+                                                        <a href="id_verification.php" class="btn <?= $verification_details ? 'btn-outline-primary' : 'btn-primary' ?>">
+                                                            <i class="fas fa-upload me-2"></i>
+                                                            <?= $verification_details ? 'Update ID' : 'Upload ID' ?>
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="row">
                                 <div class="col-md-4">
                                     <div class="profile-picture-section">
@@ -1374,32 +1791,36 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     </div>
                                 </div>
                                 <div class="col-md-8">
-                                    <form method="POST" enctype="multipart/form-data">
+                                    <form id="profileForm" method="POST" enctype="multipart/form-data">
                                         <input type="hidden" name="update_profile" value="1">
 
                                         <div class="row g-3">
                                             <div class="col-md-6">
                                                 <div class="form-group">
                                                     <label class="form-label">First Name</label>
-                                                    <input type="text" name="first_name" value="<?= htmlspecialchars($user['first_name'] ?? '') ?>" class="form-control">
+                                                    <input type="text" name="first_name" value="<?= htmlspecialchars($user['first_name'] ?? '') ?>" class="form-control" required>
+                                                    <div data-error="first_name"></div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="form-group">
                                                     <label class="form-label">Last Name</label>
-                                                    <input type="text" name="last_name" value="<?= htmlspecialchars($user['last_name'] ?? '') ?>" class="form-control">
+                                                    <input type="text" name="last_name" value="<?= htmlspecialchars($user['last_name'] ?? '') ?>" class="form-control" required>
+                                                    <div data-error="last_name"></div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="form-group">
                                                     <label class="form-label">Email</label>
                                                     <input type="email" name="email" required value="<?= htmlspecialchars($user['email'] ?? '') ?>" class="form-control">
+                                                    <div data-error="email"></div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="form-group">
                                                     <label class="form-label">Phone Number</label>
                                                     <input type="tel" name="phone" value="<?= htmlspecialchars($user['phone'] ?? '') ?>" class="form-control">
+                                                    <div data-error="phone"></div>
                                                 </div>
                                             </div>
                                             <div class="col-12">
@@ -1407,6 +1828,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                     <label class="form-label">Profile Picture</label>
                                                     <input type="file" name="profile_picture" id="profileImage" accept="image/*" class="form-control">
                                                     <small class="form-text text-muted">Supported formats: JPG, PNG, GIF, WebP. Max size: 5MB</small>
+                                                    <div data-error="profile_picture"></div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1571,6 +1993,44 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
     </div>
 
+    <!-- Confirm Order Received Modal -->
+    <div class="modal fade" id="confirmOrderModal" tabindex="-1" aria-labelledby="confirmOrderModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmOrderModalLabel">
+                        <i class="fas fa-check-circle me-2"></i>Confirm Order Received
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div class="confirm-icon">
+                        <i class="fas fa-handshake"></i>
+                    </div>
+                    <h4 class="confirm-title">Have you received your order?</h4>
+                    <p class="confirm-message">Please confirm that you have received your order in good condition.</p>
+                    <div class="alert alert-info">
+                        <strong>Order Details:</strong><br>
+                        <span id="modalOrderId"></span><br>
+                        <span id="modalOrderTotal"></span>
+                    </div>
+                    <p class="text-muted small">This action will complete your order and cannot be undone.</p>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-secondary me-3" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                    <form method="POST" action="order_received.php" class="d-inline" id="confirmOrderForm">
+                        <input type="hidden" name="order_id" id="confirmOrderIdInput">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-check-circle me-2"></i>Yes, I Received It
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Logout Confirmation Modal -->
     <div class="modal fade" id="logoutModal" tabindex="-1" aria-labelledby="logoutModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -1667,6 +2127,22 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
         });
 
+        // Confirm Order Received Modal
+        document.addEventListener('DOMContentLoaded', function() {
+            const confirmOrderModal = document.getElementById('confirmOrderModal');
+            if (confirmOrderModal) {
+                confirmOrderModal.addEventListener('show.bs.modal', function (event) {
+                    const button = event.relatedTarget;
+                    const orderId = button.getAttribute('data-order-id');
+                    const orderTotal = button.getAttribute('data-order-total');
+                    
+                    document.getElementById('modalOrderId').textContent = 'Order #' + orderId;
+                    document.getElementById('modalOrderTotal').textContent = 'Total: ' + orderTotal;
+                    document.getElementById('confirmOrderIdInput').value = orderId;
+                });
+            }
+        });
+
         // Logout confirmation
         function confirmLogout() {
             new bootstrap.Modal(document.getElementById('logoutModal')).show();
@@ -1688,7 +2164,111 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     }, 500);
                 }, 5000);
             });
+            
+            // Auto-open address modal if redirected from checkout
+            <?php if (isset($_SESSION['show_address_modal'])): ?>
+                // Show address modal after a short delay to ensure page is loaded
+                setTimeout(function() {
+                    const addAddressModal = new bootstrap.Modal(document.getElementById('addAddressModal'));
+                    addAddressModal.show();
+                }, 1000);
+                <?php unset($_SESSION['show_address_modal']); ?>
+            <?php endif; ?>
         });
+
+        // Rating functionality
+        function submitRating(event, orderId) {
+            event.preventDefault();
+            
+            const form = event.target;
+            const ratingInput = form.querySelector(`input[name="rating-${orderId}"]:checked`);
+            const reviewTextarea = form.querySelector(`textarea[name="review-${orderId}"]`);
+            
+            if (!ratingInput) {
+                showToast('Please select a rating', 'error');
+                return;
+            }
+            
+            const rating = ratingInput.value;
+            const review = reviewTextarea ? reviewTextarea.value.trim() : '';
+            
+            // Show loading state
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Submitting...';
+            
+            // Submit rating
+            const formData = new FormData();
+            formData.append('order_id', orderId);
+            formData.append('rating', rating);
+            formData.append('review', review);
+            
+            fetch('submit_rating.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    // Reload the page to show the updated rating
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Network error. Please try again.', 'error');
+            })
+            .finally(() => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+            });
+        }
+        
+        function editRating(orderId) {
+            // Hide existing rating and show form
+            const ratingSection = document.getElementById(`rating-section-${orderId}`);
+            const existingRating = ratingSection.querySelector('.existing-rating');
+            const ratingForm = ratingSection.querySelector('.rating-form');
+            
+            if (existingRating && ratingForm) {
+                existingRating.style.display = 'none';
+                ratingForm.style.display = 'block';
+            }
+        }
+        
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = 'toast show position-fixed top-0 end-0 m-3';
+            toast.style.zIndex = '9999';
+            
+            const bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
+            const icon = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+            
+            toast.innerHTML = `
+                <div class="toast-header ${bgClass} text-white">
+                    <i class="${icon} me-2"></i>
+                    <strong class="me-auto">${type === 'success' ? 'Success' : 'Error'}</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            `;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
     </script>
+    
+    <!-- Validation Script -->
+    <script src="includes/validation.js"></script>
 </body>
 </html>
