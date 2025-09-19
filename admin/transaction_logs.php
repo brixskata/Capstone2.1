@@ -24,6 +24,54 @@ if (isset($_POST['update_status'])) {
     exit;
 }
 
+// Handle order cancellation with reason (admin action before processing)
+if (isset($_POST['cancel_order'])) {
+    $order_id = $_POST['order_id'];
+    $reason = trim($_POST['cancel_reason'] ?? '');
+    if ($order_id && $reason !== '') {
+        try {
+            // Ensure cancellations table exists
+            $pdo->exec("CREATE TABLE IF NOT EXISTS order_cancellations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_id INT NOT NULL,
+                reason TEXT NOT NULL,
+                cancelled_by VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX (order_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            $pdo->beginTransaction();
+
+            // Update order status to Cancelled via status name mapping
+            $stmt = $pdo->prepare("UPDATE orders o
+                                    JOIN order_status os ON os.status_name = 'Cancelled'
+                                    SET o.orderstatus_id = os.orderstatus_id
+                                    WHERE o.orders_id = :order_id");
+            $stmt->execute(['order_id' => $order_id]);
+
+            // Log cancellation reason
+            $adminName = $_SESSION['username'] ?? 'admin';
+            $ins = $pdo->prepare("INSERT INTO order_cancellations (order_id, reason, cancelled_by) VALUES (:order_id, :reason, :by)");
+            $ins->execute(['order_id' => $order_id, 'reason' => $reason, 'by' => $adminName]);
+
+            // Notify customer
+            $uidStmt = $pdo->prepare("SELECT user_id FROM orders WHERE orders_id = ?");
+            $uidStmt->execute([$order_id]);
+            $userId = $uidStmt->fetchColumn();
+            if ($userId) {
+                $notif = $pdo->prepare("INSERT INTO notifications (user_id, order_id, message, is_read, created_at) VALUES (?, ?, ?, 0, NOW())");
+                $notif->execute([$userId, $order_id, 'Your order has been cancelled by admin: ' . $reason]);
+            }
+
+            $pdo->commit();
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+        }
+    }
+    header("Location: transaction_logs.php");
+    exit;
+}
+
 // Fetch orders with filtering
 $status_filter = isset($_GET['status']) ? $_GET['status'] : '';
 $date_filter = isset($_GET['date']) ? $_GET['date'] : '';
@@ -35,6 +83,7 @@ $query = "
            ui.email,
            os.status_name AS status,
            o.total_price as total_amount,
+           o.delivery_option,
            o.created_at,
            pay.method as payment_method,
            pay.proof as payment_proof,
@@ -60,7 +109,7 @@ if ($search) {
     $query .= " AND (u.username LIKE '%$s%' OR o.orders_id LIKE '%$s%')";
 }
 
-$query .= " GROUP BY o.orders_id, u.username, ui.email, os.status_name, o.total_price, o.created_at, pay.method, pay.proof ORDER BY o.created_at DESC";
+$query .= " GROUP BY o.orders_id, u.username, ui.email, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof ORDER BY o.created_at DESC";
 
 // Debug: Check the query
 echo "<!-- Debug Query: " . htmlspecialchars($query) . " -->\n";
@@ -187,12 +236,12 @@ $stats = $pdo->query("
       }
       
       .btn-ship {
-        background-color: #ffc107;
+        background-color: #0dcaf0; /* info */
         color: #000;
       }
       
       .btn-ship:hover {
-        background-color: #ffca2c;
+        background-color: #31d2f2;
         color: #000;
       }
       
@@ -233,18 +282,18 @@ $stats = $pdo->query("
       }
       
       .btn-waiting {
-        background-color: #ffc107;
-        color: #000;
+        background-color: #6c757d; /* secondary */
+        color: #fff;
         cursor: default;
-        opacity: 0.8;
+        opacity: 0.9;
       }
       
       .btn-waiting:hover {
-        background-color: #ffc107;
-        color: #000;
+        background-color: #6c757d;
+        color: #fff;
         transform: none;
         box-shadow: none;
-        opacity: 0.8;
+        opacity: 0.9;
       }
       
       /* Modal Styles */
@@ -354,6 +403,8 @@ $stats = $pdo->query("
             <option value="Pending" <?= $status_filter == 'Pending' ? 'selected' : '' ?>>Pending</option>
             <option value="To Ship" <?= $status_filter == 'To Ship' ? 'selected' : '' ?>>To Ship</option>
             <option value="Shipped" <?= $status_filter == 'Shipped' ? 'selected' : '' ?>>Shipped</option>
+            <option value="Ready for Pick Up" <?= $status_filter == 'Ready for Pick Up' ? 'selected' : '' ?>>Ready for Pick Up</option>
+            <option value="Cancelled" <?= $status_filter == 'Cancelled' ? 'selected' : '' ?>>Cancelled</option>
             <option value="Completed" <?= $status_filter == 'Completed' ? 'selected' : '' ?>>Completed</option>
           </select>
         </div>
@@ -393,6 +444,7 @@ $stats = $pdo->query("
               <th class="fw-semibold">Total</th>
               <th class="fw-semibold">Payment</th>
               <th class="fw-semibold">Status</th>
+              <th class="fw-semibold">Delivery</th>
               <th class="fw-semibold">Date</th>
               <th class="fw-semibold">Actions</th>
             </tr>
@@ -438,28 +490,54 @@ $stats = $pdo->query("
                     $badgeClass = 'bg-secondary';
                     if ($status === 'pending') $badgeClass = 'bg-warning text-dark';
                     elseif ($status === 'to ship') $badgeClass = 'bg-info';
+                    elseif ($status === 'ready for pick up') $badgeClass = 'bg-primary';
                     elseif ($status === 'shipped') $badgeClass = 'text-white';
+                    elseif ($status === 'cancelled') $badgeClass = 'bg-danger';
                     elseif ($status === 'delivered' || $status === 'completed') $badgeClass = 'bg-success';
                   ?>
-                  <span class="badge-status <?= $badgeClass ?>" <?php if($status === 'shipped') echo 'style="background-color: #7F1734; position: relative;"'; ?>>
+                  <span class="badge-status <?= $badgeClass ?>">
                     <?= htmlspecialchars($order['status']) ?>
-                    <?php if($status === 'shipped'): ?>
-                      <i class="fas fa-clock ms-1" style="font-size: 0.8em;" title="Waiting for customer confirmation"></i>
-                    <?php endif; ?>
                   </span>
+                </td>
+                <td>
+                  <?php if (!empty($order['delivery_option'])): ?>
+                    <span class="badge bg-light text-dark border"><?= htmlspecialchars(ucfirst($order['delivery_option'])) ?></span>
+                  <?php else: ?>
+                    <span class="text-muted">N/A</span>
+                  <?php endif; ?>
                 </td>
                 <td class="text-muted"><?= date('M d, Y H:i', strtotime($order['created_at'])) ?></td>
                 <td>
                   <div class="d-flex gap-2">
                     <?php if ($order['status'] == 'Pending'): ?>
-                      <button type="button" class="action-btn btn-process" data-bs-toggle="modal" data-bs-target="#processModal" data-order-id="<?= $order['id'] ?>" data-customer="<?= htmlspecialchars($order['username']) ?>">
-                        <i class="fas fa-cog me-1"></i>Process
+                      <?php if (strtolower($order['delivery_option']) === 'pickup'): ?>
+                        <button type="button" class="action-btn btn-process" data-bs-toggle="modal" data-bs-target="#processModal" data-order-id="<?= $order['id'] ?>" data-customer="<?= htmlspecialchars($order['username']) ?>" data-new-status="Ready for Pick Up">
+                          <i class="fas fa-cog me-1"></i>Process (Pickup)
+                        </button>
+                      <?php else: ?>
+                        <button type="button" class="action-btn btn-process" data-bs-toggle="modal" data-bs-target="#processModal" data-order-id="<?= $order['id'] ?>" data-customer="<?= htmlspecialchars($order['username']) ?>" data-new-status="To Ship">
+                          <i class="fas fa-cog me-1"></i>Process
+                        </button>
+                      <?php endif; ?>
+                      <button type="button" class="action-btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelOrderModal" data-order-id="<?= $order['id'] ?>" data-customer="<?= htmlspecialchars($order['username']) ?>">
+                        <i class="fas fa-ban me-1"></i>Cancel
                       </button>
                     <?php endif; ?>
                     <?php if ($order['status'] == 'To Ship'): ?>
                       <button type="button" class="action-btn btn-ship" data-bs-toggle="modal" data-bs-target="#shipModal" data-order-id="<?= $order['id'] ?>" data-customer="<?= htmlspecialchars($order['username']) ?>">
                         <i class="fas fa-truck me-1"></i>Ship
                       </button>
+                    <?php endif; ?>
+                    <?php if ($order['status'] == 'Ready for Pick Up'): ?>
+                      <?php if ((isset($_SESSION['usertype_id']) && $_SESSION['usertype_id'] == 1) || (isset($_SESSION['role']) && $_SESSION['role'] === 'super_admin')): ?>
+                        <button type="button" class="action-btn btn-deliver" data-bs-toggle="modal" data-bs-target="#completePickupModal" data-order-id="<?= $order['id'] ?>" data-customer="<?= htmlspecialchars($order['username']) ?>">
+                          <i class="fas fa-check me-1"></i>Complete Pickup
+                        </button>
+                      <?php else: ?>
+                        <span class="action-btn btn-waiting" title="Waiting for Super Admin confirmation">
+                          <i class="fas fa-clock me-1"></i>Waiting for Pickup
+                        </span>
+                      <?php endif; ?>
                     <?php endif; ?>
                     <?php if ($order['status'] == 'Shipped'): ?>
                       <span class="action-btn btn-waiting" title="Waiting for customer to confirm receipt">
@@ -481,6 +559,44 @@ $stats = $pdo->query("
       </div>
     </div>
   </main>
+
+  <!-- Complete Pickup Modal -->
+  <div class="modal fade" id="completePickupModal" tabindex="-1" aria-labelledby="completePickupModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title" id="completePickupModalLabel">
+            <i class="fas fa-check me-2"></i>Complete Pickup
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-center mb-3">
+            <i class="fas fa-box-open text-success" style="font-size: 3rem;"></i>
+          </div>
+          <p class="text-center mb-3">Confirm this order has been picked up by the customer.</p>
+          <div class="alert alert-success">
+            <strong>Order Details:</strong><br>
+            <span id="pickupOrderId"></span><br>
+            <span id="pickupCustomer"></span>
+          </div>
+          <p class="text-muted small text-center">This will change the order status to <strong>"Completed"</strong>.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times me-1"></i>Cancel
+          </button>
+          <form method="POST" class="d-inline" id="completePickupForm">
+            <input type="hidden" name="order_id" id="pickupOrderIdInput">
+            <input type="hidden" name="new_status" value="Completed">
+            <button type="submit" name="update_status" class="btn btn-success">
+              <i class="fas fa-check me-1"></i>Confirm Complete
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Payment Proof Modal -->
   <div class="modal fade" id="paymentProofModal" tabindex="-1" aria-labelledby="paymentProofModalLabel" aria-hidden="true">
@@ -538,7 +654,7 @@ $stats = $pdo->query("
             <span id="processOrderId"></span><br>
             <span id="processCustomer"></span>
           </div>
-          <p class="text-muted small text-center">This will change the order status to <strong>"To Ship"</strong> and notify the customer.</p>
+          <p class="text-muted small text-center">This will change the order status to <strong id="processNewStatusLabel">"To Ship"</strong>.</p>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -546,10 +662,48 @@ $stats = $pdo->query("
           </button>
           <form method="POST" class="d-inline" id="processForm">
             <input type="hidden" name="order_id" id="processOrderIdInput">
-            <input type="hidden" name="new_status" value="To Ship">
+            <input type="hidden" name="new_status" id="processNewStatusInput" value="To Ship">
             <button type="submit" name="update_status" class="btn btn-warning">
               <i class="fas fa-cog me-1"></i>Process Order
             </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cancel Order Modal -->
+  <div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title" id="cancelOrderModalLabel">
+            <i class="fas fa-ban me-2"></i>Cancel Order
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-center mb-3">
+            <i class="fas fa-triangle-exclamation text-danger" style="font-size: 3rem;"></i>
+          </div>
+          <p class="text-center mb-3">Provide a reason for cancelling this order.</p>
+          <div class="alert alert-warning">
+            <strong>Order Details:</strong><br>
+            <span id="cancelOrderId"></span><br>
+            <span id="cancelCustomer"></span>
+          </div>
+          <form method="POST" id="cancelOrderForm">
+            <input type="hidden" name="order_id" id="cancelOrderIdInput">
+            <div class="mb-3">
+              <label for="cancelReason" class="form-label">Cancellation Reason</label>
+              <textarea class="form-control" id="cancelReason" name="cancel_reason" rows="3" placeholder="Enter reason" required></textarea>
+            </div>
+            <div class="text-end">
+              <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Close</button>
+              <button type="submit" name="cancel_order" class="btn btn-danger">
+                <i class="fas fa-ban me-1"></i>Confirm Cancel
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -608,10 +762,15 @@ $stats = $pdo->query("
           const button = event.relatedTarget;
           const orderId = button.getAttribute('data-order-id');
           const customer = button.getAttribute('data-customer');
+          const newStatus = button.getAttribute('data-new-status') || 'To Ship';
           
           document.getElementById('processOrderId').textContent = 'Order #' + orderId;
           document.getElementById('processCustomer').textContent = 'Customer: ' + customer;
           document.getElementById('processOrderIdInput').value = orderId;
+          const statusInput = document.getElementById('processNewStatusInput');
+          const statusLabel = document.getElementById('processNewStatusLabel');
+          if (statusInput) statusInput.value = newStatus;
+          if (statusLabel) statusLabel.textContent = '"' + newStatus + '"';
         });
       }
 
@@ -626,6 +785,34 @@ $stats = $pdo->query("
           document.getElementById('shipOrderId').textContent = 'Order #' + orderId;
           document.getElementById('shipCustomer').textContent = 'Customer: ' + customer;
           document.getElementById('shipOrderIdInput').value = orderId;
+        });
+      }
+
+      // Complete Pickup Modal
+      const completePickupModal = document.getElementById('completePickupModal');
+      if (completePickupModal) {
+        completePickupModal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          const orderId = button.getAttribute('data-order-id');
+          const customer = button.getAttribute('data-customer');
+
+          document.getElementById('pickupOrderId').textContent = 'Order #' + orderId;
+          document.getElementById('pickupCustomer').textContent = 'Customer: ' + customer;
+          document.getElementById('pickupOrderIdInput').value = orderId;
+        });
+      }
+
+      // Cancel Order Modal
+      const cancelOrderModal = document.getElementById('cancelOrderModal');
+      if (cancelOrderModal) {
+        cancelOrderModal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          const orderId = button.getAttribute('data-order-id');
+          const customer = button.getAttribute('data-customer');
+          document.getElementById('cancelOrderId').textContent = 'Order #' + orderId;
+          document.getElementById('cancelCustomer').textContent = 'Customer: ' + customer;
+          document.getElementById('cancelOrderIdInput').value = orderId;
+          document.getElementById('cancelReason').value = '';
         });
       }
 

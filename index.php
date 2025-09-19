@@ -55,7 +55,7 @@ try {
         LEFT JOIN user_info ui ON u.user_id = ui.user_id
         WHERE o.review IS NOT NULL AND TRIM(o.review) != ''
         ORDER BY o.created_at DESC
-        LIMIT 6
+        LIMIT 3
     ");
     $testimonials = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {

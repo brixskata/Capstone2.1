@@ -189,13 +189,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['address_action'])) {
 
 
 // Fetch all orders (current and completed)
-$sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price, 
-               oi.quantity, p.product_name, pp.selling_price as price
-        FROM orders o 
+$sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price,
+               oi.quantity, p.product_name, pp.selling_price as price,
+               oc.reason AS cancel_reason
+        FROM orders o
         LEFT JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
-        LEFT JOIN order_items oi ON o.orders_id = oi.order_id 
-        LEFT JOIN products p ON oi.product_id = p.product_id 
+        LEFT JOIN order_items oi ON o.orders_id = oi.order_id
+        LEFT JOIN products p ON oi.product_id = p.product_id
         LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        LEFT JOIN (
+            SELECT oc1.order_id, oc1.reason
+            FROM order_cancellations oc1
+            INNER JOIN (
+                SELECT order_id, MAX(id) AS max_id
+                FROM order_cancellations
+                GROUP BY order_id
+            ) latest ON latest.order_id = oc1.order_id AND latest.max_id = oc1.id
+        ) oc ON oc.order_id = o.orders_id
         WHERE o.user_id = :user_id
         ORDER BY o.created_at DESC";
 $stmt = $pdo->prepare($sql);
@@ -212,6 +222,7 @@ foreach ($rawOrders as $row) {
             'created_at' => $row['created_at'],
             'status' => $row['status'],
             'total_price' => $row['total_price'],
+            'cancel_reason' => $row['cancel_reason'] ?? null,
             'items' => []
         ];
     }
@@ -1415,6 +1426,12 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             Total: ₱<?= number_format($order['total_price'], 2) ?>
                                         </div>
 
+                                        <?php if ($order['status'] === 'Cancelled' && !empty($order['cancel_reason'])): ?>
+                                            <div class="alert alert-danger mt-3 mb-0" role="alert">
+                                                <small><i class="fas fa-ban me-2"></i>Cancellation reason: <?= htmlspecialchars($order['cancel_reason']) ?></small>
+                                            </div>
+                                        <?php endif; ?>
+
                                         <!-- Order Actions -->
                                         <?php if ($order['status'] === 'Shipped'): ?>
                                             <div class="order-actions mt-3">
@@ -1535,7 +1552,14 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             Total: ₱<?= number_format($order['total_price'], 2) ?>
                                         </div>
                                         
+                                        <?php if ($order['status'] === 'Cancelled' && !empty($order['cancel_reason'])): ?>
+                                            <div class="alert alert-danger mt-3 mb-0" role="alert">
+                                                <small><i class="fas fa-ban me-2"></i>Cancellation reason: <?= htmlspecialchars($order['cancel_reason']) ?></small>
+                                            </div>
+                                        <?php endif; ?>
+
                                         <!-- Rating Section for Completed Orders -->
+                                        <?php if ($order['status'] === 'Completed'): ?>
                                         <div class="rating-section mt-3" id="rating-section-<?= $order['id'] ?>">
                                             <?php
                                             // Check if user has already rated this order
@@ -1594,6 +1618,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                 </div>
                                             <?php endif; ?>
                                         </div>
+                                        <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
                             <?php endif; ?>

@@ -138,7 +138,7 @@ if (!empty($_SESSION['cart'])) {
         </a>
       <?php else: ?>
         <a class="text-dark" href="login.php">
-          <i class="fas fa-sign-in-alt fs-5"></i>
+          <i class="fas fa-user fs-5"></i>
         </a>
       <?php endif; ?>
       <button class="btn p-0 text-dark position-relative" onclick="toggleCart()">
@@ -169,7 +169,7 @@ if (!empty($_SESSION['cart'])) {
       </a>
     <?php else: ?>
       <a class="text-dark" href="login.php">
-        <i class="fas fa-sign-in-alt me-2"></i> Login
+        <i class="fas fa-user me-2"></i> Login
       </a>
     <?php endif; ?>
     <button class="btn p-0 text-start text-dark position-relative" onclick="toggleCart()">

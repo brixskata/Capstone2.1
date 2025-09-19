@@ -2,10 +2,14 @@
 include '../includes/db.php';
 include_once '../includes/log_history.php';
 include_once '../includes/permissions.php';
+include_once '../includes/batch_manager.php';
 session_start();
 
 // Ensure user is logged in and has admin access
 requireAdmin($pdo);
+
+// Initialize batch manager
+$batchManager = new BatchManager($pdo);
 
 // Handle expiration date update
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_expiration'])) {
@@ -74,8 +78,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
         $stmt = $pdo->prepare("UPDATE restocking SET status_id = ? WHERE restocking_id = ?");
         $stmt->execute([$new_status, $restock_id]);
         
-        // If changing to "Received" (status 2), update stock
+        // If changing to "Received" (status 2), update stock and create batch
         if ($new_status == 2 && $restock['status_id'] != 2) {
+            // Create a new batch for the restocked items
+            $batch_data = [
+                'product_id' => $restock['product_id'],
+                'supplier_id' => $restock['supplier_id'],
+                'quantity_received' => $restock['quantity_added'],
+                'unit_cost' => $restock['cost_per_unit'],
+                'expiration_date' => $restock['expiration_date'] ?? null,
+                'received_date' => $restock['restock_date'],
+                'created_by' => $_SESSION['user_id'],
+                'reference_type' => 'restock',
+                'reference_id' => $restock_id,
+                'notes' => "Restocking: " . ($restock['notes'] ?? '')
+            ];
+            
+            $batch_id = $batchManager->createBatch($batch_data);
+            
             // Update product_stock current_stock and last_restock_date
             $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ? WHERE product_id = ?");
             $stmt->execute([$restock['quantity_added'], $restock['restock_date'], $restock['product_id']]);
@@ -101,7 +121,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
         logHistory($pdo, 'Restocking Status Update', "Product: $product_name, Status: {$status_names[$new_status]}", $_SESSION['username']);
         $_SESSION['success'] = "Restocking status updated successfully!";
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         $_SESSION['error'] = "Error updating status: " . $e->getMessage();
     }
     header("Location: restocking.php");
@@ -147,6 +169,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
         // Insert restocking record
         $stmt = $pdo->prepare("INSERT INTO restocking (product_id, supplier_id, quantity_added, cost_per_unit, total_cost, restock_date, expected_delivery, status_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, 2, ?, ?)");
         $stmt->execute([$product_id, $supplier_id, $quantity_added, $cost_per_unit, $total_cost, $restock_date, $expected_delivery, $notes, $_SESSION['user_id']]);
+        $restock_id = $pdo->lastInsertId();
+
+        // Create a new batch for the restocked items
+        $batch_data = [
+            'product_id' => $product_id,
+            'supplier_id' => $supplier_id,
+            'quantity_received' => $quantity_added,
+            'unit_cost' => $cost_per_unit,
+            'expiration_date' => $expiration_date,
+            'received_date' => $restock_date,
+            'created_by' => $_SESSION['user_id'],
+            'reference_type' => 'restock',
+            'reference_id' => $restock_id,
+            'notes' => "Restocking: " . ($notes ?? '')
+        ];
+        
+        $batch_id = $batchManager->createBatch($batch_data);
 
         // Update product_stock current_stock, last_restock_date, and expiration_date
         $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ?, expiration_date = ? WHERE product_id = ?");
@@ -158,7 +197,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
         $current_stock = (int)$stmt->fetchColumn();
 
         // Record stock movement
-        $restock_id = $pdo->lastInsertId();
         $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, stockmovementtype_id, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 1, ?, ?, ?, 'Restocking', ?, 'restock', ?)");
         $stmt->execute([$product_id, $quantity_added, $current_stock - $quantity_added, $current_stock, $restock_id, $_SESSION['user_id']]);
 
@@ -172,7 +210,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
         logHistory($pdo, 'Restocking', "Product: $product_name, Quantity: $quantity_added, Cost: ₱$total_cost", $_SESSION['username']);
         $_SESSION['success'] = "Restocking recorded successfully!";
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         $_SESSION['error'] = "Error recording restocking: " . $e->getMessage();
     }
     header("Location: restocking.php");

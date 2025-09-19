@@ -2,6 +2,7 @@
 <?php
 include '../includes/db.php';
 include_once '../includes/log_history.php';
+include_once '../includes/batch_manager.php';
 session_start();
 
 // Ensure user is logged in and has admin role
@@ -38,13 +39,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
             throw new Exception("Cost per unit cannot be negative.");
         }
 
-        // Insert restocking record (matches restocking table schema)
-        $stmt = $pdo->prepare("INSERT INTO restocking (product_id, supplier_id, quantity_added, cost_per_unit, total_cost, restock_date, expected_delivery, status_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)");
-        $stmt->execute([$product_id, $supplier_id, $quantity_added, $cost_per_unit, $total_cost, $restock_date, $expected_delivery, $notes, $_SESSION['user_id']]);
+        // Start transaction for restocking
+        $pdo->beginTransaction();
+        
+        try {
+            // Insert restocking record (matches restocking table schema)
+            $stmt = $pdo->prepare("INSERT INTO restocking (product_id, supplier_id, quantity_added, cost_per_unit, total_cost, restock_date, expected_delivery, status_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)");
+            $stmt->execute([$product_id, $supplier_id, $quantity_added, $cost_per_unit, $total_cost, $restock_date, $expected_delivery, $notes, $_SESSION['user_id']]);
+            $restock_id = $pdo->lastInsertId();
 
-        // Update product_stock current_stock and last_restock_date
-        $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ? WHERE product_id = ?");
-        $stmt->execute([$quantity_added, $restock_date, $product_id]);
+            // Update product_stock current_stock and last_restock_date
+            $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ? WHERE product_id = ?");
+            $stmt->execute([$quantity_added, $restock_date, $product_id]);
+            
+            // Create batch for the restocked items
+            $batchManager = new BatchManager($pdo);
+            $batch_id = $batchManager->createBatch([
+                'product_id' => $product_id,
+                'supplier_id' => $supplier_id,
+                'quantity_received' => $quantity_added,
+                'unit_cost' => $cost_per_unit,
+                'received_date' => $restock_date,
+                'created_by' => $_SESSION['user_id'],
+                'reference_type' => 'restock',
+                'reference_id' => $restock_id,
+                'notes' => $notes
+            ]);
+            
+            $pdo->commit();
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
 
         // Fetch new current stock
         $stmt = $pdo->prepare("SELECT current_stock FROM product_stock WHERE product_id = ?");
@@ -52,7 +80,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
         $current_stock = (int)$stmt->fetchColumn();
 
         // Record stock movement (use stock_movements schema)
-        $restock_id = $pdo->lastInsertId();
         $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, stockmovementtype_id, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 1, ?, ?, ?, 'Restocking', ?, 'restock', ?)");
         $stmt->execute([$product_id, $quantity_added, $current_stock - $quantity_added, $current_stock, $restock_id, $_SESSION['user_id']]);
 
@@ -111,24 +138,63 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
                 throw new Exception("Invalid adjustment type: $adjustment_type");
         }
 
-        // Update product_stock
-        $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = ? WHERE product_id = ?");
-        $stmt->execute([$new_stock, $product_id]);
+        // Start transaction for stock adjustment
+        $pdo->beginTransaction();
+        
+        try {
+            // Update product_stock
+            $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = ? WHERE product_id = ?");
+            $stmt->execute([$new_stock, $product_id]);
 
-        // Map adjustment type to proper ID
-        $adjustment_type_map = [
-            'add' => 1,      // Increase
-            'subtract' => 2, // Decrease  
-            'set' => 3       // Correction
-        ];
-        $adjustment_type_id = $adjustment_type_map[$adjustment_type] ?? 3;
+            // Map adjustment type to proper ID
+            $adjustment_type_map = [
+                'add' => 1,      // Increase
+                'subtract' => 2, // Decrease  
+                'set' => 3       // Correction
+            ];
+            $adjustment_type_id = $adjustment_type_map[$adjustment_type] ?? 3;
 
-        // Record stock adjustment
-        $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $_SESSION['user_id']]);
+            // Record stock adjustment
+            $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $_SESSION['user_id']]);
+            $adjustment_id = $pdo->lastInsertId();
+            
+            // Handle batch operations based on adjustment type
+            $batchManager = new BatchManager($pdo);
+            
+            if ($adjustment_type === 'add') {
+                // Create a batch for added stock
+                $batch_id = $batchManager->createBatch([
+                    'product_id' => $product_id,
+                    'quantity_received' => $quantity,
+                    'received_date' => date('Y-m-d'),
+                    'created_by' => $_SESSION['user_id'],
+                    'reference_type' => 'adjustment',
+                    'reference_id' => $adjustment_id,
+                    'notes' => "Stock adjustment: $reason"
+                ]);
+            } elseif ($adjustment_type === 'subtract') {
+                // Consume from batches using FIFO
+                $batches_used = $batchManager->consumeStock(
+                    $product_id,
+                    $quantity,
+                    'adjustment',
+                    'adjustment',
+                    $adjustment_id,
+                    $_SESSION['user_id'],
+                    "Stock adjustment: $reason"
+                );
+            }
+            
+            $pdo->commit();
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
 
         // Record stock movement
-        $adjustment_id = $pdo->lastInsertId();
         $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, stockmovementtype_id, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 4, ?, ?, ?, ?, ?, 'adjustment', ?)");
         $stmt->execute([$product_id, $quantity, $previous_stock, $new_stock, $reason, $adjustment_id, $_SESSION['user_id']]);
 

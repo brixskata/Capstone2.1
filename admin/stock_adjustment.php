@@ -2,10 +2,14 @@
 include '../includes/db.php';
 include_once '../includes/log_history.php';
 include_once '../includes/permissions.php';
+include_once '../includes/batch_manager.php';
 session_start();
 
 // Ensure user is logged in and has admin access
 requireAdmin($pdo);
+
+// Initialize batch manager
+$batchManager = new BatchManager($pdo);
 
 // Handle stock adjustment form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
@@ -23,6 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
         $quantity = (int)$_POST['quantity'];
         $reason = $_POST['reason'];
         $notes = $_POST['notes'] ?: null;
+        $expiration_date = $_POST['expiration_date'] ?: null;
+        $supplier_id = $_POST['supplier_id'] ?: null;
 
         // Validate quantity
         if ($quantity <= 0) {
@@ -55,6 +61,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
                 throw new Exception("Invalid adjustment type: $adjustment_type");
         }
 
+        // Handle batch creation for stock additions
+        if ($adjustment_type === 'add') {
+            // Create a new batch for the added stock
+            $batch_data = [
+                'product_id' => $product_id,
+                'supplier_id' => $supplier_id,
+                'quantity_received' => $quantity,
+                'expiration_date' => $expiration_date,
+                'received_date' => date('Y-m-d'),
+                'created_by' => $_SESSION['user_id'],
+                'reference_type' => 'adjustment',
+                'notes' => "Stock adjustment: {$reason}"
+            ];
+            
+            $batch_id = $batchManager->createBatch($batch_data);
+        } elseif ($adjustment_type === 'subtract') {
+            // Consume stock from existing batches (FIFO)
+            $batches_used = $batchManager->consumeStock(
+                $product_id, 
+                $quantity, 
+                'adjustment', 
+                'stock_adjustment', 
+                null, 
+                $_SESSION['user_id'], 
+                "Stock adjustment: {$reason}"
+            );
+        }
+
         // Update product_stock
         $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = ? WHERE product_id = ?");
         $stmt->execute([$new_stock, $product_id]);
@@ -67,12 +101,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
         ];
         $adjustment_type_id = $adjustment_type_map[$adjustment_type] ?? 3;
 
-        // Record stock adjustment
-        $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $_SESSION['user_id']]);
+        // Record stock adjustment (with optional supplier and expiration date)
+        try {
+            // Try to insert with new columns first
+            $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, supplier_id, expiration_date, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $supplier_id, $expiration_date, $_SESSION['user_id']]);
+        } catch (PDOException $e) {
+            // Fallback to original columns if new columns don't exist
+            $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $_SESSION['user_id']]);
+        }
+        
+        $adjustment_id = $pdo->lastInsertId();
+        
+        // Update batch reference if it was created
+        if (isset($batch_id)) {
+            $stmt = $pdo->prepare("UPDATE product_batches SET reference_id = ? WHERE batch_id = ?");
+            $stmt->execute([$adjustment_id, $batch_id]);
+        }
 
         // Record stock movement
-        $adjustment_id = $pdo->lastInsertId();
         $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, stockmovementtype_id, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 4, ?, ?, ?, ?, ?, 'adjustment', ?)");
         $stmt->execute([$product_id, $quantity, $previous_stock, $new_stock, $reason, $adjustment_id, $_SESSION['user_id']]);
 
@@ -115,26 +163,61 @@ $stmt = $pdo->query("
 ");
 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch recent stock adjustments
-$stmt = $pdo->query("
-    SELECT 
-        sa.*,
-        p.product_name,
-        u.name as uom_name,
-        at.name as adjustment_type_name
-    FROM stock_adjustment sa
-    JOIN products p ON sa.product_id = p.product_id
-    LEFT JOIN uom u ON p.uom_id = u.uom_id
-    LEFT JOIN adjustment_types at ON sa.adjustment_type_id = at.adjustment_type_id
-    ORDER BY sa.created_at DESC
-    LIMIT 20
-");
-$recent_adjustments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Fetch suppliers for the form
+$stmt = $pdo->query("SELECT supplier_id AS id, name FROM suppliers WHERE is_archive = 0 ORDER BY name");
+$suppliers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch recent stock adjustments with supplier information
+try {
+    // Try to fetch with supplier information first
+    $stmt = $pdo->query("
+        SELECT 
+            sa.*,
+            p.product_name,
+            u.name as uom_name,
+            at.name as adjustment_type_name,
+            s.name as supplier_name
+        FROM stock_adjustment sa
+        JOIN products p ON sa.product_id = p.product_id
+        LEFT JOIN uom u ON p.uom_id = u.uom_id
+        LEFT JOIN adjustment_types at ON sa.adjustment_type_id = at.adjustment_type_id
+        LEFT JOIN suppliers s ON sa.supplier_id = s.supplier_id
+        ORDER BY sa.created_at DESC
+        LIMIT 20
+    ");
+    $recent_adjustments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    // Fallback query without supplier information if columns don't exist
+    $stmt = $pdo->query("
+        SELECT 
+            sa.*,
+            p.product_name,
+            u.name as uom_name,
+            at.name as adjustment_type_name,
+            NULL as supplier_name
+        FROM stock_adjustment sa
+        JOIN products p ON sa.product_id = p.product_id
+        LEFT JOIN uom u ON p.uom_id = u.uom_id
+        LEFT JOIN adjustment_types at ON sa.adjustment_type_id = at.adjustment_type_id
+        ORDER BY sa.created_at DESC
+        LIMIT 20
+    ");
+    $recent_adjustments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 // Calculate adjustment statistics
 $total_adjustments = $pdo->query("SELECT COUNT(*) FROM stock_adjustment")->fetchColumn();
 $adjustments_today = $pdo->query("SELECT COUNT(*) FROM stock_adjustment WHERE DATE(created_at) = CURDATE()")->fetchColumn();
 $adjustments_this_month = $pdo->query("SELECT COUNT(*) FROM stock_adjustment WHERE MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())")->fetchColumn();
+
+// Calculate adjustment type statistics
+$increase_count = $pdo->query("SELECT COUNT(*) FROM stock_adjustment WHERE adjustment_type_id = 1")->fetchColumn();
+$decrease_count = $pdo->query("SELECT COUNT(*) FROM stock_adjustment WHERE adjustment_type_id = 2")->fetchColumn();
+$correction_count = $pdo->query("SELECT COUNT(*) FROM stock_adjustment WHERE adjustment_type_id = 3")->fetchColumn();
+
+// Calculate total quantity adjusted
+$total_increased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adjustment WHERE adjustment_type_id = 1")->fetchColumn();
+$total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adjustment WHERE adjustment_type_id = 2")->fetchColumn();
 ?>
 
 <!DOCTYPE html>
@@ -277,6 +360,60 @@ $adjustments_this_month = $pdo->query("SELECT COUNT(*) FROM stock_adjustment WHE
             </div>
         </div>
 
+        <!-- Adjustment Type Statistics -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-4 col-md-6">
+                <div class="stat-card">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon bg-success">
+                            <i class="fa fa-arrow-up"></i>
+                        </div>
+                        <div class="ms-3">
+                            <h4 class="fw-bold mb-0"><?= $increase_count ?></h4>
+                            <small class="text-muted text-uppercase">Stock Increases</small>
+                            <div class="mt-1">
+                                <small class="text-success fw-semibold">+<?= number_format($total_increased) ?> units</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4 col-md-6">
+                <div class="stat-card">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon bg-danger">
+                            <i class="fa fa-arrow-down"></i>
+                        </div>
+                        <div class="ms-3">
+                            <h4 class="fw-bold mb-0"><?= $decrease_count ?></h4>
+                            <small class="text-muted text-uppercase">Stock Decreases</small>
+                            <div class="mt-1">
+                                <small class="text-danger fw-semibold">-<?= number_format($total_decreased) ?> units</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4 col-md-6">
+                <div class="stat-card">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon bg-info">
+                            <i class="fa fa-edit"></i>
+                        </div>
+                        <div class="ms-3">
+                            <h4 class="fw-bold mb-0"><?= $correction_count ?></h4>
+                            <small class="text-muted text-uppercase">Stock Corrections</small>
+                            <div class="mt-1">
+                                <small class="text-info fw-semibold">Manual fixes</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Products List -->
         <div class="table-card mb-4">
             <div class="card-header bg-transparent border-0 p-4">
@@ -330,44 +467,117 @@ $adjustments_this_month = $pdo->query("SELECT COUNT(*) FROM stock_adjustment WHE
         <!-- Recent Adjustments -->
         <div class="table-card">
             <div class="card-header bg-transparent border-0 p-4">
-                <h5 class="fw-bold mb-0">Recent Stock Adjustments</h5>
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0">Recent Stock Adjustments</h5>
+                    <small class="text-muted">Showing last 20 adjustments</small>
+                </div>
             </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="fw-semibold">Date</th>
+                            <th class="fw-semibold">Date & Time</th>
                             <th class="fw-semibold">Product</th>
                             <th class="fw-semibold">Type</th>
                             <th class="fw-semibold">Quantity</th>
-                            <th class="fw-semibold">Previous Stock</th>
-                            <th class="fw-semibold">New Stock</th>
+                            <th class="fw-semibold">Stock Change</th>
+                            <th class="fw-semibold">Supplier</th>
+                            <th class="fw-semibold">Expiration</th>
                             <th class="fw-semibold">Reason</th>
+                            <th class="fw-semibold">Notes</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($recent_adjustments as $adjustment): ?>
+                        <?php if (empty($recent_adjustments)): ?>
                             <tr>
-                                <td><?= date('M d, Y H:i', strtotime($adjustment['created_at'])) ?></td>
-                                <td><?= htmlspecialchars($adjustment['product_name']) ?></td>
-                                <td>
-                                    <?php
-                                    $type = $adjustment['adjustment_type_id'];
-                                    if ($type == 1) {
-                                        echo '<span class="badge bg-success">Increase</span>';
-                                    } elseif ($type == 2) {
-                                        echo '<span class="badge bg-danger">Decrease</span>';
-                                    } else {
-                                        echo '<span class="badge bg-info">Correction</span>';
-                                    }
-                                    ?>
+                                <td colspan="9" class="text-center text-muted py-4">
+                                    <i class="fa fa-inbox fa-2x mb-2"></i><br>
+                                    No stock adjustments found
                                 </td>
-                                <td><?= $adjustment['quantity'] ?> <?= htmlspecialchars($adjustment['uom_name']) ?></td>
-                                <td><?= $adjustment['previous_stock'] ?></td>
-                                <td><?= $adjustment['new_stock'] ?></td>
-                                <td><?= htmlspecialchars($adjustment['reason']) ?></td>
                             </tr>
-                        <?php endforeach; ?>
+                        <?php else: ?>
+                            <?php foreach ($recent_adjustments as $adjustment): ?>
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold"><?= date('M d, Y', strtotime($adjustment['created_at'])) ?></div>
+                                        <small class="text-muted"><?= date('H:i', strtotime($adjustment['created_at'])) ?></small>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold"><?= htmlspecialchars($adjustment['product_name']) ?></div>
+                                        <small class="text-muted">ID: <?= $adjustment['product_id'] ?></small>
+                                    </td>
+                                    <td>
+                                        <?php
+                                        $type = $adjustment['adjustment_type_id'];
+                                        if ($type == 1) {
+                                            echo '<span class="badge bg-success"><i class="fa fa-plus me-1"></i>Increase</span>';
+                                        } elseif ($type == 2) {
+                                            echo '<span class="badge bg-danger"><i class="fa fa-minus me-1"></i>Decrease</span>';
+                                        } else {
+                                            echo '<span class="badge bg-info"><i class="fa fa-edit me-1"></i>Correction</span>';
+                                        }
+                                        ?>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold"><?= $adjustment['quantity'] ?></span>
+                                        <small class="text-muted d-block"><?= htmlspecialchars($adjustment['uom_name']) ?></small>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <span class="text-muted me-2"><?= $adjustment['previous_stock'] ?></span>
+                                            <i class="fa fa-arrow-right text-muted me-2"></i>
+                                            <span class="fw-semibold"><?= $adjustment['new_stock'] ?></span>
+                                        </div>
+                                        <?php 
+                                        $change = $adjustment['new_stock'] - $adjustment['previous_stock'];
+                                        if ($change > 0) {
+                                            echo '<small class="text-success"><i class="fa fa-arrow-up me-1"></i>+' . $change . '</small>';
+                                        } elseif ($change < 0) {
+                                            echo '<small class="text-danger"><i class="fa fa-arrow-down me-1"></i>' . $change . '</small>';
+                                        } else {
+                                            echo '<small class="text-muted">No change</small>';
+                                        }
+                                        ?>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($adjustment['supplier_name'])): ?>
+                                            <span class="badge bg-primary"><?= htmlspecialchars($adjustment['supplier_name']) ?></span>
+                                        <?php else: ?>
+                                            <span class="text-muted">N/A</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($adjustment['expiration_date'])): ?>
+                                            <?php 
+                                            $exp_date = strtotime($adjustment['expiration_date']);
+                                            $today = time();
+                                            $days_diff = ($exp_date - $today) / (60 * 60 * 24);
+                                            
+                                            if ($days_diff < 0) {
+                                                echo '<span class="badge bg-danger">Expired</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
+                                            } elseif ($days_diff <= 7) {
+                                                echo '<span class="badge bg-warning">Expires Soon</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
+                                            } else {
+                                                echo '<span class="badge bg-success">Valid</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
+                                            }
+                                            ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">N/A</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold"><?= htmlspecialchars($adjustment['reason']) ?></span>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($adjustment['notes'])): ?>
+                                            <span class="text-muted"><?= htmlspecialchars($adjustment['notes']) ?></span>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -420,6 +630,19 @@ $adjustments_this_month = $pdo->query("SELECT COUNT(*) FROM stock_adjustment WHE
                                     <option value="Manual Correction">Manual Correction</option>
                                     <option value="Other">Other</option>
                                 </select>
+                            </div>
+                            <div class="col-md-6" id="supplierField" style="display: none;">
+                                <label class="form-label fw-semibold">Supplier</label>
+                                <select name="supplier_id" class="form-select">
+                                    <option value="">Select Supplier (Optional)</option>
+                                    <?php foreach ($suppliers as $supplier): ?>
+                                        <option value="<?= $supplier['id'] ?>"><?= htmlspecialchars($supplier['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6" id="expirationField" style="display: none;">
+                                <label class="form-label fw-semibold">Expiration Date</label>
+                                <input type="date" name="expiration_date" class="form-control">
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold">Notes</label>
@@ -485,8 +708,25 @@ $adjustments_this_month = $pdo->query("SELECT COUNT(*) FROM stock_adjustment WHE
 
         // Add event listeners
         document.getElementById('adjustProductId').addEventListener('change', updateStockDisplay);
-        document.getElementById('adjustmentType').addEventListener('change', updateStockDisplay);
+        document.getElementById('adjustmentType').addEventListener('change', function() {
+            updateStockDisplay();
+            toggleAdditionalFields();
+        });
         document.getElementById('quantityInput').addEventListener('input', updateStockDisplay);
+
+        function toggleAdditionalFields() {
+            const adjustmentType = document.getElementById('adjustmentType').value;
+            const supplierField = document.getElementById('supplierField');
+            const expirationField = document.getElementById('expirationField');
+            
+            if (adjustmentType === 'add') {
+                supplierField.style.display = 'block';
+                expirationField.style.display = 'block';
+            } else {
+                supplierField.style.display = 'none';
+                expirationField.style.display = 'none';
+            }
+        }
     </script>
 </body>
 </html>
