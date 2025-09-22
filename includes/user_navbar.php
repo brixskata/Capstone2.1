@@ -129,7 +129,7 @@ if (!empty($_SESSION['cart'])) {
 
     <!-- Desktop Icons -->
     <div class="d-none d-lg-flex align-items-center gap-4">
-      <a class="text-dark <?php if ($current == 'favorite.php') echo 'fw-bold'; ?>" href="favorite.php">
+      <a class="text-dark <?php if ($current == 'favorites.php') echo 'fw-bold'; ?>" href="favorites.php">
         <i class="fas fa-heart fs-5"></i>
       </a>
       <?php if (isset($_SESSION['user_id'])): ?>

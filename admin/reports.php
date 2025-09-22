@@ -402,7 +402,7 @@ $topProducts = $topProductsStmt->fetchAll(PDO::FETCH_ASSOC);
                       <span class="badge
                         <?= $row['status'] === 'Pending' ? 'bg-warning text-dark' : '' ?>
                         <?= $row['status'] === 'To Ship' ? 'bg-info' : '' ?>
-                        <?= $row['status'] === 'Shipped' ? 'bg-secondary' : '' ?>
+                        <?= $row['status'] === 'Out for delivery' ? 'bg-secondary' : '' ?>
                         <?= $row['status'] === 'Completed' ? 'bg-success' : '' ?>
                         <?= $row['status'] === 'Cancelled' ? 'bg-danger' : '' ?>">
                         <?= htmlspecialchars($row['status']) ?>
@@ -646,7 +646,7 @@ $topProducts = $topProductsStmt->fetchAll(PDO::FETCH_ASSOC);
                         <span class="badge
                           <?= $row['status'] === 'Pending' ? 'bg-warning text-dark' : '' ?>
                           <?= $row['status'] === 'To Ship' ? 'bg-info' : '' ?>
-                          <?= $row['status'] === 'Shipped' ? 'bg-secondary' : '' ?>
+                          <?= $row['status'] === 'Out for delivery' ? 'bg-secondary' : '' ?>
                           <?= $row['status'] === 'Completed' ? 'bg-success' : '' ?>
                           <?= $row['status'] === 'Cancelled' ? 'bg-danger' : '' ?>">
                           <?= htmlspecialchars($row['status']) ?>

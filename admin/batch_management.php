@@ -101,25 +101,134 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <?php include 'includes/admin_styles.php'; ?>
     <style>
+        :root {
+            --bs-primary: #7F1734;
+            --bs-secondary: #6c757d;
+            --bs-success: #198754;
+            --bs-danger: #dc3545;
+            --bs-warning: #ffc107;
+            --bs-info: #0dcaf0;
+            --bs-light: #f8f9fa;
+            --bs-dark: #212529;
+        }
+        
+        /* Override admin styles for this page */
+        .main-content {
+            background-color: var(--bg-primary) !important;
+        }
+        
+        .main-container {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .page-header {
+            background: var(--bs-primary);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+        }
+        
+        .page-header h2 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+
+        /* Analytics Cards - Light Version */
+        .analytics-card {
+            background: white;
+            color: var(--bs-dark);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .analytics-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--bs-primary);
+        }
+
+        .analytics-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            background: rgba(127, 23, 52, 0.1);
+            color: var(--bs-primary);
+        }
+
+        .card-content {
+            flex: 1;
+        }
+
+        .card-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bs-primary);
+            margin: 0;
+            line-height: 1;
+        }
+
+        .card-label {
+            color: var(--bs-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 0.5rem 0 0 0;
+        }
+
         .batch-card {
             background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
-            margin-bottom: 20px;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        
+        .batch-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.12);
         }
         
         .batch-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 15px;
         }
         
         .batch-number {
             font-weight: bold;
-            color: #7F1734;
+            color: var(--bs-primary);
             font-size: 1.1rem;
         }
         
@@ -150,6 +259,20 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
         .quantity-fill.danger {
             background-color: #dc3545;
         }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 1rem;
+            }
+            
+            .page-header {
+                padding: 1.5rem;
+            }
+            
+            .page-header h2 {
+                font-size: 1.5rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -158,40 +281,46 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
 
     <!-- Main Content -->
     <main class="main-content" id="mainContent">
-        <?php if (isset($_SESSION['success'])): ?>
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        <?php endif; ?>
-        
-        <?php if (isset($_SESSION['error'])): ?>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        <?php endif; ?>
+        <div class="main-container">
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
 
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h1 class="h3 fw-bold text-dark mb-2">
-                    <i class="fa fa-boxes me-3" style="color: #7F1734;"></i>Batch Management
-                </h1>
-                <p class="text-muted">Track product batches with FIFO inventory management</p>
+            <!-- Page Header -->
+            <div class="page-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2>
+                            <i class="fa fa-boxes me-3"></i>Batch Management
+                        </h2>
+                        <p class="mb-0 opacity-75">Track product batches with FIFO inventory management</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <?php if ($expiring_count > 0): ?>
+                            <span class="badge" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);"><?= $expiring_count ?> Expiring Soon</span>
+                        <?php endif; ?>
+                        <?php if ($expired_count > 0): ?>
+                            <span class="badge" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);"><?= $expired_count ?> Expired</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
-            <div class="d-flex gap-2">
-                <?php if ($expiring_count > 0): ?>
-                    <span class="badge bg-warning fs-6"><?= $expiring_count ?> Expiring Soon</span>
-                <?php endif; ?>
-                <?php if ($expired_count > 0): ?>
-                    <span class="badge bg-danger fs-6"><?= $expired_count ?> Expired</span>
-                <?php endif; ?>
-            </div>
-        </div>
 
-        <!-- Filters -->
-        <div class="batch-card mb-4">
-            <h5 class="fw-bold mb-3">Filters</h5>
+            <!-- Filters -->
+            <div class="batch-card mb-4">
+                <h5 class="fw-bold mb-3 text-dark">
+                    <i class="fas fa-filter me-2"></i>Filters
+                </h5>
             <form method="GET" class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Product</label>
@@ -222,15 +351,15 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">&nbsp;</label>
-                    <button type="submit" class="btn btn-primary d-block w-100">
+                    <button type="submit" class="btn d-block w-100" style="background: #7F1734; color: white; border-radius: 8px;">
                         <i class="fa fa-filter me-1"></i>Filter
                     </button>
                 </div>
             </form>
         </div>
 
-        <!-- Batches List -->
-        <div class="row">
+            <!-- Batches List -->
+            <div class="row">
             <?php if (empty($batches)): ?>
                 <div class="col-12">
                     <div class="batch-card text-center">
@@ -247,9 +376,9 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                                 <div class="batch-number"><?= htmlspecialchars($batch['batch_number']) ?></div>
                                 <div>
                                     <?php if ($batch['is_active']): ?>
-                                        <span class="badge bg-success">Active</span>
+                                        <span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Active</span>
                                     <?php else: ?>
-                                        <span class="badge bg-secondary">Inactive</span>
+                                        <span class="badge" style="background: #e2e3e5; color: #383d41; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Inactive</span>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -280,11 +409,11 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                                     <?php 
                                     $days_until_expiry = $batch['days_until_expiry'];
                                     if ($days_until_expiry < 0) {
-                                        echo '<span class="badge bg-danger expiry-badge">Expired ' . abs($days_until_expiry) . ' days ago</span>';
+                                        echo '<span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Expired ' . abs($days_until_expiry) . ' days ago</span>';
                                     } elseif ($days_until_expiry <= 7) {
-                                        echo '<span class="badge bg-warning expiry-badge">Expires in ' . $days_until_expiry . ' days</span>';
+                                        echo '<span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Expires in ' . $days_until_expiry . ' days</span>';
                                     } else {
-                                        echo '<span class="badge bg-success expiry-badge">Expires ' . date('M d, Y', strtotime($batch['expiration_date'])) . '</span>';
+                                        echo '<span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Expires ' . date('M d, Y', strtotime($batch['expiration_date'])) . '</span>';
                                     }
                                     ?>
                                 </div>
@@ -298,14 +427,14 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                             </div>
                             
                             <div class="d-flex gap-2">
-                                <button class="btn btn-sm btn-outline-info" onclick="viewBatchDetails(<?= $batch['batch_id'] ?>)">
+                                <button class="btn btn-sm" style="background: #cce5ff; color: #004085; border-radius: 8px;" onclick="viewBatchDetails(<?= $batch['batch_id'] ?>)">
                                     <i class="fa fa-eye me-1"></i>Details
                                 </button>
                                 <?php if ($batch['is_active']): ?>
                                     <form method="POST" style="display: inline;">
                                         <input type="hidden" name="action" value="deactivate_batch">
                                         <input type="hidden" name="batch_id" value="<?= $batch['batch_id'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-warning" onclick="return confirm('Deactivate this batch?')">
+                                        <button type="submit" class="btn btn-sm" style="background: #fff3cd; color: #856404; border-radius: 8px;" onclick="return confirm('Deactivate this batch?')">
                                             <i class="fa fa-pause me-1"></i>Deactivate
                                         </button>
                                     </form>
@@ -313,7 +442,7 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                                     <form method="POST" style="display: inline;">
                                         <input type="hidden" name="action" value="activate_batch">
                                         <input type="hidden" name="batch_id" value="<?= $batch['batch_id'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <button type="submit" class="btn btn-sm" style="background: #d4edda; color: #155724; border-radius: 8px;">
                                             <i class="fa fa-play me-1"></i>Activate
                                         </button>
                                     </form>
@@ -323,6 +452,7 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                     </div>
                 <?php endforeach; ?>
             <?php endif; ?>
+        </div>
         </div>
     </main>
 
@@ -362,3 +492,6 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
     </script>
 </body>
 </html>
+
+
+

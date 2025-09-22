@@ -106,36 +106,145 @@ if ($filter === 'low_stock') {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <?php include 'includes/admin_styles.php'; ?>
     <style>
-        .stat-card {
+        :root {
+            --bs-primary: #7F1734;
+            --bs-secondary: #6c757d;
+            --bs-success: #198754;
+            --bs-danger: #dc3545;
+            --bs-warning: #ffc107;
+            --bs-info: #0dcaf0;
+            --bs-light: #f8f9fa;
+            --bs-dark: #212529;
+        }
+        
+        /* Override admin styles for this page */
+        .main-content {
+            background-color: var(--bg-primary) !important;
+        }
+        
+        .main-container {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .page-header {
+            background: var(--bs-primary);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+        }
+        
+        .page-header h2 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+
+        /* Analytics Cards - Light Version */
+        .analytics-card {
             background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            color: var(--bs-dark);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
-            transition: transform 0.2s ease;
+            transition: all 0.3s ease;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
         }
-        
-        .stat-card:hover {
+
+        .analytics-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--bs-primary);
+        }
+
+        .analytics-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
         }
-        
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 10px;
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
-            color: white;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            background: rgba(127, 23, 52, 0.1);
+            color: var(--bs-primary);
+        }
+
+        .card-content {
+            flex: 1;
+        }
+
+        .card-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bs-primary);
+            margin: 0;
+            line-height: 1;
+        }
+
+        .card-label {
+            color: var(--bs-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 0.5rem 0 0 0;
         }
         
         .table-card {
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
+            color: var(--text-primary) !important;
+        }
+        
+        .table-card .card-header {
+            background: transparent;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .table-card .card-body {
+            padding: 1.5rem;
+        }
+        
+        .table-card .table {
+            margin-bottom: 0;
+        }
+        
+        .table-card .table th {
+            border: none;
+            padding: 1rem 1.25rem;
+            font-weight: 600;
+            color: var(--bs-dark);
+        }
+        
+        .table-card .table td {
+            border: none;
+            padding: 1rem 1.25rem;
+            vertical-align: middle;
+        }
+        
+        .table-card .table-light {
+            background: #f8f9fa;
         }
         
         .product-image {
@@ -145,26 +254,34 @@ if ($filter === 'low_stock') {
             border-radius: 6px;
         }
         
-        .stock-badge {
-            font-size: 0.75rem;
-            padding: 4px 8px;
-            border-radius: 12px;
-        }
-        
         .low-stock-item {
             background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
+            border-left: 4px solid #856404;
         }
         
         .out-of-stock-item {
-            background-color: #f8d7da;
-            border-left: 4px solid #dc3545;
+            background-color: #f5c6cb;
+            border-left: 4px solid #721c24;
         }
         
         .filter-btn {
             border-radius: 20px;
             padding: 8px 16px;
             font-size: 0.875rem;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 1rem;
+            }
+            
+            .page-header {
+                padding: 1.5rem;
+            }
+            
+            .page-header h2 {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
@@ -174,109 +291,105 @@ if ($filter === 'low_stock') {
 
     <!-- Main Content -->
     <main class="main-content" id="mainContent">
-        <?php if (isset($_SESSION['success'])): ?>
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        <?php endif; ?>
-        
-        <?php if (isset($_SESSION['error'])): ?>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        <?php endif; ?>
+        <div class="main-container">
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
 
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h1 class="h3 fw-bold text-dark mb-2">
-                    <i class="fa fa-chart-line me-3" style="color: #7F1734;"></i>Stock Levels
-                </h1>
-                <p class="text-muted">Monitor real-time stock levels and manage reorder points</p>
+            <!-- Page Header -->
+            <div class="page-header">
+                <div>
+                    <h2>
+                        <i class="fa fa-chart-line me-3"></i>Stock Levels
+                    </h2>
+                    <p class="mb-0 opacity-75">Monitor real-time stock levels and manage reorder points</p>
+                </div>
             </div>
-        </div>
 
-        <!-- Statistics -->
-        <div class="row g-4 mb-4">
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-info">
+            <!-- Analytics Cards -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-boxes"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $total_products ?></h4>
-                            <small class="text-muted text-uppercase">Total Products</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $total_products ?></h3>
+                            <p class="card-label">Total Products</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-success">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-check-circle"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $in_stock_products ?></h4>
-                            <small class="text-muted text-uppercase">In Stock</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $in_stock_products ?></h3>
+                            <p class="card-label">In Stock</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-warning">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-exclamation-triangle"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $low_stock_products ?></h4>
-                            <small class="text-muted text-uppercase">Low Stock</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $low_stock_products ?></h3>
+                            <p class="card-label">Low Stock</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-danger">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-times-circle"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $out_of_stock_products ?></h4>
-                            <small class="text-muted text-uppercase">Out of Stock</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $out_of_stock_products ?></h3>
+                            <p class="card-label">Out of Stock</p>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Filters -->
-        <div class="d-flex gap-2 mb-4">
-            <a href="?filter=all" class="btn filter-btn <?= $filter === 'all' ? 'btn-primary' : 'btn-outline-primary' ?>">
-                All Products (<?= $total_products ?>)
-            </a>
-            <a href="?filter=in_stock" class="btn filter-btn <?= $filter === 'in_stock' ? 'btn-success' : 'btn-outline-success' ?>">
-                In Stock (<?= $in_stock_products ?>)
-            </a>
-            <a href="?filter=low_stock" class="btn filter-btn <?= $filter === 'low_stock' ? 'btn-warning' : 'btn-outline-warning' ?>">
-                Low Stock (<?= $low_stock_products ?>)
-            </a>
-            <a href="?filter=out_of_stock" class="btn filter-btn <?= $filter === 'out_of_stock' ? 'btn-danger' : 'btn-outline-danger' ?>">
-                Out of Stock (<?= $out_of_stock_products ?>)
-            </a>
-        </div>
-
-        <!-- Stock Levels Table -->
-        <div class="table-card">
-            <div class="card-header bg-transparent border-0 p-4">
-                <h5 class="fw-bold mb-0">Current Stock Levels</h5>
+            <!-- Filters -->
+            <div class="d-flex gap-2 mb-4">
+                <a href="?filter=all" class="btn filter-btn <?= $filter === 'all' ? 'btn-primary' : 'btn-outline-primary' ?>">
+                    All Products (<?= $total_products ?>)
+                </a>
+                <a href="?filter=in_stock" class="btn filter-btn <?= $filter === 'in_stock' ? 'btn-success' : 'btn-outline-success' ?>">
+                    In Stock (<?= $in_stock_products ?>)
+                </a>
+                <a href="?filter=low_stock" class="btn filter-btn <?= $filter === 'low_stock' ? 'btn-warning' : 'btn-outline-warning' ?>">
+                    Low Stock (<?= $low_stock_products ?>)
+                </a>
+                <a href="?filter=out_of_stock" class="btn filter-btn <?= $filter === 'out_of_stock' ? 'btn-danger' : 'btn-outline-danger' ?>">
+                    Out of Stock (<?= $out_of_stock_products ?>)
+                </a>
             </div>
+
+            <!-- Stock Levels Table -->
+            <div class="table-card">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fas fa-list-alt me-2"></i>Current Stock Levels
+                    </h5>
+                </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
@@ -312,11 +425,11 @@ if ($filter === 'low_stock') {
                                 </td>
                                 <td>
                                     <?php if ((int)$product['stock'] === 0): ?>
-                                        <span class="badge bg-danger stock-badge">Out of Stock</span>
+                                        <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Out of Stock</span>
                                     <?php elseif ((int)$product['stock'] <= (int)$product['reorder_point']): ?>
-                                        <span class="badge bg-warning stock-badge">Low Stock</span>
+                                        <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Low Stock</span>
                                     <?php else: ?>
-                                        <span class="badge bg-success stock-badge">In Stock</span>
+                                        <span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">In Stock</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-muted">
@@ -324,10 +437,10 @@ if ($filter === 'low_stock') {
                                 </td>
                                 <td>
                                     <div class="btn-group" role="group">
-                                        <button class="btn btn-sm btn-info" onclick="openReorderModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>', <?= $product['reorder_point'] ?>)">
+                                        <button class="btn btn-sm" style="background: #cce5ff; color: #004085; border-radius: 8px;" onclick="openReorderModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>', <?= $product['reorder_point'] ?>)">
                                             <i class="fa fa-edit me-1"></i>Edit Reorder Point
                                         </button>
-                                        <a href="restocking.php" class="btn btn-sm btn-success">
+                                        <a href="restocking.php" class="btn btn-sm" style="background: #d4edda; color: #155724; border-radius: 8px;">
                                             <i class="fa fa-plus me-1"></i>Restock
                                         </a>
                                     </div>
@@ -337,6 +450,7 @@ if ($filter === 'low_stock') {
                     </tbody>
                 </table>
             </div>
+        </div>
         </div>
     </main>
 
@@ -366,7 +480,7 @@ if ($filter === 'low_stock') {
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn text-white fw-bold" style="background-color: #7F1734;">
+                        <button type="submit" class="btn text-white fw-bold" style="background-color: #7F1734; border-radius: 8px;">
                             <i class="fa fa-save me-2"></i>Update Reorder Point
                         </button>
                     </div>

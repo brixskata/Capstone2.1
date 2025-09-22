@@ -34,6 +34,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
         if ($quantity <= 0) {
             throw new Exception("Quantity must be greater than 0.");
         }
+        
+        // Validate expiration date for stock additions
+        if ($adjustment_type === 'add' && !empty($expiration_date)) {
+            $restock_date = date('Y-m-d'); // Use current date as restock date for adjustments
+            $expiration_timestamp = strtotime($expiration_date);
+            $restock_timestamp = strtotime($restock_date);
+            $days_until_expiry = floor(($expiration_timestamp - $restock_timestamp) / (60 * 60 * 24));
+            
+            if ($days_until_expiry < 180) {
+                throw new Exception("Expiration date is too close to adjustment date. Products must have at least 6 months (180 days) before expiration. Current: {$days_until_expiry} days.");
+            }
+        }
 
         $pdo->beginTransaction();
 
@@ -167,6 +179,28 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $stmt = $pdo->query("SELECT supplier_id AS id, name FROM suppliers WHERE is_archive = 0 ORDER BY name");
 $suppliers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Handle AJAX request for getting suppliers by product
+if ($_SERVER['REQUEST_METHOD'] == 'GET' && isset($_GET['action']) && $_GET['action'] == 'get_suppliers_by_product') {
+    $product_id = (int)$_GET['product_id'];
+    
+    $stmt = $pdo->prepare("
+        SELECT 
+            s.supplier_id AS id,
+            s.name,
+            sp.is_primary
+        FROM suppliers s
+        INNER JOIN supplier_products sp ON s.supplier_id = sp.supplier_id
+        WHERE sp.product_id = ? AND sp.is_active = 1 AND s.is_archive = 0
+        ORDER BY sp.is_primary DESC, s.name
+    ");
+    $stmt->execute([$product_id]);
+    $product_suppliers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    header('Content-Type: application/json');
+    echo json_encode($product_suppliers);
+    exit;
+}
+
 // Fetch recent stock adjustments with supplier information
 try {
     // Try to fetch with supplier information first
@@ -230,42 +264,165 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <?php include 'includes/admin_styles.php'; ?>
     <style>
-        .stat-card {
+        :root {
+            --bs-primary: #7F1734;
+            --bs-secondary: #6c757d;
+            --bs-success: #198754;
+            --bs-danger: #dc3545;
+            --bs-warning: #ffc107;
+            --bs-info: #0dcaf0;
+            --bs-light: #f8f9fa;
+            --bs-dark: #212529;
+        }
+        
+        /* Override admin styles for this page */
+        .main-content {
+            background-color: var(--bg-primary) !important;
+        }
+        
+        .main-container {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .page-header {
+            background: var(--bs-primary);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+        }
+        
+        .page-header h2 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+
+        /* Analytics Cards - Light Version */
+        .analytics-card {
             background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            color: var(--bs-dark);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
-            transition: transform 0.2s ease;
+            transition: all 0.3s ease;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
         }
-        
-        .stat-card:hover {
+
+        .analytics-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--bs-primary);
+        }
+
+        .analytics-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
         }
-        
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 10px;
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
-            color: white;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            background: rgba(127, 23, 52, 0.1);
+            color: var(--bs-primary);
+        }
+
+        .card-content {
+            flex: 1;
+        }
+
+        .card-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bs-primary);
+            margin: 0;
+            line-height: 1;
+        }
+
+        .card-label {
+            color: var(--bs-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 0.5rem 0 0 0;
         }
         
         .table-card {
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
+            color: var(--text-primary) !important;
+        }
+        
+        .table-card .card-header {
+            background: transparent;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .table-card .card-body {
+            padding: 1.5rem;
+        }
+        
+        .table-card .table {
+            margin-bottom: 0;
+        }
+        
+        .table-card .table th {
+            border: none;
+            padding: 1rem 1.25rem;
+            font-weight: 600;
+            color: var(--bs-dark);
+        }
+        
+        .table-card .table td {
+            border: none;
+            padding: 1rem 1.25rem;
+            vertical-align: middle;
+        }
+        
+        .table-card .table-light {
+            background: #f8f9fa;
         }
         
         .adjustment-badge {
             font-size: 0.75rem;
             padding: 4px 8px;
             border-radius: 12px;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 1rem;
+            }
+            
+            .page-header {
+                padding: 1.5rem;
+            }
+            
+            .page-header h2 {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
@@ -275,150 +432,136 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
 
     <!-- Main Content -->
     <main class="main-content" id="mainContent">
-        <?php if (isset($_SESSION['success'])): ?>
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        <?php endif; ?>
-        
-        <?php if (isset($_SESSION['error'])): ?>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        <?php endif; ?>
+        <div class="main-container">
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
 
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h1 class="h3 fw-bold text-dark mb-2">
-                    <i class="fa fa-edit me-3" style="color: #7F1734;"></i>Stock Adjustment
-                </h1>
-                <p class="text-muted">Correct discrepancies between physical count and system records</p>
+            <!-- Page Header -->
+            <div class="page-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2>
+                            <i class="fa fa-edit me-3"></i>Stock Adjustment
+                        </h2>
+                        <p class="mb-0 opacity-75">Correct discrepancies between physical count and system records</p>
+                    </div>
+                    <button class="btn text-white fw-bold px-4" style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);" data-bs-toggle="modal" data-bs-target="#adjustStockModal">
+                        <i class="fa fa-edit me-2"></i>Adjust Stock
+                    </button>
+                </div>
             </div>
-            <button class="btn text-white fw-bold px-4" style="background-color: #7F1734;" data-bs-toggle="modal" data-bs-target="#adjustStockModal">
-                <i class="fa fa-edit me-2"></i>Adjust Stock
-            </button>
-        </div>
 
-        <!-- Statistics -->
-        <div class="row g-4 mb-4">
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-info">
+            <!-- Analytics Cards -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-calculator"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $total_adjustments ?></h4>
-                            <small class="text-muted text-uppercase">Total Adjustments</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $total_adjustments ?></h3>
+                            <p class="card-label">Total Adjustments</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-success">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-calendar-day"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $adjustments_today ?></h4>
-                            <small class="text-muted text-uppercase">Today</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $adjustments_today ?></h3>
+                            <p class="card-label">Today</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-warning">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-calendar-alt"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $adjustments_this_month ?></h4>
-                            <small class="text-muted text-uppercase">This Month</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $adjustments_this_month ?></h3>
+                            <p class="card-label">This Month</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-primary">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-boxes"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= count($products) ?></h4>
-                            <small class="text-muted text-uppercase">Products</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= count($products) ?></h3>
+                            <p class="card-label">Products</p>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Adjustment Type Statistics -->
-        <div class="row g-4 mb-4">
-            <div class="col-lg-4 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-success">
+            <!-- Adjustment Type Statistics -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-4 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-arrow-up"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $increase_count ?></h4>
-                            <small class="text-muted text-uppercase">Stock Increases</small>
-                            <div class="mt-1">
-                                <small class="text-success fw-semibold">+<?= number_format($total_increased) ?> units</small>
-                            </div>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $increase_count ?></h3>
+                            <p class="card-label">Stock Increases</p>
+                            <small class="text-white-50">+<?= number_format($total_increased) ?> units</small>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-4 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-danger">
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-arrow-down"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $decrease_count ?></h4>
-                            <small class="text-muted text-uppercase">Stock Decreases</small>
-                            <div class="mt-1">
-                                <small class="text-danger fw-semibold">-<?= number_format($total_decreased) ?> units</small>
-                            </div>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $decrease_count ?></h3>
+                            <p class="card-label">Stock Decreases</p>
+                            <small class="text-white-50">-<?= number_format($total_decreased) ?> units</small>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-4 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-info">
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-edit"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $correction_count ?></h4>
-                            <small class="text-muted text-uppercase">Stock Corrections</small>
-                            <div class="mt-1">
-                                <small class="text-info fw-semibold">Manual fixes</small>
-                            </div>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $correction_count ?></h3>
+                            <p class="card-label">Stock Corrections</p>
+                            <small class="text-white-50">Manual fixes</small>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Products List -->
-        <div class="table-card mb-4">
-            <div class="card-header bg-transparent border-0 p-4">
-                <h5 class="fw-bold mb-0">Products Available for Adjustment</h5>
-            </div>
+            <!-- Products List -->
+            <div class="table-card mb-4">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fas fa-list-alt me-2"></i>Products Available for Adjustment
+                    </h5>
+                </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
@@ -445,15 +588,15 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                                 <td><?= $product['reorder_point'] ?></td>
                                 <td>
                                     <?php if ((int)$product['stock'] === 0): ?>
-                                        <span class="badge bg-danger adjustment-badge">Out of Stock</span>
+                                        <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Out of Stock</span>
                                     <?php elseif ((int)$product['stock'] <= (int)$product['reorder_point']): ?>
-                                        <span class="badge bg-warning adjustment-badge">Low Stock</span>
+                                        <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Low Stock</span>
                                     <?php else: ?>
-                                        <span class="badge bg-success adjustment-badge">In Stock</span>
+                                        <span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">In Stock</span>
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-info" onclick="openAdjustModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>', <?= (int)$product['stock'] ?>)">
+                                    <button class="btn btn-sm" style="background: #cce5ff; color: #004085; border-radius: 8px;" onclick="openAdjustModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>', <?= (int)$product['stock'] ?>)">
                                         <i class="fa fa-edit me-1"></i>Adjust
                                     </button>
                                 </td>
@@ -464,14 +607,16 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
             </div>
         </div>
 
-        <!-- Recent Adjustments -->
-        <div class="table-card">
-            <div class="card-header bg-transparent border-0 p-4">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="fw-bold mb-0">Recent Stock Adjustments</h5>
-                    <small class="text-muted">Showing last 20 adjustments</small>
+            <!-- Recent Adjustments -->
+            <div class="table-card">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0 text-dark">
+                            <i class="fas fa-history me-2"></i>Recent Stock Adjustments
+                        </h5>
+                        <small class="text-muted">Showing last 20 adjustments</small>
+                    </div>
                 </div>
-            </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
@@ -510,11 +655,11 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                                         <?php
                                         $type = $adjustment['adjustment_type_id'];
                                         if ($type == 1) {
-                                            echo '<span class="badge bg-success"><i class="fa fa-plus me-1"></i>Increase</span>';
+                                            echo '<span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><i class="fa fa-plus me-1"></i>Increase</span>';
                                         } elseif ($type == 2) {
-                                            echo '<span class="badge bg-danger"><i class="fa fa-minus me-1"></i>Decrease</span>';
+                                            echo '<span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><i class="fa fa-minus me-1"></i>Decrease</span>';
                                         } else {
-                                            echo '<span class="badge bg-info"><i class="fa fa-edit me-1"></i>Correction</span>';
+                                            echo '<span class="badge" style="background: #cce5ff; color: #004085; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><i class="fa fa-edit me-1"></i>Correction</span>';
                                         }
                                         ?>
                                     </td>
@@ -541,7 +686,7 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                                     </td>
                                     <td>
                                         <?php if (!empty($adjustment['supplier_name'])): ?>
-                                            <span class="badge bg-primary"><?= htmlspecialchars($adjustment['supplier_name']) ?></span>
+                                            <span class="badge" style="background: #e2e3e5; color: #383d41; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= htmlspecialchars($adjustment['supplier_name']) ?></span>
                                         <?php else: ?>
                                             <span class="text-muted">N/A</span>
                                         <?php endif; ?>
@@ -554,11 +699,11 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                                             $days_diff = ($exp_date - $today) / (60 * 60 * 24);
                                             
                                             if ($days_diff < 0) {
-                                                echo '<span class="badge bg-danger">Expired</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
+                                                echo '<span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Expired</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
                                             } elseif ($days_diff <= 7) {
-                                                echo '<span class="badge bg-warning">Expires Soon</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
+                                                echo '<span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Expires Soon</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
                                             } else {
-                                                echo '<span class="badge bg-success">Valid</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
+                                                echo '<span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Valid</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
                                             }
                                             ?>
                                         <?php else: ?>
@@ -581,6 +726,7 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                     </tbody>
                 </table>
             </div>
+        </div>
         </div>
     </main>
 
@@ -633,16 +779,21 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                             </div>
                             <div class="col-md-6" id="supplierField" style="display: none;">
                                 <label class="form-label fw-semibold">Supplier</label>
-                                <select name="supplier_id" class="form-select">
-                                    <option value="">Select Supplier (Optional)</option>
-                                    <?php foreach ($suppliers as $supplier): ?>
-                                        <option value="<?= $supplier['id'] ?>"><?= htmlspecialchars($supplier['name']) ?></option>
-                                    <?php endforeach; ?>
+                                <select name="supplier_id" id="supplierSelect" class="form-select">
+                                    <option value="">Select Product First</option>
                                 </select>
+                                <div class="form-text" id="supplierHelperText">
+                                    <i class="fa fa-info-circle me-1"></i>
+                                    <span id="supplierHelperMessage">Suppliers will be filtered based on the selected product</span>
+                                </div>
                             </div>
                             <div class="col-md-6" id="expirationField" style="display: none;">
                                 <label class="form-label fw-semibold">Expiration Date</label>
-                                <input type="date" name="expiration_date" class="form-control">
+                                <input type="date" name="expiration_date" id="expirationDateInput" class="form-control">
+                                <div class="form-text">
+                                    <i class="fa fa-info-circle me-1"></i>
+                                    Must be at least 6 months (180 days) after adjustment date to prevent waste
+                                </div>
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold">Notes</label>
@@ -660,7 +811,7 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn text-white fw-bold" style="background-color: #7F1734;">
+                        <button type="submit" class="btn text-white fw-bold" style="background-color: #7F1734; border-radius: 8px;">
                             <i class="fa fa-save me-2"></i>Adjust Stock
                         </button>
                     </div>
@@ -675,7 +826,11 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
         function openAdjustModal(productId, productName, currentStock) {
             const modal = new bootstrap.Modal(document.getElementById('adjustStockModal'));
             const select = document.querySelector('#adjustStockModal select[name="product_id"]');
-            if (select) select.value = productId;
+            if (select) {
+                select.value = productId;
+                // Trigger the change event to load suppliers for this product
+                select.dispatchEvent(new Event('change'));
+            }
             updateStockDisplay();
             modal.show();
         }
@@ -706,25 +861,152 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
             newStockDisplay.textContent = newStock;
         }
 
+        // Function to load suppliers for a selected product
+        function loadSuppliersForProduct(productId) {
+            const supplierSelect = document.getElementById('supplierSelect');
+            
+            if (!productId) {
+                supplierSelect.innerHTML = '<option value="">Select Product First</option>';
+                return;
+            }
+            
+            // Show loading state
+            supplierSelect.innerHTML = '<option value="">Loading suppliers...</option>';
+            supplierSelect.disabled = true;
+            
+            fetch(`stock_adjustment.php?action=get_suppliers_by_product&product_id=${productId}`)
+                .then(response => response.json())
+                .then(suppliers => {
+                    supplierSelect.innerHTML = '<option value="">Select Supplier</option>';
+                    
+                    if (suppliers.length === 0) {
+                        supplierSelect.innerHTML += '<option value="" disabled>No suppliers assigned to this product</option>';
+                    } else {
+                        suppliers.forEach(supplier => {
+                            const option = document.createElement('option');
+                            option.value = supplier.id;
+                            option.textContent = supplier.name + (supplier.is_primary ? ' (Primary)' : '');
+                            supplierSelect.appendChild(option);
+                        });
+                    }
+                    
+                    supplierSelect.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Error loading suppliers:', error);
+                    supplierSelect.innerHTML = '<option value="">Error loading suppliers</option>';
+                    supplierSelect.disabled = false;
+                });
+        }
+
         // Add event listeners
-        document.getElementById('adjustProductId').addEventListener('change', updateStockDisplay);
+        document.getElementById('adjustProductId').addEventListener('change', function() {
+            updateStockDisplay();
+            loadSuppliersForProduct(this.value);
+        });
         document.getElementById('adjustmentType').addEventListener('change', function() {
             updateStockDisplay();
             toggleAdditionalFields();
         });
         document.getElementById('quantityInput').addEventListener('input', updateStockDisplay);
+        
+        // Add expiration date validation listener
+        document.addEventListener('DOMContentLoaded', function() {
+            const expirationDateInput = document.getElementById('expirationDateInput');
+            if (expirationDateInput) {
+                expirationDateInput.addEventListener('change', validateExpirationDate);
+            }
+        });
 
         function toggleAdditionalFields() {
             const adjustmentType = document.getElementById('adjustmentType').value;
             const supplierField = document.getElementById('supplierField');
             const expirationField = document.getElementById('expirationField');
+            const supplierHelperMessage = document.getElementById('supplierHelperMessage');
             
             if (adjustmentType === 'add') {
                 supplierField.style.display = 'block';
                 expirationField.style.display = 'block';
+                supplierHelperMessage.textContent = 'Suppliers will be filtered based on the selected product';
+                
+                // Set default expiration date to 6 months from today
+                const today = new Date();
+                const expirationDate = new Date(today);
+                expirationDate.setMonth(expirationDate.getMonth() + 6);
+                document.getElementById('expirationDateInput').value = expirationDate.toISOString().split('T')[0];
+                validateExpirationDate();
+            } else if (adjustmentType === 'subtract') {
+                supplierField.style.display = 'block';
+                expirationField.style.display = 'none';
+                supplierHelperMessage.textContent = 'Select the supplier who provided the items being removed (important for quality tracking)';
+                
+                // Clear validation messages when hiding expiration field
+                const existingAlert = document.querySelector('.expiration-validation-alert');
+                if (existingAlert) {
+                    existingAlert.remove();
+                }
             } else {
                 supplierField.style.display = 'none';
                 expirationField.style.display = 'none';
+                // Clear validation messages when hiding expiration field
+                const existingAlert = document.querySelector('.expiration-validation-alert');
+                if (existingAlert) {
+                    existingAlert.remove();
+                }
+            }
+        }
+        
+        // Function to validate expiration date
+        function validateExpirationDate() {
+            const expirationDateInput = document.getElementById('expirationDateInput');
+            const adjustmentDate = new Date(); // Current date for adjustments
+            const expirationDate = new Date(expirationDateInput.value);
+            
+            if (expirationDateInput.value && !isNaN(expirationDate)) {
+                const daysUntilExpiry = Math.floor((expirationDate - adjustmentDate) / (1000 * 60 * 60 * 24));
+                
+                // Remove existing validation messages
+                const existingAlert = document.querySelector('.expiration-validation-alert');
+                if (existingAlert) {
+                    existingAlert.remove();
+                }
+                
+                if (daysUntilExpiry < 180) {
+                    // Show warning
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-warning expiration-validation-alert mt-2';
+                    alertDiv.innerHTML = `
+                        <i class="fa fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> Expiration date is only ${daysUntilExpiry} days after adjustment date. 
+                        Products must have at least 6 months (180 days) before expiration to prevent waste.
+                    `;
+                    expirationDateInput.parentNode.appendChild(alertDiv);
+                    
+                    // Disable submit button
+                    const submitBtn = document.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.title = 'Expiration date is too close to adjustment date';
+                    }
+                } else {
+                    // Enable submit button
+                    const submitBtn = document.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.title = '';
+                    }
+                    
+                    // Show success message for good expiration dates
+                    if (daysUntilExpiry >= 180) {
+                        const alertDiv = document.createElement('div');
+                        alertDiv.className = 'alert alert-success expiration-validation-alert mt-2';
+                        alertDiv.innerHTML = `
+                            <i class="fa fa-check-circle me-2"></i>
+                            <strong>Good:</strong> Product has ${daysUntilExpiry} days (${Math.round(daysUntilExpiry/30)} months) before expiration.
+                        `;
+                        expirationDateInput.parentNode.appendChild(alertDiv);
+                    }
+                }
             }
         }
     </script>

@@ -163,6 +163,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
         if (strtotime($expiration_date) <= strtotime($restock_date)) {
             throw new Exception("Expiration date must be after restock date.");
         }
+        
+        // Check if expiration date is too close (less than 6 months from restock date)
+        $expiration_timestamp = strtotime($expiration_date);
+        $restock_timestamp = strtotime($restock_date);
+        $days_until_expiry = floor(($expiration_timestamp - $restock_timestamp) / (60 * 60 * 24));
+        
+        if ($days_until_expiry < 180) {
+            throw new Exception("Expiration date is too close to restock date. Products must have at least 6 months (180 days) before expiration. Current: {$days_until_expiry} days.");
+        }
 
         $pdo->beginTransaction();
 
@@ -245,6 +254,28 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $stmt = $pdo->query("SELECT supplier_id AS id, name FROM suppliers WHERE is_archive = 0 ORDER BY name");
 $suppliers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Handle AJAX request for getting suppliers by product
+if ($_SERVER['REQUEST_METHOD'] == 'GET' && isset($_GET['action']) && $_GET['action'] == 'get_suppliers_by_product') {
+    $product_id = (int)$_GET['product_id'];
+    
+    $stmt = $pdo->prepare("
+        SELECT 
+            s.supplier_id AS id,
+            s.name,
+            sp.is_primary
+        FROM suppliers s
+        INNER JOIN supplier_products sp ON s.supplier_id = sp.supplier_id
+        WHERE sp.product_id = ? AND sp.is_active = 1 AND s.is_archive = 0
+        ORDER BY sp.is_primary DESC, s.name
+    ");
+    $stmt->execute([$product_id]);
+    $product_suppliers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    header('Content-Type: application/json');
+    echo json_encode($product_suppliers);
+    exit;
+}
+
 // Fetch recent restocking records
 $stmt = $pdo->query("
     SELECT 
@@ -279,46 +310,169 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <?php include 'includes/admin_styles.php'; ?>
     <style>
-        .stat-card {
+        :root {
+            --bs-primary: #7F1734;
+            --bs-secondary: #6c757d;
+            --bs-success: #198754;
+            --bs-danger: #dc3545;
+            --bs-warning: #ffc107;
+            --bs-info: #0dcaf0;
+            --bs-light: #f8f9fa;
+            --bs-dark: #212529;
+        }
+        
+        /* Override admin styles for this page */
+        .main-content {
+            background-color: var(--bg-primary) !important;
+        }
+        
+        .main-container {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .page-header {
+            background: var(--bs-primary);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+        }
+        
+        .page-header h2 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+
+        /* Analytics Cards - Light Version */
+        .analytics-card {
             background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            color: var(--bs-dark);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
-            transition: transform 0.2s ease;
+            transition: all 0.3s ease;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
         }
-        
-        .stat-card:hover {
+
+        .analytics-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--bs-primary);
+        }
+
+        .analytics-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
         }
-        
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 10px;
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
-            color: white;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            background: rgba(127, 23, 52, 0.1);
+            color: var(--bs-primary);
+        }
+
+        .card-content {
+            flex: 1;
+        }
+
+        .card-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bs-primary);
+            margin: 0;
+            line-height: 1;
+        }
+
+        .card-label {
+            color: var(--bs-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 0.5rem 0 0 0;
         }
         
         .table-card {
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
+            color: var(--text-primary) !important;
+        }
+        
+        .table-card .card-header {
+            background: transparent;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .table-card .card-body {
+            padding: 1.5rem;
+        }
+        
+        .table-card .table {
+            margin-bottom: 0;
+        }
+        
+        .table-card .table th {
+            border: none;
+            padding: 1rem 1.25rem;
+            font-weight: 600;
+            color: var(--bs-dark);
+        }
+        
+        .table-card .table td {
+            border: none;
+            padding: 1rem 1.25rem;
+            vertical-align: middle;
+        }
+        
+        .table-card .table-light {
+            background: #f8f9fa;
         }
         
         .low-stock-item {
             background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
+            border-left: 4px solid #856404;
         }
         
         .out-of-stock-item {
-            background-color: #f8d7da;
-            border-left: 4px solid #dc3545;
+            background-color: #f5c6cb;
+            border-left: 4px solid #721c24;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 1rem;
+            }
+            
+            .page-header {
+                padding: 1.5rem;
+            }
+            
+            .page-header h2 {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
@@ -328,96 +482,94 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
 
     <!-- Main Content -->
     <main class="main-content" id="mainContent">
-        <?php if (isset($_SESSION['success'])): ?>
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        <?php endif; ?>
-        
-        <?php if (isset($_SESSION['error'])): ?>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        <?php endif; ?>
+        <div class="main-container">
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
 
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h1 class="h3 fw-bold text-dark mb-2">
-                    <i class="fa fa-plus-circle me-3" style="color: #7F1734;"></i>Restocking Management
-                </h1>
-                <p class="text-muted">Record new stock entries and track restocking activities</p>
+            <!-- Page Header -->
+            <div class="page-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2>
+                            <i class="fa fa-plus-circle me-3"></i>Restocking Management
+                        </h2>
+                        <p class="mb-0 opacity-75">Record new stock entries and track restocking activities</p>
+                    </div>
+                    <button class="btn text-white fw-bold px-4" style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);" data-bs-toggle="modal" data-bs-target="#restockModal">
+                        <i class="fa fa-plus me-2"></i>Record Restocking
+                    </button>
+                </div>
             </div>
-            <button class="btn text-white fw-bold px-4" style="background-color: #7F1734;" data-bs-toggle="modal" data-bs-target="#restockModal">
-                <i class="fa fa-plus me-2"></i>Record Restocking
-            </button>
-        </div>
 
-        <!-- Statistics -->
-        <div class="row g-4 mb-4">
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-success">
+            <!-- Analytics Cards -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-check-circle"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $total_restocks ?></h4>
-                            <small class="text-muted text-uppercase">Completed Restocks</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $total_restocks ?></h3>
+                            <p class="card-label">Completed Restocks</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-warning">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-clock"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $pending_restocks ?></h4>
-                            <small class="text-muted text-uppercase">Pending Restocks</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $pending_restocks ?></h3>
+                            <p class="card-label">Pending Restocks</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-info">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-money-bill"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0">₱<?= number_format($total_restock_value, 2) ?></h4>
-                            <small class="text-muted text-uppercase">Total Value</small>
+                        <div class="card-content">
+                            <h3 class="card-number">₱<?= number_format($total_restock_value, 2) ?></h3>
+                            <p class="card-label">Total Value</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-danger">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-exclamation-triangle"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= count(array_filter($products, fn($p) => (int)$p['stock'] <= (int)$p['reorder_point'])) ?></h4>
-                            <small class="text-muted text-uppercase">Need Restocking</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= count(array_filter($products, fn($p) => (int)$p['stock'] <= (int)$p['reorder_point'])) ?></h3>
+                            <p class="card-label">Need Restocking</p>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Products Needing Restocking -->
-        <div class="table-card mb-4">
-            <div class="card-header bg-transparent border-0 p-4">
-                <h5 class="fw-bold mb-0">Products Needing Restocking</h5>
-            </div>
+            <!-- Products Needing Restocking -->
+            <div class="table-card mb-4">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Products Needing Restocking
+                    </h5>
+                </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
@@ -444,14 +596,14 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                                     <td><?= $product['reorder_point'] ?></td>
                                     <td>
                                         <?php if ((int)$product['stock'] === 0): ?>
-                                            <span class="badge bg-danger">Out of Stock</span>
+                                            <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Out of Stock</span>
                                         <?php else: ?>
-                                            <span class="badge bg-warning">Low Stock</span>
+                                            <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Low Stock</span>
                                         <?php endif; ?>
                                     </td>
                                     <td><?= htmlspecialchars($product['supplier_name']) ?></td>
                                     <td>
-                                        <button class="btn btn-sm btn-success" onclick="openRestockModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>')">
+                                        <button class="btn btn-sm" style="background: #d4edda; color: #155724; border-radius: 8px;" onclick="openRestockModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>')">
                                             <i class="fa fa-plus me-1"></i>Restock
                                         </button>
                                     </td>
@@ -463,11 +615,13 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
             </div>
         </div>
 
-        <!-- Recent Restocking Records -->
-        <div class="table-card">
-            <div class="card-header bg-transparent border-0 p-4">
-                <h5 class="fw-bold mb-0">Recent Restocking Records</h5>
-            </div>
+            <!-- Recent Restocking Records -->
+            <div class="table-card">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fas fa-history me-2"></i>Recent Restocking Records
+                    </h5>
+                </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
@@ -500,9 +654,9 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                                         $days_until_expiry = floor(($exp_date - $today) / (60 * 60 * 24));
                                         
                                         if ($days_until_expiry < 0): ?>
-                                            <span class="badge bg-danger">Expired</span>
+                                            <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Expired</span>
                                         <?php elseif ($days_until_expiry <= 7): ?>
-                                            <span class="badge bg-warning"><?= date('M d, Y', $exp_date) ?></span>
+                                            <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= date('M d, Y', $exp_date) ?></span>
                                         <?php else: ?>
                                             <span class="text-muted"><?= date('M d, Y', $exp_date) ?></span>
                                         <?php endif; ?>
@@ -511,7 +665,8 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                                             <span class="text-muted small">
                                                 <i class="fa fa-info-circle me-1"></i>No expiration set
                                             </span>
-                                            <button class="btn btn-sm btn-outline-primary" 
+                                            <button class="btn btn-sm" 
+                                                    style="background: #cce5ff; color: #004085; border-radius: 8px;"
                                                     onclick="setExpirationDate(<?= $restock['product_id'] ?>, '<?= htmlspecialchars($restock['product_name']) ?>')"
                                                     title="Set expiration date">
                                                 <i class="fa fa-calendar-plus"></i>
@@ -521,11 +676,11 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                                 </td>
                                 <td>
                                     <?php if ($restock['status_id'] == 1): ?>
-                                        <span class="badge bg-warning">Pending</span>
+                                        <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Pending</span>
                                     <?php elseif ($restock['status_id'] == 2): ?>
-                                        <span class="badge bg-success">Received</span>
+                                        <span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Received</span>
                                     <?php else: ?>
-                                        <span class="badge bg-danger">Cancelled</span>
+                                        <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Cancelled</span>
                                     <?php endif; ?>
                                 </td>
                                 <td>
@@ -542,8 +697,8 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                                         ];
                                         
                                         $status_buttons = [
-                                            2 => ['class' => 'btn-success', 'icon' => 'fa-check', 'title' => 'Mark as Received'],
-                                            3 => ['class' => 'btn-danger', 'icon' => 'fa-times', 'title' => 'Cancel']
+                                            2 => ['class' => 'btn', 'style' => 'background: #d4edda; color: #155724; border-radius: 8px;', 'icon' => 'fa-check', 'title' => 'Mark as Received'],
+                                            3 => ['class' => 'btn', 'style' => 'background: #f5c6cb; color: #721c24; border-radius: 8px;', 'icon' => 'fa-times', 'title' => 'Cancel']
                                         ];
                                         
                                         // Show buttons for valid transitions only
@@ -551,6 +706,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                                             $button = $status_buttons[$status_id];
                                         ?>
                                             <button class="btn btn-sm <?php echo $button['class']; ?> status-update-btn" 
+                                                    style="<?php echo $button['style']; ?>"
                                                     data-restock-id="<?php echo $restock_id; ?>" 
                                                     data-status="<?php echo $status_id; ?>" 
                                                     title="<?php echo $button['title']; ?>">
@@ -568,6 +724,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                     </tbody>
                 </table>
             </div>
+        </div>
         </div>
     </main>
 
@@ -596,12 +753,13 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Supplier</label>
-                                <select name="supplier_id" class="form-select" required>
-                                    <option value="">Select Supplier</option>
-                                    <?php foreach ($suppliers as $supplier): ?>
-                                        <option value="<?= $supplier['id'] ?>"><?= htmlspecialchars($supplier['name']) ?></option>
-                                    <?php endforeach; ?>
+                                <select name="supplier_id" id="supplierSelect" class="form-select" required>
+                                    <option value="">Select Product First</option>
                                 </select>
+                                <div class="form-text">
+                                    <i class="fa fa-info-circle me-1"></i>
+                                    Suppliers will be filtered based on the selected product
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Quantity Added</label>
@@ -618,6 +776,10 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                              <div class="col-md-6">
                                  <label class="form-label fw-semibold">Expiration Date</label>
                                  <input type="date" name="expiration_date" class="form-control" required>
+                                 <div class="form-text">
+                                     <i class="fa fa-info-circle me-1"></i>
+                                     Must be at least 6 months (180 days) after restock date to prevent waste
+                                 </div>
                              </div>
                              <div class="col-md-6">
                                  <label class="form-label fw-semibold">Expected Delivery</label>
@@ -631,7 +793,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn text-white fw-bold" style="background-color: #7F1734;">
+                        <button type="submit" class="btn text-white fw-bold" style="background-color: #7F1734; border-radius: 8px;">
                             <i class="fa fa-save me-2"></i>Record Restocking
                         </button>
                     </div>
@@ -646,7 +808,11 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
          function openRestockModal(productId, productName) {
              const modal = new bootstrap.Modal(document.getElementById('restockModal'));
              const select = document.querySelector('#restockModal select[name="product_id"]');
-             if (select) select.value = productId;
+             if (select) {
+                 select.value = productId;
+                 // Trigger the change event to load suppliers for this product
+                 select.dispatchEvent(new Event('change'));
+             }
              modal.show();
          }
          
@@ -726,6 +892,44 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
             }
         }
         
+         // Function to load suppliers for a selected product
+         function loadSuppliersForProduct(productId) {
+             const supplierSelect = document.getElementById('supplierSelect');
+             
+             if (!productId) {
+                 supplierSelect.innerHTML = '<option value="">Select Product First</option>';
+                 return;
+             }
+             
+             // Show loading state
+             supplierSelect.innerHTML = '<option value="">Loading suppliers...</option>';
+             supplierSelect.disabled = true;
+             
+             fetch(`restocking.php?action=get_suppliers_by_product&product_id=${productId}`)
+                 .then(response => response.json())
+                 .then(suppliers => {
+                     supplierSelect.innerHTML = '<option value="">Select Supplier</option>';
+                     
+                     if (suppliers.length === 0) {
+                         supplierSelect.innerHTML += '<option value="" disabled>No suppliers assigned to this product</option>';
+                     } else {
+                         suppliers.forEach(supplier => {
+                             const option = document.createElement('option');
+                             option.value = supplier.id;
+                             option.textContent = supplier.name + (supplier.is_primary ? ' (Primary)' : '');
+                             supplierSelect.appendChild(option);
+                         });
+                     }
+                     
+                     supplierSelect.disabled = false;
+                 })
+                 .catch(error => {
+                     console.error('Error loading suppliers:', error);
+                     supplierSelect.innerHTML = '<option value="">Error loading suppliers</option>';
+                     supplierSelect.disabled = false;
+                 });
+         }
+         
          // Event delegation for status update buttons
          document.addEventListener('DOMContentLoaded', function() {
              document.addEventListener('click', function(e) {
@@ -738,6 +942,14 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                  }
              });
              
+             // Product selection change handler
+             const productSelect = document.querySelector('select[name="product_id"]');
+             if (productSelect) {
+                 productSelect.addEventListener('change', function() {
+                     loadSuppliersForProduct(this.value);
+                 });
+             }
+             
              // Auto-set expiration date when restock date changes
              const restockDateInput = document.querySelector('input[name="restock_date"]');
              const expirationDateInput = document.querySelector('input[name="expiration_date"]');
@@ -746,12 +958,73 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                  restockDateInput.addEventListener('change', function() {
                      const restockDate = new Date(this.value);
                      if (restockDate) {
-                         // Set expiration date to 30 days after restock date by default
+                         // Set expiration date to 6 months after restock date by default
                          const expirationDate = new Date(restockDate);
-                         expirationDate.setDate(expirationDate.getDate() + 30);
+                         expirationDate.setMonth(expirationDate.getMonth() + 6);
                          expirationDateInput.value = expirationDate.toISOString().split('T')[0];
+                         
+                         // Validate expiration date
+                         validateExpirationDate();
                      }
                  });
+                 
+                 // Validate expiration date when it changes
+                 expirationDateInput.addEventListener('change', function() {
+                     validateExpirationDate();
+                 });
+             }
+             
+             // Function to validate expiration date
+             function validateExpirationDate() {
+                 const restockDate = new Date(restockDateInput.value);
+                 const expirationDate = new Date(expirationDateInput.value);
+                 
+                 if (restockDate && expirationDate && !isNaN(restockDate) && !isNaN(expirationDate)) {
+                     const daysUntilExpiry = Math.floor((expirationDate - restockDate) / (1000 * 60 * 60 * 24));
+                     
+                     // Remove existing validation messages
+                     const existingAlert = document.querySelector('.expiration-validation-alert');
+                     if (existingAlert) {
+                         existingAlert.remove();
+                     }
+                     
+                     if (daysUntilExpiry < 180) {
+                         // Show warning
+                         const alertDiv = document.createElement('div');
+                         alertDiv.className = 'alert alert-warning expiration-validation-alert mt-2';
+                         alertDiv.innerHTML = `
+                             <i class="fa fa-exclamation-triangle me-2"></i>
+                             <strong>Warning:</strong> Expiration date is only ${daysUntilExpiry} days after restock date. 
+                             Products must have at least 6 months (180 days) before expiration to prevent waste.
+                         `;
+                         expirationDateInput.parentNode.appendChild(alertDiv);
+                         
+                         // Disable submit button
+                         const submitBtn = document.querySelector('button[type="submit"]');
+                         if (submitBtn) {
+                             submitBtn.disabled = true;
+                             submitBtn.title = 'Expiration date is too close to restock date';
+                         }
+                     } else {
+                         // Enable submit button
+                         const submitBtn = document.querySelector('button[type="submit"]');
+                         if (submitBtn) {
+                             submitBtn.disabled = false;
+                             submitBtn.title = '';
+                         }
+                         
+                         // Show success message for good expiration dates
+                         if (daysUntilExpiry >= 180) {
+                             const alertDiv = document.createElement('div');
+                             alertDiv.className = 'alert alert-success expiration-validation-alert mt-2';
+                             alertDiv.innerHTML = `
+                                 <i class="fa fa-check-circle me-2"></i>
+                                 <strong>Good:</strong> Product has ${daysUntilExpiry} days (${Math.round(daysUntilExpiry/30)} months) before expiration.
+                             `;
+                             expirationDateInput.parentNode.appendChild(alertDiv);
+                         }
+                     }
+                 }
              }
          });
     </script>

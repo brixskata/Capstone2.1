@@ -927,14 +927,14 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                 fetch('favorite.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'product_id=' + productId
+                    body: 'product_id=' + productId + '&csrf_token=<?= $_SESSION['csrf_token'] ?? '' ?>'
                 })
-                .then(response => response.text())
+                .then(response => response.json())
                 .then(data => {
                     let message, icon, headerClass;
                     
-                    if (data === 'added') {
-                        message = 'Added to favorites!';
+                    if (data.success && data.is_favorite) {
+                        message = data.message || 'Added to favorites!';
                         icon = 'fas fa-heart text-danger';
                         headerClass = 'bg-success text-white';
                         
@@ -944,8 +944,8 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                         this.style.color = 'white';
                         this.style.borderColor = 'var(--bs-danger)';
                         
-                    } else if (data === 'removed') {
-                        message = 'Removed from favorites!';
+                    } else if (data.success && !data.is_favorite) {
+                        message = data.message || 'Removed from favorites!';
                         icon = 'fas fa-heart-broken text-warning';
                         headerClass = 'bg-warning text-dark';
                         
@@ -955,8 +955,8 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                         this.style.color = 'var(--bs-secondary)';
                         this.style.borderColor = 'var(--bs-secondary)';
                         
-                    } else if (data === 'not_logged_in') {
-                        message = 'Please log in to add favorites';
+                    } else if (!data.success && data.message && data.message.includes('log in')) {
+                        message = data.message;
                         icon = 'fas fa-exclamation-circle text-warning';
                         headerClass = 'bg-warning text-dark';
                         
@@ -965,7 +965,7 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                             window.location.href = 'login.php';
                         }, 2000);
                     } else {
-                        message = 'Something went wrong. Please try again.';
+                        message = data.message || 'Something went wrong. Please try again.';
                         icon = 'fas fa-exclamation-circle text-danger';
                         headerClass = 'bg-danger text-white';
                     }

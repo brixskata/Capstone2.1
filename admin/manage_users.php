@@ -342,7 +342,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </h1>
       </div>
       <?php if (hasPermission($pdo, 'user_create')): ?>
-        <button class="btn" data-bs-toggle="modal" data-bs-target="#createUserModal" style="background-color: #198754; color: white; border: none;">
+        <button class="btn" data-bs-toggle="modal" data-bs-target="#createUserModal" style="background-color: #b3d9ff; color: #003d82; border: none; border-radius: 8px;">
           <i class="fa fa-user-plus me-1"></i> Add User
         </button>
       <?php endif; ?>
@@ -430,7 +430,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
           </div>
           <div class="col-md-2">
-            <button type="submit" class="btn w-100" style="background-color: #016bf8; color: white; border: none;">
+            <button type="submit" class="btn w-100" style="background-color: #d4b3ff; color: #4a0080; border: none; border-radius: 8px;">
               <i class="fa fa-filter me-1"></i> Filter
             </button>
           </div>
@@ -497,14 +497,14 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                   ?>
                 </select>
                 <?php if (hasPermission($pdo, 'user_deactivate')): ?>
-                  <button type="button" onclick="showDeactivateModal(<?php echo $user['id']; ?>)" class="btn btn-sm" style="background-color: #db3030; color: white; border: none;">
-                    <i class="fa fa-user-slash me-1"></i> Deactivate
+                  <button type="button" onclick="showDeactivateModal(<?php echo $user['id']; ?>)" class="btn btn-sm" style="background-color: #ffb3ba; color: #8b0000; border: none; border-radius: 8px;">
+                    <i class="fa fa-trash me-1"></i> Deactivate
                   </button>
                 <?php endif; ?>
               <?php elseif (($user['role'] ?? '') !== 'super_admin' && !empty($user['deactivated'])): ?>
                 <?php if (hasPermission($pdo, 'user_deactivate')): ?>
-                  <button type="button" onclick="showReactivateModal(<?php echo $user['id']; ?>)" class="btn btn-sm" style="background-color: #198754; color: white; border: none;">
-                    <i class="fa fa-user-check me-1"></i> Reactivate
+                  <button type="button" onclick="showReactivateModal(<?php echo $user['id']; ?>)" class="btn btn-sm" style="background-color: #b3ffb3; color: #006400; border: none; border-radius: 8px;">
+                    <i class="fa fa-undo me-1"></i> Reactivate
                   </button>
                 <?php endif; ?>
               <?php else: ?>
@@ -538,7 +538,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn" style="background-color: #7F1734; color: white; border: none;">Confirm Change</button>
+            <button type="submit" class="btn" style="background-color: #ffb3d1; color: #8b0040; border: none; border-radius: 8px;">Confirm Change</button>
           </div>
         </div>
       </form>
@@ -604,7 +604,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" name="create_user" class="btn" style="background-color: #198754; color: white; border: none;">Create User</button>
+            <button type="submit" name="create_user" class="btn" style="background-color: #b3ffb3; color: #006400; border: none; border-radius: 8px;">Create User</button>
           </div>
         </div>
       </form>
@@ -630,7 +630,9 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn" style="background-color: #db3030; color: white; border: none;">Deactivate</button>
+            <button type="submit" class="btn" style="background-color: #ffb3ba; color: #8b0000; border: none; border-radius: 8px;">
+              <i class="fa fa-trash me-1"></i> Deactivate
+            </button>
           </div>
         </div>
       </form>
@@ -656,7 +658,9 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn" style="background-color: #198754; color: white; border: none;">Reactivate</button>
+            <button type="submit" class="btn" style="background-color: #b3ffb3; color: #006400; border: none; border-radius: 8px;">
+              <i class="fa fa-undo me-1"></i> Reactivate
+            </button>
           </div>
         </div>
       </form>

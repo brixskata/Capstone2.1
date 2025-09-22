@@ -119,51 +119,156 @@ $product_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <?php include 'includes/admin_styles.php'; ?>
     <style>
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-            border: 1px solid #e9ecef;
-            transition: transform 0.2s ease;
+        :root {
+            --bs-primary: #7F1734;
+            --bs-secondary: #6c757d;
+            --bs-success: #198754;
+            --bs-danger: #dc3545;
+            --bs-warning: #ffc107;
+            --bs-info: #0dcaf0;
+            --bs-light: #f8f9fa;
+            --bs-dark: #212529;
         }
         
-        .stat-card:hover {
+        /* Override admin styles for this page */
+        .main-content {
+            background-color: var(--bg-primary) !important;
+        }
+        
+        .main-container {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .page-header {
+            background: var(--bs-primary);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+        }
+        
+        .page-header h2 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+
+        /* Analytics Cards */
+        .analytics-card {
+            background: var(--bs-primary);
+            color: white;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .analytics-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 8px 25px rgba(127, 23, 52, 0.4);
         }
-        
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 10px;
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.2);
             color: white;
+        }
+
+        .card-content {
+            flex: 1;
+        }
+
+        .card-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: white;
+            margin: 0;
+            line-height: 1;
+        }
+
+        .card-label {
+            color: rgba(255,255,255,0.9);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 0.5rem 0 0 0;
         }
         
         .table-card {
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
+            color: var(--text-primary) !important;
         }
         
-        .movement-badge {
-            font-size: 0.75rem;
-            padding: 4px 8px;
-            border-radius: 12px;
+        .table-card .card-header {
+            background: transparent;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .table-card .card-body {
+            padding: 1.5rem;
+        }
+        
+        .table-card .table {
+            margin-bottom: 0;
+        }
+        
+        .table-card .table th {
+            border: none;
+            padding: 1rem 1.25rem;
+            font-weight: 600;
+            color: var(--bs-dark);
+        }
+        
+        .table-card .table td {
+            border: none;
+            padding: 1rem 1.25rem;
+            vertical-align: middle;
+        }
+        
+        .table-card .table-light {
+            background: #f8f9fa;
         }
         
         .filter-card {
             background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
-            margin-bottom: 20px;
+            margin-bottom: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 1rem;
+            }
+            
+            .page-header {
+                padding: 1.5rem;
+            }
+            
+            .page-header h2 {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
@@ -173,77 +278,73 @@ $product_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     <!-- Main Content -->
     <main class="main-content" id="mainContent">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h1 class="h3 fw-bold text-dark mb-2">
-                    <i class="fa fa-exchange-alt me-3" style="color: #7F1734;"></i>Stock Movements
-                </h1>
-                <p class="text-muted">Track product performance and inventory movements over time</p>
+        <div class="main-container">
+            <!-- Page Header -->
+            <div class="page-header">
+                <div>
+                    <h2>
+                        <i class="fa fa-exchange-alt me-3"></i>Stock Movements
+                    </h2>
+                    <p class="mb-0 opacity-75">Track product performance and inventory movements over time</p>
+                </div>
             </div>
-        </div>
 
-        <!-- Statistics -->
-        <div class="row g-4 mb-4">
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-info">
+            <!-- Analytics Cards -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-chart-line"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $total_movements ?></h4>
-                            <small class="text-muted text-uppercase">Total Movements</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $total_movements ?></h3>
+                            <p class="card-label">Total Movements</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-success">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-calendar-day"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $movements_today ?></h4>
-                            <small class="text-muted text-uppercase">Today</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $movements_today ?></h3>
+                            <p class="card-label">Today</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-warning">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-calendar-week"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $movements_this_week ?></h4>
-                            <small class="text-muted text-uppercase">This Week</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $movements_this_week ?></h3>
+                            <p class="card-label">This Week</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="stat-card">
-                    <div class="d-flex align-items-center">
-                        <div class="stat-icon bg-primary">
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="analytics-card">
+                        <div class="card-icon">
                             <i class="fa fa-calendar-alt"></i>
                         </div>
-                        <div class="ms-3">
-                            <h4 class="fw-bold mb-0"><?= $movements_this_month ?></h4>
-                            <small class="text-muted text-uppercase">This Month</small>
+                        <div class="card-content">
+                            <h3 class="card-number"><?= $movements_this_month ?></h3>
+                            <p class="card-label">This Month</p>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Filters -->
-        <div class="filter-card">
-            <h5 class="fw-bold mb-3">Filter Movements</h5>
+            <!-- Filters -->
+            <div class="filter-card">
+                <h5 class="fw-bold mb-3 text-dark">
+                    <i class="fas fa-filter me-2"></i>Filter Movements
+                </h5>
             <form method="GET" class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Product</label>
@@ -278,10 +379,10 @@ $product_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <div class="col-md-2">
                     <label class="form-label fw-semibold">&nbsp;</label>
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn" style="background: #7F1734; color: white; border-radius: 8px;">
                             <i class="fa fa-search me-1"></i>Filter
                         </button>
-                        <a href="stock_movements.php" class="btn btn-outline-secondary">
+                        <a href="stock_movements.php" class="btn" style="background: #e2e3e5; color: #383d41; border-radius: 8px;">
                             <i class="fa fa-times me-1"></i>Clear
                         </a>
                     </div>
@@ -289,11 +390,13 @@ $product_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </form>
         </div>
 
-        <!-- Product Movement Analysis -->
-        <div class="table-card mb-4">
-            <div class="card-header bg-transparent border-0 p-4">
-                <h5 class="fw-bold mb-0">Top Moving Products (Last 30 Days)</h5>
-            </div>
+            <!-- Product Movement Analysis -->
+            <div class="table-card mb-4">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fas fa-trophy me-2"></i>Top Moving Products (Last 30 Days)
+                    </h5>
+                </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
@@ -313,7 +416,7 @@ $product_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <td class="fw-semibold"><?= htmlspecialchars($analysis['product_name']) ?></td>
                                 <td><?= htmlspecialchars($analysis['category_name']) ?></td>
                                 <td>
-                                    <span class="badge bg-info"><?= $analysis['total_movements'] ?></span>
+                                    <span class="badge" style="background: #cce5ff; color: #004085; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= $analysis['total_movements'] ?></span>
                                 </td>
                                 <td>
                                     <span class="text-success fw-semibold">+<?= $analysis['total_in'] ?></span>
@@ -328,9 +431,9 @@ $product_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <?php
                                     $movement_rate = $analysis['current_stock'] > 0 ? round(($analysis['total_movements'] / 30) * 100, 1) : 0;
                                     if ($movement_rate > 7) {
-                                        echo '<span class="badge bg-success">Fast Moving</span>';
+                                        echo '<span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Fast Moving</span>';
                                     } else {
-                                        echo '<span class="badge bg-danger">Slow Moving</span>';
+                                        echo '<span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Slow Moving</span>';
                                     }
                                     ?>
                                 </td>
@@ -341,11 +444,13 @@ $product_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
         </div>
 
-        <!-- Stock Movements Table -->
-        <div class="table-card">
-            <div class="card-header bg-transparent border-0 p-4">
-                <h5 class="fw-bold mb-0">Recent Stock Movements</h5>
-            </div>
+            <!-- Stock Movements Table -->
+            <div class="table-card">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fas fa-history me-2"></i>Recent Stock Movements
+                    </h5>
+                </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
@@ -371,15 +476,15 @@ $product_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <?php
                                     $type = $movement['stockmovementtype_id'];
                                     if ($type == 1) {
-                                        echo '<span class="badge bg-success movement-badge">Restocking</span>';
+                                        echo '<span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Restocking</span>';
                                     } elseif ($type == 2) {
-                                        echo '<span class="badge bg-danger movement-badge">Sale</span>';
+                                        echo '<span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Sale</span>';
                                     } elseif ($type == 3) {
-                                        echo '<span class="badge bg-warning movement-badge">Return</span>';
+                                        echo '<span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Return</span>';
                                     } elseif ($type == 4) {
-                                        echo '<span class="badge bg-info movement-badge">Adjustment</span>';
+                                        echo '<span class="badge" style="background: #cce5ff; color: #004085; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Adjustment</span>';
                                     } else {
-                                        echo '<span class="badge bg-secondary movement-badge">Other</span>';
+                                        echo '<span class="badge" style="background: #e2e3e5; color: #383d41; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Other</span>';
                                     }
                                     ?>
                                 </td>
@@ -401,6 +506,7 @@ $product_analysis = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     </tbody>
                 </table>
             </div>
+        </div>
         </div>
     </main>
 

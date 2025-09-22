@@ -184,3 +184,7 @@ $movements = $batchManager->getBatchMovements($batch_id);
     </div>
 </div>
 <?php endif; ?>
+
+
+
+

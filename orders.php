@@ -1433,7 +1433,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                         <?php endif; ?>
 
                                         <!-- Order Actions -->
-                                        <?php if ($order['status'] === 'Shipped'): ?>
+                                        <?php if ($order['status'] === 'Out for delivery'): ?>
                                             <div class="order-actions mt-3">
                                                 <div class="alert alert-info mb-2 py-2">
                                                     <small><i class="fas fa-info-circle me-1"></i>Click below to confirm you have received your order and complete the transaction.</small>
