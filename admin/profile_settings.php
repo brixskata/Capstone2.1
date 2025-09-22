@@ -229,7 +229,8 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
             margin-bottom: 1rem;
         }
         
-        .profile-avatar {
+        /* Renamed to avoid conflict with navbar .profile-avatar wrapper */
+        .profile-avatar-lg {
             width: 100px;
             height: 100px;
             border-radius: 50%;
@@ -281,14 +282,14 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
     <main class="main-content" id="mainContent">
         <?php if (isset($_SESSION['success'])): ?>
             <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+                <i class="fa-solid fa-circle-check me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
         
         <?php if (isset($_SESSION['error'])): ?>
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+                <i class="fa-solid fa-circle-exclamation me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
@@ -296,7 +297,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h1 class="h3 fw-bold text-dark mb-2">
-                    <i class="fa fa-user-cog me-3" style="color: #7F1734;"></i>Profile Settings
+                    <i class="fa-solid fa-user-gear me-3" style="color: #7F1734;"></i>Profile Settings
                 </h1>
                 <p class="text-muted">Manage your account information and security settings</p>
             </div>
@@ -313,10 +314,10 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                                 ? '../uploads/profile_pictures/' . $user['profile_picture'] 
                                 : 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxjaXJjbGUgY3g9IjUwIiBjeT0iNTAiIHI9IjUwIiBmaWxsPSIjZjhmOWZhIi8+CjxjaXJjbGUgY3g9IjUwIiBjeT0iNDAiIHI9IjE1IiBmaWxsPSIjNmM3NTdkIi8+CjxwYXRoIGQ9Ik0yMCA4MGMwLTE2LjU2OSAxMy40MzEtMzAgMzAtMzBzMzAgMTMuNDMxIDMwIDMwIiBmaWxsPSIjNmM3NTdkIi8+Cjwvc3ZnPgo=';
                             ?>
-                            <img src="<?php echo $profile_picture; ?>" alt="Profile" class="profile-avatar" id="profile-avatar">
+                            <img src="<?php echo $profile_picture; ?>" alt="Profile" class="profile-avatar-lg" id="profile-avatar">
                             <div class="profile-picture-overlay">
                                 <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#profilePictureModal">
-                                    <i class="fas fa-camera"></i>
+                                    <i class="fa-solid fa-camera"></i>
                                 </button>
                             </div>
                         </div>
@@ -326,7 +327,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     
                     <div class="form-section">
                         <h5 class="section-title">
-                            <i class="fa fa-user me-2"></i>Personal Information
+                            <i class="fa-solid fa-user me-2"></i>Personal Information
                         </h5>
                         
                         <form method="POST">
@@ -358,7 +359,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                             
                             <div class="d-flex justify-content-end">
                                 <button type="submit" name="update_profile" class="btn btn-primary">
-                                    <i class="fa fa-save me-2"></i>Update Profile
+                                    <i class="fa-solid fa-floppy-disk me-2"></i>Update Profile
                                 </button>
                             </div>
                         </form>
@@ -369,7 +370,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 <div class="profile-card">
                     <div class="form-section">
                         <h5 class="section-title">
-                            <i class="fa fa-lock me-2"></i>Change Password
+                            <i class="fa-solid fa-lock me-2"></i>Change Password
                         </h5>
                         
                         <form method="POST">
@@ -392,7 +393,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                             
                             <div class="d-flex justify-content-end">
                                 <button type="submit" name="change_password" class="btn btn-warning">
-                                    <i class="fa fa-key me-2"></i>Change Password
+                                    <i class="fa-solid fa-key me-2"></i>Change Password
                                 </button>
                             </div>
                         </form>
@@ -405,7 +406,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 <div class="profile-card">
                     <div class="form-section">
                         <h5 class="section-title">
-                            <i class="fa fa-info-circle me-2"></i>Account Information
+                            <i class="fa-solid fa-circle-info me-2"></i>Account Information
                         </h5>
                         
                         <div class="mb-3">
@@ -416,7 +417,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Role</label>
                             <p class="form-control-plaintext">
-                                <span class="badge bg-primary"><?php echo ucfirst(isset($user['role']) ? $user['role'] : 'admin'); ?></span>
+                                <span class="badge bg-primary"><i class="fa-solid fa-user-shield me-1"></i><?php echo ucfirst(isset($user['role']) ? $user['role'] : 'admin'); ?></span>
                             </p>
                         </div>
                         
@@ -450,7 +451,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="profilePictureModalLabel">
-                        <i class="fas fa-camera me-2"></i>Update Profile Picture
+                        <i class="fa-solid fa-camera me-2"></i>Update Profile Picture
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -469,7 +470,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                         </div>
                         
                         <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
+                            <i class="fa-solid fa-circle-info me-2"></i>
                             <strong>Tips for best results:</strong>
                             <ul class="mb-0 mt-2">
                                 <li>Use a square image for best fit</li>
@@ -481,7 +482,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" name="upload_picture" class="btn btn-primary">
-                            <i class="fas fa-upload me-2"></i>Upload Picture
+                            <i class="fa-solid fa-upload me-2"></i>Upload Picture
                         </button>
                     </div>
                 </form>

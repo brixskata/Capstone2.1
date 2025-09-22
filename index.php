@@ -192,6 +192,7 @@ try {
         .hero-content {
             position: relative;
             z-index: 2;
+            max-width: 560px; /* prevent content from pushing into image area */
         }
 
         .hero-badge {
@@ -214,6 +215,28 @@ try {
             color: var(--bs-dark);
         }
 
+        /* Simple hero title (no gradient) */
+        .simple-hero-title {
+            color: var(--bs-secondary);
+            letter-spacing: 0.4px;
+        }
+        .simple-hero-title::after {
+            content: '';
+            display: block;
+            width: 140px;
+            max-width: 60%;
+            height: 4px;
+            border-radius: 4px;
+            margin-top: 0.75rem;
+            background: rgba(127, 23, 52, 0.85);
+        }
+        @media (max-width: 768px) {
+            .simple-hero-title::after {
+                width: 100px;
+                height: 3px;
+            }
+        }
+
         .hero-title .text-highlight {
             color: var(--bs-secondary);
         }
@@ -223,6 +246,9 @@ try {
             color: #6c757d;
             margin-bottom: 2rem;
             line-height: 1.6;
+            max-width: 48ch; /* limit line length to avoid overlap */
+            overflow-wrap: anywhere; /* robust wrapping */
+            word-break: break-word;
         }
 
         .hero-features {
@@ -233,16 +259,38 @@ try {
         }
 
         .hero-feature {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            font-weight: 500;
+            gap: 0.6rem;
+            font-weight: 600;
             color: var(--bs-dark);
+            padding: 0.6rem 1rem;
+            border: 1px solid #e9ecef;
+            border-radius: 999px;
+            background: #ffffff;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+            transition: all 0.25s ease;
+        }
+
+        .hero-feature:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 24px rgba(127, 23, 52, 0.18);
+            border-color: rgba(127, 23, 52, 0.25);
         }
 
         .hero-feature i {
             color: var(--bs-secondary);
             font-size: 1.1rem;
+        }
+
+        .hero-feature span {
+            letter-spacing: 0.2px;
+        }
+
+        /* Ensure hero text doesn't collide on tablets */
+        @media (max-width: 992px) {
+            .hero-content { max-width: 100%; }
+            .hero-subtitle { max-width: 100%; }
         }
 
         .btn-hero {
@@ -749,19 +797,17 @@ try {
                             100% Fresh & Organic
                         </div>
 
-                        <h1 class="hero-title">
-                            Groceries delivered in <span class="text-highlight">90 minutes</span>
-                        </h1>
+                        <h1 class="hero-title simple-hero-title">Top Quality You Deserve</h1>
 
                         <p class="hero-subtitle">
-                            Get your healthy foods & snacks delivered at your doorsteps all day everyday. 
-                            Fresh meat, seafood, and quality products guaranteed.
+                            Enjoy premium frozen meat and seafood delivered straight to your doorstep. 
+                            Always fresh, carefully packed, and ready when you need it.
                         </p>
 
                         <div class="hero-features">
                             <div class="hero-feature">
                                 <i class="fas fa-shipping-fast"></i>
-                                <span>Free Delivery</span>
+                                <span>Fast and Reliable</span>
                             </div>
                             <div class="hero-feature">
                                 <i class="fas fa-medal"></i>
@@ -769,7 +815,7 @@ try {
                             </div>
                             <div class="hero-feature">
                                 <i class="fas fa-clock"></i>
-                                <span>90 Min Delivery</span>
+                                <span>Hassle-Free Shopping</span>
                             </div>
                         </div>
 

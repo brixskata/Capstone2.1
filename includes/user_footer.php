@@ -13,16 +13,16 @@
                     Your trusted online store for quality products and excellent service. We deliver fresh, premium goods right to your doorstep.
                 </p>
                 <div class="social-links">
-                    <a href="#" class="social-link" aria-label="Facebook">
+                    <a href="https://www.facebook.com/profile.php?id=100080633373415&rdid=aUMAHJjLqc8iyS6F&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1CWfcWaM36#" class="social-link" aria-label="Facebook" target="_blank" rel="noopener noreferrer">
                         <i class="fab fa-facebook-f"></i>
                     </a>
-                    <a href="#" class="social-link" aria-label="Instagram">
+                    <a href="https://www.instagram.com/_mikemadz/?fbclid=IwY2xjawM7tJJleHRuA2FlbQIxMABicmlkETFNUnlFdHZhb0tQWnhDczRpAR74YXn5w3HVbILSwEbqrBNsAsWVgDSIG4BL0me2649S0H7rix1rIb6-suU8_w_aem_j99nmp4VFY9UePLoWrYFAQ" class="social-link" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
                         <i class="fab fa-instagram"></i>
                     </a>
-                    <a href="#" class="social-link" aria-label="Twitter">
+                    <a href="https://x.com/_mikemadz?fbclid=IwY2xjawM7szVleHRuA2FlbQIxMABicmlkETFFTHNRNExsVkN3b1g3TWpSAR4sjkp4ynBgeF98L9eiaM7HqoEMJ7kjMJIOYx23vFsrSbIgbxpcitbH9C9flA_aem_5ghteVEc9M4UPXDqpM1lTg" class="social-link" aria-label="Twitter" target="_blank" rel="noopener noreferrer">
                         <i class="fab fa-twitter"></i>
                     </a>
-                    <a href="#" class="social-link" aria-label="TikTok">
+                    <a href="https://www.tiktok.com/@_mikemadz?fbclid=IwY2xjawM7tQ5leHRuA2FlbQIxMABicmlkETFNUnlFdHZhb0tQWnhDczRpAR7nONSLtD8m1pJow_8yumrTfhu0UjsEyQuNOxZKZt3CMSiGnwhAnSVfevi09g_aem_Wgz8xno5jClfgS5QhZpHaA" class="social-link" aria-label="TikTok" target="_blank" rel="noopener noreferrer">
                         <i class="fab fa-tiktok"></i>
                     </a>
                 </div>

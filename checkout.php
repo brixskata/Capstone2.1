@@ -422,11 +422,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
             font-size: 1.1rem;
             transition: all 0.3s ease;
             box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+            color: #ffffff;
         }
 
         .place-order-btn:hover {
             transform: translateY(-3px);
             box-shadow: 0 8px 25px rgba(127, 23, 52, 0.4);
+            color: #ffffff;
         }
 
         /* Delivery Address Styles */

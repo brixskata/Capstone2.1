@@ -631,16 +631,19 @@ try {
             transition: all 0.3s ease;
             box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
             width: 100%;
+            color: #fff;
         }
 
         .checkout-btn:hover:not(:disabled) {
             transform: translateY(-3px);
             box-shadow: 0 8px 25px rgba(127, 23, 52, 0.4);
+            color: #fff;
         }
 
         .checkout-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+            color: #fff;
         }
 
         .empty-cart {

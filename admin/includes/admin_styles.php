@@ -198,7 +198,7 @@
     top: var(--navbar-height);
     left: 0;
     width: var(--sidebar-width);
-    z-index: 1000;
+    z-index: 2000; /* ensure sidebar stays above main content */
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow-x: hidden;
@@ -210,6 +210,32 @@
   
   .sidebar.collapsed {
     width: var(--sidebar-collapsed);
+  }
+
+  /* Main content layout relative to sidebar */
+  .main-content {
+    margin-left: var(--sidebar-width);
+    padding: var(--spacing-lg);
+    position: relative;
+    z-index: 1; /* keep below the sidebar */
+    min-height: calc(100vh - var(--navbar-height));
+    background: var(--bg-primary);
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* When sidebar is collapsed, reduce left margin with a small safety buffer */
+  .main-content.sidebar-collapsed {
+    margin-left: calc(var(--sidebar-collapsed) + 8px);
+  }
+
+  /* Ensure collapsed state keeps icons fully visible within width */
+  .sidebar.collapsed .nav-link {
+    overflow: hidden; /* hide any text remnants */
+  }
+
+  .sidebar.collapsed .nav-icon,
+  .sidebar.collapsed .nav-link i {
+    overflow: visible; /* but allow icon to render fully within its box */
   }
   
   
@@ -372,12 +398,40 @@
     text-align: center;
     font-size: 14px;
   }
+
+  /* Icon wrapper to ensure consistent sizing and centering */
+  .sidebar .nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; /* base size in expanded view */
+    height: 28px;
+    flex: 0 0 auto;
+  }
+
+  /* Collapsed: provide larger, centered icon in a square to avoid clipping */
+  .sidebar.collapsed .nav-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .sidebar.collapsed .nav-link i {
+    font-size: 20px; /* larger icon in collapsed view */
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  }
   
   .sidebar .nav-link:hover,
   .sidebar .nav-link.active {
     background-color: rgba(255, 255, 255, 0.12);
     color: white;
     transform: translateX(1px);
+  }
+
+  /* Prevent horizontal shift on hover when collapsed to avoid clipping */
+  .sidebar.collapsed .nav-link:hover,
+  .sidebar.collapsed .nav-link.active {
+    transform: none;
   }
    
   .sidebar .nav-link.active {
@@ -435,8 +489,8 @@
   }
   
   .sidebar.collapsed .nav-link {
-    padding: 12px;
-    margin: 2px 8px;
+    padding: 10px; /* slightly tighter to keep icon centered */
+    margin: 4px 6px; /* reduce side margins to avoid cut-off */
     justify-content: center;
   }
   
@@ -462,10 +516,12 @@
     min-height: calc(100vh - var(--navbar-height));
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     background-color: var(--bg-primary);
+    position: relative;
+    z-index: 1; /* keep content below the sidebar */
   }
   
   .main-content.sidebar-collapsed {
-    margin-left: var(--sidebar-collapsed);
+    margin-left: calc(var(--sidebar-collapsed) + 8px);
   }
   
   /* Dark mode card and component styles */
@@ -528,22 +584,25 @@
   
   /* Minimalist enhancements */
   .admin-profile {
-    padding: var(--spacing-sm) var(--spacing-sm);
+    padding: 4px 6px; /* tighter to reduce overall footprint */
     border-radius: var(--radius-md);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  
+
   .admin-profile:hover {
     background-color: rgba(255, 255, 255, 0.1);
   }
-  
+
   .admin-avatar {
-    width: 32px;
-    height: 32px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: block;
+    width: 32px; /* was 40px */
+    height: 32px; /* was 40px */
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.25); /* thinner ring */
   }
-  
-  
+
+
   .dropdown-menu {
     border: none;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -715,6 +774,10 @@
   
   .profile-avatar {
     position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0; /* remove baseline gap */
   }
   
   .status-indicator {
@@ -735,6 +798,7 @@
     display: flex;
     flex-direction: column;
     margin-left: var(--spacing-sm);
+    line-height: 1.1;
   }
   
   .profile-name {
@@ -932,5 +996,28 @@
   
   .sidebar.collapsed .nav-badge {
     display: none;
+  }
+
+  /* Improve collapsed sidebar icon visibility */
+  .sidebar .nav-icon {
+    width: 22px;
+    height: 22px;
+    font-size: 16px;
+  }
+
+  .sidebar.collapsed .nav-link {
+    padding: 10px; /* tighter to give more room to the icon */
+  }
+
+  .sidebar.collapsed .nav-icon {
+    width: 28px;  /* bigger target area */
+    height: 28px;
+  }
+
+  .sidebar.collapsed .nav-link i {
+    font-size: 18px;        /* bigger icon when collapsed */
+    color: #fff;            /* solid white for better contrast */
+    opacity: 1;             /* ensure full opacity */
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); /* subtle edge to stand out */
   }
 </style>
