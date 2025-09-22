@@ -19,7 +19,7 @@ if (isset($_GET['id']) && isset($_GET['action'])) {
         // Map action to orderstatus_id
         $statusMap = [
             'processing' => 2, // To Ship
-            'shipped' => 3,    // Shipped
+            'shipped' => 3,    // Out for delivery
             'deliver' => 4     // Completed
         ];
         

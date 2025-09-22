@@ -162,6 +162,13 @@ try {
           <span>Stock Movements</span>
           <div class="nav-indicator"></div>
         </a>
+        <a href="batch_management.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'batch_management.php' ? 'active' : ''; ?>">
+          <div class="nav-icon">
+            <i class="fas fa-boxes"></i>
+          </div>
+          <span>Batch Management</span>
+          <div class="nav-indicator"></div>
+        </a>
         <?php endif; ?>
       </div>
     </div>

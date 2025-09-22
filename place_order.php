@@ -1,6 +1,7 @@
 <?php
 session_start();
 include 'includes/db.php';
+include_once 'includes/batch_manager.php';
 
 if (!isset($_SESSION['user_id']) || empty($_SESSION['cart'])) {
     header('Location: login.php');
@@ -165,7 +166,10 @@ foreach ($_SESSION['cart'] as $product_id => $cart_item) {
     }
 }
 
-// Insert order items into the order_items table and update product stock
+// Initialize batch manager
+$batchManager = new BatchManager($pdo);
+
+// Insert order items into the order_items table and consume from batches
 foreach ($_SESSION['cart'] as $product_id => $cart_item) {
     $quantity = $cart_item['quantity'];
 
@@ -188,12 +192,31 @@ foreach ($_SESSION['cart'] as $product_id => $cart_item) {
         $stmt->bindParam(':price', $product['price']);
         $stmt->execute();
 
-        // Update product stock in normalized structure
-        $sql = "UPDATE product_stock SET current_stock = current_stock - :quantity WHERE product_id = :product_id AND current_stock >= :quantity";
-        $stmt = $pdo->prepare($sql);
-        $stmt->bindParam(':quantity', $quantity);
-        $stmt->bindParam(':product_id', $product_id);
-        $stmt->execute();
+        // Consume stock from batches using FIFO
+        try {
+            $batches_used = $batchManager->consumeStock(
+                $product_id, 
+                $quantity, 
+                'sale', 
+                'order', 
+                $order_id, 
+                $_SESSION['user_id'], 
+                "Order #{$order_id} - Customer purchase"
+            );
+            
+            // Update product stock in normalized structure
+            $sql = "UPDATE product_stock SET current_stock = current_stock - :quantity WHERE product_id = :product_id AND current_stock >= :quantity";
+            $stmt = $pdo->prepare($sql);
+            $stmt->bindParam(':quantity', $quantity);
+            $stmt->bindParam(':product_id', $product_id);
+            $stmt->execute();
+            
+        } catch (Exception $e) {
+            // If batch consumption fails, rollback the order
+            $_SESSION['error'] = "Order failed: " . $e->getMessage();
+            header('Location: checkout.php');
+            exit;
+        }
     }
 }
 

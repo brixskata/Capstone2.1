@@ -2,6 +2,7 @@
 <?php
 include '../includes/db.php';
 include_once '../includes/log_history.php';
+include_once '../includes/batch_manager.php';
 session_start();
 
 // Ensure user is logged in and has admin role
@@ -38,13 +39,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
             throw new Exception("Cost per unit cannot be negative.");
         }
 
-        // Insert restocking record (matches restocking table schema)
-        $stmt = $pdo->prepare("INSERT INTO restocking (product_id, supplier_id, quantity_added, cost_per_unit, total_cost, restock_date, expected_delivery, status_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)");
-        $stmt->execute([$product_id, $supplier_id, $quantity_added, $cost_per_unit, $total_cost, $restock_date, $expected_delivery, $notes, $_SESSION['user_id']]);
+        // Start transaction for restocking
+        $pdo->beginTransaction();
+        
+        try {
+            // Insert restocking record (matches restocking table schema)
+            $stmt = $pdo->prepare("INSERT INTO restocking (product_id, supplier_id, quantity_added, cost_per_unit, total_cost, restock_date, expected_delivery, status_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)");
+            $stmt->execute([$product_id, $supplier_id, $quantity_added, $cost_per_unit, $total_cost, $restock_date, $expected_delivery, $notes, $_SESSION['user_id']]);
+            $restock_id = $pdo->lastInsertId();
 
-        // Update product_stock current_stock and last_restock_date
-        $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ? WHERE product_id = ?");
-        $stmt->execute([$quantity_added, $restock_date, $product_id]);
+            // Update product_stock current_stock and last_restock_date
+            $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ? WHERE product_id = ?");
+            $stmt->execute([$quantity_added, $restock_date, $product_id]);
+            
+            // Create batch for the restocked items
+            $batchManager = new BatchManager($pdo);
+            $batch_id = $batchManager->createBatch([
+                'product_id' => $product_id,
+                'supplier_id' => $supplier_id,
+                'quantity_received' => $quantity_added,
+                'unit_cost' => $cost_per_unit,
+                'received_date' => $restock_date,
+                'created_by' => $_SESSION['user_id'],
+                'reference_type' => 'restock',
+                'reference_id' => $restock_id,
+                'notes' => $notes
+            ]);
+            
+            $pdo->commit();
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
 
         // Fetch new current stock
         $stmt = $pdo->prepare("SELECT current_stock FROM product_stock WHERE product_id = ?");
@@ -52,7 +80,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
         $current_stock = (int)$stmt->fetchColumn();
 
         // Record stock movement (use stock_movements schema)
-        $restock_id = $pdo->lastInsertId();
         $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, stockmovementtype_id, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 1, ?, ?, ?, 'Restocking', ?, 'restock', ?)");
         $stmt->execute([$product_id, $quantity_added, $current_stock - $quantity_added, $current_stock, $restock_id, $_SESSION['user_id']]);
 
@@ -111,24 +138,63 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
                 throw new Exception("Invalid adjustment type: $adjustment_type");
         }
 
-        // Update product_stock
-        $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = ? WHERE product_id = ?");
-        $stmt->execute([$new_stock, $product_id]);
+        // Start transaction for stock adjustment
+        $pdo->beginTransaction();
+        
+        try {
+            // Update product_stock
+            $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = ? WHERE product_id = ?");
+            $stmt->execute([$new_stock, $product_id]);
 
-        // Map adjustment type to proper ID
-        $adjustment_type_map = [
-            'add' => 1,      // Increase
-            'subtract' => 2, // Decrease  
-            'set' => 3       // Correction
-        ];
-        $adjustment_type_id = $adjustment_type_map[$adjustment_type] ?? 3;
+            // Map adjustment type to proper ID
+            $adjustment_type_map = [
+                'add' => 1,      // Increase
+                'subtract' => 2, // Decrease  
+                'set' => 3       // Correction
+            ];
+            $adjustment_type_id = $adjustment_type_map[$adjustment_type] ?? 3;
 
-        // Record stock adjustment
-        $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $_SESSION['user_id']]);
+            // Record stock adjustment
+            $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $_SESSION['user_id']]);
+            $adjustment_id = $pdo->lastInsertId();
+            
+            // Handle batch operations based on adjustment type
+            $batchManager = new BatchManager($pdo);
+            
+            if ($adjustment_type === 'add') {
+                // Create a batch for added stock
+                $batch_id = $batchManager->createBatch([
+                    'product_id' => $product_id,
+                    'quantity_received' => $quantity,
+                    'received_date' => date('Y-m-d'),
+                    'created_by' => $_SESSION['user_id'],
+                    'reference_type' => 'adjustment',
+                    'reference_id' => $adjustment_id,
+                    'notes' => "Stock adjustment: $reason"
+                ]);
+            } elseif ($adjustment_type === 'subtract') {
+                // Consume from batches using FIFO
+                $batches_used = $batchManager->consumeStock(
+                    $product_id,
+                    $quantity,
+                    'adjustment',
+                    'adjustment',
+                    $adjustment_id,
+                    $_SESSION['user_id'],
+                    "Stock adjustment: $reason"
+                );
+            }
+            
+            $pdo->commit();
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
 
         // Record stock movement
-        $adjustment_id = $pdo->lastInsertId();
         $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, stockmovementtype_id, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 4, ?, ?, ?, ?, ?, 'adjustment', ?)");
         $stmt->execute([$product_id, $quantity, $previous_stock, $new_stock, $reason, $adjustment_id, $_SESSION['user_id']]);
 
@@ -308,51 +374,168 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <?php include 'includes/admin_styles.php'; ?>
-      <style>
-      .stat-card {
-        background: white;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-        border: 1px solid #e9ecef;
-        transition: transform 0.2s ease;
-      }
-      
-      .stat-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-      }
-      
-      .stat-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        color: white;
-      }
-      
-      .table-card {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-        border: 1px solid #e9ecef;
-      }
-      
-      .product-image {
-        width: 40px;
-        height: 40px;
-        object-fit: contain;
-        border-radius: 6px;
-      }
-      
-      .stock-badge {
-        font-size: 0.75rem;
-        padding: 4px 8px;
-        border-radius: 12px;
-      }
+    <style>
+        :root {
+            --bs-primary: #7F1734;
+            --bs-secondary: #6c757d;
+            --bs-success: #198754;
+            --bs-danger: #dc3545;
+            --bs-warning: #ffc107;
+            --bs-info: #0dcaf0;
+            --bs-light: #f8f9fa;
+            --bs-dark: #212529;
+        }
+        
+        /* Override admin styles for this page */
+        .main-content {
+            background-color: var(--bg-primary) !important;
+        }
+        
+        .main-container {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .page-header {
+            background: var(--bs-primary);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+        }
+        
+        .page-header h2 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+
+        /* Analytics Cards - Light Version */
+        .analytics-card {
+            background: white;
+            color: var(--bs-dark);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .analytics-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--bs-primary);
+        }
+
+        .analytics-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            background: rgba(127, 23, 52, 0.1);
+            color: var(--bs-primary);
+        }
+
+        .card-content {
+            flex: 1;
+        }
+
+        .card-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bs-primary);
+            margin: 0;
+            line-height: 1;
+        }
+
+        .card-label {
+            color: var(--bs-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 0.5rem 0 0 0;
+        }
+        
+        .table-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            color: var(--text-primary) !important;
+        }
+        
+        .table-card .card-header {
+            background: transparent;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .table-card .card-body {
+            padding: 1.5rem;
+        }
+        
+        .table-card .table {
+            margin-bottom: 0;
+        }
+        
+        .table-card .table th {
+            border: none;
+            padding: 1rem 1.25rem;
+            font-weight: 600;
+            color: var(--bs-dark);
+        }
+        
+        .table-card .table td {
+            border: none;
+            padding: 1rem 1.25rem;
+            vertical-align: middle;
+        }
+        
+        .table-card .table-light {
+            background: #f8f9fa;
+        }
+        
+        .product-image {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 1rem;
+            }
+            
+            .page-header {
+                padding: 1.5rem;
+            }
+            
+            .page-header h2 {
+                font-size: 1.5rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -361,262 +544,211 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
   <!-- Main Content -->
   <main class="main-content" id="mainContent">
-    <?php if (isset($_SESSION['success'])): ?>
-      <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <div class="main-container">
+      <div class="page-header">
+        <h2><i class="fas fa-warehouse me-2"></i>Inventory Overview</h2>
       </div>
-    <?php endif; ?>
-    
-    <?php if (isset($_SESSION['error'])): ?>
-      <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-      </div>
-    <?php endif; ?>
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <div>
-        <h1 class="h3 fw-bold text-dark mb-2">
-          <i class="fa fa-warehouse me-3" style="color: #7F1734;"></i>Inventory Overview
-        </h1>
-        <p class="text-muted">Monitor inventory status and access management tools</p>
-      </div>
-    </div>
-
-    <!-- Quick Access Cards -->
-    <div class="row g-4 mb-4">
-      <div class="col-lg-3 col-md-6">
-        <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='restocking.php'">
-          <div class="d-flex align-items-center">
-            <div class="stat-icon bg-success">
-              <i class="fa fa-plus-circle"></i>
-            </div>
-            <div class="ms-3">
-              <h5 class="fw-bold mb-1">Restocking</h5>
-              <small class="text-muted">Record new stock entries</small>
-            </div>
-          </div>
+      <?php if (isset($_SESSION['success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-      </div>
+      <?php endif; ?>
       
-      <div class="col-lg-3 col-md-6">
-        <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='stock_adjustment.php'">
-          <div class="d-flex align-items-center">
-            <div class="stat-icon bg-info">
-              <i class="fa fa-edit"></i>
-            </div>
-            <div class="ms-3">
-              <h5 class="fw-bold mb-1">Stock Adjustment</h5>
-              <small class="text-muted">Correct discrepancies</small>
-            </div>
-          </div>
+      <?php if (isset($_SESSION['error'])): ?>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-      </div>
-      
-      <div class="col-lg-3 col-md-6">
-        <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='stock_levels.php'">
-          <div class="d-flex align-items-center">
-            <div class="stat-icon bg-warning">
-              <i class="fa fa-chart-line"></i>
-            </div>
-            <div class="ms-3">
-              <h5 class="fw-bold mb-1">Stock Levels</h5>
-              <small class="text-muted">Monitor real-time levels</small>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="col-lg-3 col-md-6">
-        <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='stock_movements.php'">
-          <div class="d-flex align-items-center">
-            <div class="stat-icon bg-primary">
-              <i class="fa fa-exchange-alt"></i>
-            </div>
-            <div class="ms-3">
-              <h5 class="fw-bold mb-1">Stock Movements</h5>
-              <small class="text-muted">Track product performance</small>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      <?php endif; ?>
 
-    <!-- Inventory Statistics -->
-    <div class="row g-4 mb-4">
-      <div class="col-lg-3 col-md-6">
-        <div class="stat-card">
-          <div class="d-flex align-items-center">
-            <div class="stat-icon bg-info">
-              <i class="fa fa-boxes"></i>
+      <!-- Quick Access Analytics Cards -->
+      <div class="row g-4 mb-4">
+        <div class="col-lg-3 col-md-6">
+          <div class="analytics-card" style="cursor: pointer;" onclick="window.location.href='restocking.php'">
+            <div class="card-icon">
+              <i class="fas fa-plus-circle"></i>
             </div>
-            <div class="ms-3">
-              <h4 class="fw-bold mb-0"><?= $total_products ?></h4>
-              <small class="text-muted text-uppercase">Total Products</small>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="col-lg-3 col-md-6">
-        <div class="stat-card">
-          <div class="d-flex align-items-center">
-            <div class="stat-icon bg-warning">
-              <i class="fa fa-exclamation-triangle"></i>
-            </div>
-            <div class="ms-3">
-              <h4 class="fw-bold mb-0"><?= $low_stock_products ?></h4>
-              <small class="text-muted text-uppercase">Low Stock Items</small>
+            <div class="card-content">
+              <h3 class="card-number">Restock</h3>
+              <p class="card-label">Record new stock entries</p>
             </div>
           </div>
         </div>
-      </div>
-      
-      <div class="col-lg-3 col-md-6">
-        <div class="stat-card">
-          <div class="d-flex align-items-center">
-            <div class="stat-icon bg-danger">
-              <i class="fa fa-times-circle"></i>
+        
+        <div class="col-lg-3 col-md-6">
+          <div class="analytics-card" style="cursor: pointer;" onclick="window.location.href='stock_adjustment.php'">
+            <div class="card-icon">
+              <i class="fas fa-edit"></i>
             </div>
-            <div class="ms-3">
-              <h4 class="fw-bold mb-0"><?= $out_of_stock_products ?></h4>
-              <small class="text-muted text-uppercase">Out of Stock</small>
+            <div class="card-content">
+              <h3 class="card-number">Adjust</h3>
+              <p class="card-label">Correct discrepancies</p>
             </div>
           </div>
         </div>
-      </div>
-      
-      <div class="col-lg-3 col-md-6">
-        <div class="stat-card">
-          <div class="d-flex align-items-center">
-            <div class="stat-icon bg-success">
-              <i class="fa fa-money-bill"></i>
+        
+        <div class="col-lg-3 col-md-6">
+          <div class="analytics-card" style="cursor: pointer;" onclick="window.location.href='stock_levels.php'">
+            <div class="card-icon">
+              <i class="fas fa-chart-line"></i>
             </div>
-            <div class="ms-3">
-              <h4 class="fw-bold mb-0">₱<?= number_format($total_inventory_value, 2) ?></h4>
-              <small class="text-muted text-uppercase">Total Value</small>
+            <div class="card-content">
+              <h3 class="card-number">Levels</h3>
+              <p class="card-label">Monitor real-time levels</p>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- Charts Section -->
-    <!-- Row 3: Product Movement Categories and Stock Status Distribution -->
-    <div class="row g-4 mb-4">
-      <!-- Product Movement Categories -->
-      <div class="col-lg-6">
-        <div class="table-card">
-          <div class="card-header bg-transparent border-0 p-4">
-            <h5 class="fw-bold mb-0">
-              <i class="fa fa-chart-bar me-2" style="color: #7F1734;"></i>Product Movement Categories (Last 30 Days)
-            </h5>
-          </div>
-          <div class="p-4">
-            <canvas id="movementCategoriesChart" height="300"></canvas>
+        
+        <div class="col-lg-3 col-md-6">
+          <div class="analytics-card" style="cursor: pointer;" onclick="window.location.href='stock_movements.php'">
+            <div class="card-icon">
+              <i class="fas fa-exchange-alt"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number">Movements</h3>
+              <p class="card-label">Track product performance</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Stock Status Distribution Chart -->
-      <div class="col-lg-6">
-        <div class="table-card">
-          <div class="card-header bg-transparent border-0 p-4">
-            <h5 class="fw-bold mb-0">
-              <i class="fa fa-chart-donut me-2" style="color: #7F1734;"></i>Stock Status Distribution
-            </h5>
+      <!-- Inventory Statistics Analytics Cards -->
+      <div class="row g-4 mb-4">
+        <div class="col-lg-3 col-md-6">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-boxes"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?= $total_products ?></h3>
+              <p class="card-label">Total Products</p>
+            </div>
           </div>
-          <div class="p-4">
-            <canvas id="stockStatusChart" height="300"></canvas>
+        </div>
+        
+        <div class="col-lg-3 col-md-6">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?= $low_stock_products ?></h3>
+              <p class="card-label">Low Stock Items</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-times-circle"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?= $out_of_stock_products ?></h3>
+              <p class="card-label">Out of Stock</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-money-bill"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number">₱<?= number_format($total_inventory_value, 2) ?></h3>
+              <p class="card-label">Total Value</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Row 4: Stock Movement Trend (Full Width) -->
-    <div class="row g-4 mb-4">
-      <!-- Stock Movement Trend Chart -->
-      <div class="col-12">
-        <div class="table-card">
-          <div class="card-header bg-transparent border-0 p-4">
-            <h5 class="fw-bold mb-0">
-              <i class="fa fa-chart-line me-2" style="color: #7F1734;"></i>Stock Movement Trend (Last 7 Days)
-            </h5>
+      <!-- Product Movement Categories and Stock Status Distribution -->
+      <div class="row g-4 mb-4">
+        <!-- Product Movement Categories -->
+        <div class="col-lg-6">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-chart-bar me-2"></i>Product Movement Categories (Last 30 Days)
+              </h5>
+            </div>
+            <div class="card-body">
+              <canvas id="movementCategoriesChart" height="300"></canvas>
+            </div>
           </div>
-          <div class="p-4">
-            <canvas id="movementTrendChart" height="200"></canvas>
+        </div>
+
+        <!-- Stock Status Distribution Chart -->
+        <div class="col-lg-6">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-chart-donut me-2"></i>Stock Status Distribution
+              </h5>
+            </div>
+            <div class="card-body">
+              <canvas id="stockStatusChart" height="300"></canvas>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Row 5: Top Products Value and Movement Distribution -->
-    <div class="row g-4 mb-4">
+      <!-- Stock Movement Trend -->
+      <div class="row g-4 mb-4">
+        <div class="col-12">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-chart-line me-2"></i>Stock Movement Trend (Last 7 Days)
+              </h5>
+            </div>
+            <div class="card-body">
+              <canvas id="movementTrendChart" height="200"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Top Products by Value -->
-      <div class="col-lg-6">
-        <div class="table-card">
-          <div class="card-header bg-transparent border-0 p-4">
-            <h5 class="fw-bold mb-0">
-              <i class="fa fa-trophy me-2" style="color: #7F1734;"></i>Top Products by Stock Value
-            </h5>
-          </div>
-          <div class="p-4">
-            <canvas id="topProductsChart" height="300"></canvas>
+      <div class="row g-4 mb-4">
+        <div class="col-12">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-trophy me-2"></i>Top Products by Stock Value
+              </h5>
+            </div>
+            <div class="card-body">
+              <canvas id="topProductsChart" height="300"></canvas>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Movement Distribution -->
-      <div class="col-lg-6">
-        <div class="table-card">
-          <div class="card-header bg-transparent border-0 p-4">
-            <h5 class="fw-bold mb-0">
-              <i class="fa fa-chart-pie me-2" style="color: #7F1734;"></i>Movement Distribution
-            </h5>
-          </div>
-          <div class="p-4">
-            <canvas id="movementDistributionChart" height="300"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- Row 6: Category Distribution (Full Width) -->
-    <div class="row g-4 mb-4">
-      <!-- Category Distribution Chart -->
-      <div class="col-12">
-        <div class="table-card">
-          <div class="card-header bg-transparent border-0 p-4">
-            <h5 class="fw-bold mb-0">
-              <i class="fa fa-chart-pie me-2" style="color: #7F1734;"></i>Products by Category
-            </h5>
-          </div>
-          <div class="p-4">
-            <canvas id="categoryChart" height="300"></canvas>
-          </div>
+      <!-- Inventory Table -->
+      <div class="table-card">
+        <div class="card-header bg-transparent border-0 p-4">
+          <h5 class="fw-bold mb-0 text-dark">
+            <i class="fas fa-list-alt me-2"></i>Current Inventory Levels
+          </h5>
         </div>
-      </div>
-    </div>
-
-    <!-- Inventory Table -->
-    <div class="table-card">
-      <div class="card-header bg-transparent border-0 p-4">
-        <h5 class="fw-bold mb-0">Current Inventory Levels</h5>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-hover mb-0">
-          <thead class="table-light">
-            <tr>
-              <th class="fw-semibold">Product</th>
-              <th class="fw-semibold">Category</th>
-              <th class="fw-semibold">Current Stock</th>
-              <th class="fw-semibold">Reorder Point</th>
-              <th class="fw-semibold">Status</th>
-              <th class="fw-semibold">Last Restock</th>
-              <th class="fw-semibold">Actions</th>
-            </tr>
-          </thead>
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th class="fw-semibold text-dark">Product</th>
+                <th class="fw-semibold text-dark">Category</th>
+                <th class="fw-semibold text-dark">Current Stock</th>
+                <th class="fw-semibold text-dark">Reorder Point</th>
+                <th class="fw-semibold text-dark">Status</th>
+                <th class="fw-semibold text-dark">Last Restock</th>
+                <th class="fw-semibold text-dark">Actions</th>
+              </tr>
+            </thead>
           <tbody>
             <?php foreach ($products as $product): ?>
               <tr>
@@ -637,11 +769,11 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <td><?= $product['reorder_point'] ?></td>
                 <td>
                   <?php if ((int)$product['stock'] === 0): ?>
-                    <span class="badge bg-danger stock-badge">Out of Stock</span>
+                    <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Out of Stock</span>
                   <?php elseif ((int)$product['stock'] <= (int)$product['reorder_point']): ?>
-                    <span class="badge bg-warning stock-badge">Low Stock</span>
+                    <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Low Stock</span>
                   <?php else: ?>
-                    <span class="badge bg-success stock-badge">In Stock</span>
+                    <span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">In Stock</span>
                   <?php endif; ?>
                 </td>
                 <td class="text-muted">
@@ -662,8 +794,9 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </td>
               </tr>
             <?php endforeach; ?>
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </main>
@@ -676,51 +809,6 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
     Chart.defaults.font.family = "'Inter', sans-serif";
     Chart.defaults.color = '#6c757d';
 
-    // Category Distribution Chart (Pie Chart)
-    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
-    new Chart(categoryCtx, {
-      type: 'pie',
-      data: {
-        labels: <?= json_encode(array_column($category_data, 'category_name')) ?>,
-        datasets: [{
-          data: <?= json_encode(array_column($category_data, 'product_count')) ?>,
-          backgroundColor: [
-            '#FF6384',
-            '#36A2EB',
-            '#FFCE56',
-            '#4BC0C0',
-            '#9966FF',
-            '#FF9F40',
-            '#FF6384',
-            '#C9CBCF'
-          ],
-          borderWidth: 2,
-          borderColor: '#fff'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              padding: 20,
-              usePointStyle: true
-            }
-          },
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                const percentage = ((context.parsed / total) * 100).toFixed(1);
-                return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
-              }
-            }
-          }
-        }
-      }
-    });
 
     // Stock Status Distribution Chart (Doughnut Chart)
     const stockStatusCtx = document.getElementById('stockStatusChart').getContext('2d');
@@ -735,9 +823,9 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?= $stock_status_data['Out of Stock'] ?>
           ],
           backgroundColor: [
-            '#28a745',
-            '#ffc107',
-            '#dc3545'
+            'rgba(212, 237, 218, 0.8)',   // Light green
+            'rgba(255, 243, 205, 0.8)',   // Light yellow
+            'rgba(245, 198, 203, 0.8)'    // Light red
           ],
           borderWidth: 2,
           borderColor: '#fff'
@@ -781,15 +869,15 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
         datasets: [{
           label: 'Stock In',
           data: stockInData,
-          borderColor: '#28a745',
-          backgroundColor: 'rgba(40, 167, 69, 0.1)',
+          borderColor: '#155724',
+          backgroundColor: 'rgba(212, 237, 218, 0.3)',
           tension: 0.4,
           fill: true
         }, {
           label: 'Stock Out',
           data: stockOutData,
-          borderColor: '#dc3545',
-          backgroundColor: 'rgba(220, 53, 69, 0.1)',
+          borderColor: '#721c24',
+          backgroundColor: 'rgba(245, 198, 203, 0.3)',
           tension: 0.4,
           fill: true
         }]
@@ -835,8 +923,8 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
         datasets: [{
           label: 'Stock Value (₱)',
           data: stockValues,
-          backgroundColor: 'rgba(127, 23, 52, 0.8)',
-          borderColor: '#7F1734',
+          backgroundColor: 'rgba(212, 237, 218, 0.8)',
+          borderColor: '#155724',
           borderWidth: 1
         }]
       },
@@ -891,14 +979,14 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?= $movement_categories['Non Moving'] ?>
           ],
           backgroundColor: [
-            'rgba(40, 167, 69, 0.8)',
-            'rgba(255, 87, 34, 0.8)',
-            'rgba(108, 117, 125, 0.8)'
+            'rgba(212, 237, 218, 0.8)',   // Light green
+            'rgba(245, 198, 203, 0.8)',   // Light red
+            'rgba(226, 227, 229, 0.8)'    // Light gray
           ],
           borderColor: [
-            '#28a745',
-            '#ff5722',
-            '#6c757d'
+            '#155724',   // Dark green
+            '#721c24',   // Dark red
+            '#383d41'    // Dark gray
           ],
           borderWidth: 2
         }]
@@ -939,71 +1027,6 @@ $recent_movements = $stmt->fetchAll(PDO::FETCH_ASSOC);
       }
     });
 
-    // Movement Distribution Chart (Pie Chart)
-    const movementDistributionCtx = document.getElementById('movementDistributionChart').getContext('2d');
-    new Chart(movementDistributionCtx, {
-      type: 'pie',
-      data: {
-        labels: ['Fast Moving', 'Slow Moving', 'Non Moving'],
-        datasets: [{
-          data: [
-            <?= $movement_categories['Fast Moving'] ?>,
-            <?= $movement_categories['Slow Moving'] ?>,
-            <?= $movement_categories['Non Moving'] ?>
-          ],
-          backgroundColor: [
-            '#28a745',
-            '#ff5722',
-            '#6c757d'
-          ],
-          borderWidth: 2,
-          borderColor: '#fff'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              padding: 20,
-              usePointStyle: true,
-              generateLabels: function(chart) {
-                const data = chart.data;
-                if (data.labels.length && data.datasets.length) {
-                  const dataset = data.datasets[0];
-                  const total = dataset.data.reduce((a, b) => a + b, 0);
-                  return data.labels.map((label, i) => {
-                    const value = dataset.data[i];
-                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                    return {
-                      text: `${label}: ${value} (${percentage}%)`,
-                      fillStyle: dataset.backgroundColor[i],
-                      strokeStyle: dataset.borderColor[i],
-                      lineWidth: dataset.borderWidth,
-                      pointStyle: 'circle',
-                      hidden: false,
-                      index: i
-                    };
-                  });
-                }
-                return [];
-              }
-            }
-          },
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                const percentage = ((context.parsed / total) * 100).toFixed(1);
-                return context.label + ': ' + context.parsed + ' products (' + percentage + '%)';
-              }
-            }
-          }
-        }
-      }
-    });
   </script>
 </body>
 </html>

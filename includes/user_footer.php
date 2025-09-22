@@ -45,7 +45,7 @@
                 <ul class="footer-links">
                     <li><a href="orders.php">My Orders</a></li>
                     <li><a href="cart.php">Shopping Cart</a></li>
-                    <li><a href="favorite.php">Favorites</a></li>
+                    <li><a href="favorites.php">Favorites</a></li>
                     <li><a href="notifications.php">Notifications</a></li>
                 </ul>
             </div>

@@ -20,7 +20,7 @@ $order_id = (int)$_POST['order_id'];
 $user_id = $_SESSION['user_id'];
 
 try {
-    // First, verify that the order belongs to the current user and is in "Shipped" status
+    // First, verify that the order belongs to the current user and is in "Out for delivery" status
     $sql = "SELECT o.orders_id, o.orderstatus_id, os.status_name 
             FROM orders o 
             LEFT JOIN order_status os ON o.orderstatus_id = os.orderstatus_id 
@@ -35,9 +35,9 @@ try {
         exit;
     }
 
-    // Check if order is in "Shipped" status
-    if ($order['status_name'] !== 'Shipped') {
-        $_SESSION['error'] = "Order must be shipped before you can confirm receipt.";
+    // Check if order is in "Out for delivery" status
+    if ($order['status_name'] !== 'Out for delivery') {
+        $_SESSION['error'] = "Order must be out for delivery before you can confirm receipt.";
         header('Location: orders.php');
         exit;
     }

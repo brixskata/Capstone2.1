@@ -19,11 +19,11 @@ try {
 	$deliveredStats = $stmt->fetch(PDO::FETCH_ASSOC);
 	$totalCompletedSales = $deliveredStats['total_sales'] ?: 0;
 
-	// Get total pending sales (Pending/To Ship/Shipped)
+	// Get total pending sales (Pending/To Ship/Out for delivery)
 	$stmt = $pdo->query("SELECT SUM(o.total_price)
 		FROM orders o
 		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		WHERE os.status_name IN ('Pending','To Ship','Shipped')");
+		WHERE os.status_name IN ('Pending','To Ship','Out for delivery')");
 	$totalPendingSales = $stmt->fetchColumn() ?: 0;
 
 	$stmt = $pdo->query("SELECT COUNT(*) FROM users");
@@ -52,7 +52,7 @@ try {
 	$stmt = $pdo->query("SELECT COUNT(*)
 		FROM orders o
 		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		WHERE os.status_name = 'Shipped'");
+		WHERE os.status_name = 'Out for delivery'");
 	$shippedOrders = $stmt->fetchColumn();
 
 	// Recent orders
@@ -216,393 +216,479 @@ try {
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <?php include 'includes/admin_styles.php'; ?>
     <style>
-    .metric-card {
-      background: white;
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-      border: 1px solid #e9ecef;
-      transition: all 0.3s ease;
-      height: 100%;
-    }
-    
-    .metric-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-    }
-    
-    .metric-icon {
-      width: 56px;
-      height: 56px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      color: white;
-      margin-bottom: 16px;
-    }
-    
-    .chart-container {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-      border: 1px solid #e9ecef;
-      overflow: hidden;
-    }
-    
-    .chart-header {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-      padding: 20px 24px;
-      border-bottom: 1px solid #e9ecef;
-    }
-    
-    .chart-body {
-      padding: 24px;
-    }
-    
-    .status-badge {
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: capitalize;
-    }
-    
-    .table-modern {
-      background: white;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-    }
-    
-    .table-modern thead {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    }
-    
-    .table-modern th {
-      border: none;
-      padding: 16px 20px;
-      font-weight: 600;
-      color: var(--dark-text);
-    }
-    
-    .table-modern td {
-      border: none;
-      padding: 16px 20px;
-      vertical-align: middle;
-    }
-    
-    .page-title {
-      color: var(--dark-text);
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-    
-    .page-subtitle {
-      color: #6c757d;
-      font-size: 16px;
-      margin-bottom: 32px;
-    }
+        :root {
+            --bs-primary: #7F1734;
+            --bs-secondary: #6c757d;
+            --bs-success: #198754;
+            --bs-danger: #dc3545;
+            --bs-warning: #ffc107;
+            --bs-info: #0dcaf0;
+            --bs-light: #f8f9fa;
+            --bs-dark: #212529;
+        }
+        
+        /* Override admin styles for this page */
+        .main-content {
+            background-color: var(--bg-primary) !important;
+        }
+        
+        .main-container {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .page-header {
+            background: var(--bs-primary);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+        }
+        
+        .page-header h2 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+
+        /* Analytics Cards - Light Version */
+        .analytics-card {
+            background: white;
+            color: var(--bs-dark);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .analytics-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--bs-primary);
+        }
+
+        .analytics-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            background: rgba(127, 23, 52, 0.1);
+            color: var(--bs-primary);
+        }
+
+        .card-content {
+            flex: 1;
+        }
+
+        .card-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bs-primary);
+            margin: 0;
+            line-height: 1;
+        }
+
+        .card-label {
+            color: var(--bs-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 0.5rem 0 0 0;
+        }
+        
+        .table-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            color: var(--text-primary) !important;
+        }
+        
+        .table-card .card-header {
+            background: transparent;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .table-card .card-body {
+            padding: 1.5rem;
+        }
+        
+        .table-card .table {
+            margin-bottom: 0;
+        }
+        
+        .table-card .table th {
+            border: none;
+            padding: 1rem 1.25rem;
+            font-weight: 600;
+            color: var(--bs-dark);
+        }
+        
+        .table-card .table td {
+            border: none;
+            padding: 1rem 1.25rem;
+            vertical-align: middle;
+        }
+        
+        .table-card .table-light {
+            background: #f8f9fa;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 1rem;
+            }
+            
+            .page-header {
+                padding: 1.5rem;
+            }
+            
+            .page-header h2 {
+                font-size: 1.5rem;
+            }
+        }
   </style>
 </head>
 <body>
   <?php include 'includes/admin_navbar.php'; ?>
   <?php include 'includes/admin_sidebar.php'; ?>
 
-  <!-- Main Content Area -->
+  <!-- Main Content -->
   <main class="main-content" id="mainContent">
-    <!-- Page Header -->
-    <div class="mb-5">
-      <h1 class="page-title">
-        <i class="fas fa-tachometer-alt me-3" style="color: #7F1734;"></i>Dashboard 
-      </h1>
-     
-    </div>
+    <div class="main-container">
+      <div class="page-header">
+        <h2><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h2>
+      </div>
 
-    <!-- Key Metrics Summary -->
-    <div class="row g-3 mb-4">
-      <div class="col-12">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-tachometer-alt me-2" style="color: #7F1734;"></i>Key Performance Indicators
-            </h5>
-            <small class="text-muted">Essential business metrics at a glance</small>
-          </div>
-          <div class="chart-body">
-            <div class="row g-3">
-              <div class="col-md-2 col-6">
-                <div class="text-center">
-                  <h4 class="fw-bold text-info mb-1"><?php echo number_format($totalProducts); ?></h4>
-                  <small class="text-muted">Active Products</small>
-                </div>
-              </div>
-              <div class="col-md-2 col-6">
-                <div class="text-center">
-                  <h4 class="fw-bold text-success mb-1">₱<?php echo number_format($totalCompletedSales, 0); ?></h4>
-                  <small class="text-muted">Total Revenue</small>
-                </div>
-              </div>
-              <div class="col-md-2 col-6">
-                <div class="text-center">
-                  <h4 class="fw-bold mb-1" style="color: #7F1734;"><?php echo number_format($totalUsers); ?></h4>
-                  <small class="text-muted">Users</small>
-                </div>
-              </div>
-              <div class="col-md-2 col-6">
-                <div class="text-center">
-                  <h4 class="fw-bold text-warning mb-1"><?php echo number_format($totalStock); ?></h4>
-                  <small class="text-muted">In Stock</small>
-                </div>
-              </div>
-              <div class="col-md-2 col-6">
-                <div class="text-center">
-                  <h4 class="fw-bold text-danger mb-1"><?php echo $lowStockProducts ? count($lowStockProducts) : 0; ?></h4>
-                  <small class="text-muted">Low Stock</small>
-                </div>
-              </div>
-              <div class="col-md-2 col-6">
-                <div class="text-center">
-                  <h4 class="fw-bold text-primary mb-1"><?php echo $movement_categories['Fast Moving']; ?></h4>
-                  <small class="text-muted">Fast Moving</small>
-                </div>
-              </div>
+      <!-- Analytics Cards -->
+      <div class="row g-4 mb-4">
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-box"></i>
             </div>
-            <hr class="my-3">
-            <div class="row g-3">
-              <div class="col-md-3 col-6">
-                <div class="text-center">
-                  <h5 class="fw-bold text-warning mb-1"><?php echo $pendingOrders; ?></h5>
-                  <small class="text-muted">Pending Orders</small>
-                </div>
-              </div>
-              <div class="col-md-3 col-6">
-                <div class="text-center">
-                  <h5 class="fw-bold text-info mb-1"><?php echo $processingOrders; ?></h5>
-                  <small class="text-muted">Processing</small>
-                </div>
-              </div>
-              <div class="col-md-3 col-6">
-                <div class="text-center">
-                  <h5 class="fw-bold mb-1" style="color: #7F1734;"><?php echo $shippedOrders; ?></h5>
-                  <small class="text-muted">Shipped</small>
-                </div>
-              </div>
-              <div class="col-md-3 col-6">
-                <div class="text-center">
-                  <h5 class="fw-bold text-secondary mb-1"><?php echo $movement_categories['Non Moving']; ?></h5>
-                  <small class="text-muted">Non-Moving</small>
-                </div>
-              </div>
+            <div class="card-content">
+              <h3 class="card-number"><?php echo number_format($totalProducts); ?></h3>
+              <p class="card-label">Active Products</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-peso-sign"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number">₱<?php echo number_format($totalCompletedSales, 0); ?></h3>
+              <p class="card-label">Total Revenue</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-users"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?php echo number_format($totalUsers); ?></h3>
+              <p class="card-label">Total Users</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-warehouse"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?php echo number_format($totalStock); ?></h3>
+              <p class="card-label">In Stock</p>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Row 1: Daily Sales Trend (Full Width) -->
-    <div class="row g-4 mb-5">
+      <!-- Order Status Analytics Cards -->
+      <div class="row g-4 mb-4">
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?php echo $pendingOrders; ?></h3>
+              <p class="card-label">Pending Orders</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-cog"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?php echo $processingOrders; ?></h3>
+              <p class="card-label">Processing</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-truck"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?php echo $shippedOrders; ?></h3>
+              <p class="card-label">Out for delivery</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?php echo $lowStockProducts ? count($lowStockProducts) : 0; ?></h3>
+              <p class="card-label">Low Stock</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Daily Sales Trend -->
-      <div class="col-12">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-line me-2" style="color: #7F1734;"></i>Daily Sales Trend
-            </h5>
-            <small class="text-muted">Daily revenue and order count (last 30 days)</small>
-          </div>
-          <div class="chart-body">
-            <canvas id="dailySalesChart" height="200"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Row 2: Product Distribution and User Registration Trend -->
-    <div class="row g-4 mb-5">
-      <!-- Product Distribution Pie Chart -->
-      <div class="col-lg-4">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-pie me-2" style="color: #7F1734;"></i>Product Distribution
-            </h5>
-            <small class="text-muted">Products by category</small>
-          </div>
-          <div class="chart-body" style="height: 300px;">
-            <canvas id="categoriesChart"></canvas>
+      <div class="row g-4 mb-4">
+        <div class="col-12">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-chart-line me-2"></i>Daily Sales Trend
+              </h5>
+              <small class="text-muted">Daily revenue and order count (last 30 days)</small>
+            </div>
+            <div class="card-body">
+              <canvas id="dailySalesChart" height="200"></canvas>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- User Registration Trend -->
-      <div class="col-lg-8">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-user-plus me-2" style="color: #7F1734;"></i>User Registration Trend
-            </h5>
-            <small class="text-muted">New users per month (last 12 months)</small>
-          </div>
-          <div class="chart-body" style="height: 300px;">
-            <canvas id="userRegistrationChart"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Row 3: Top Selling Products and Product Movement Analysis -->
-    <div class="row g-4 mb-5">
-      <!-- Top Selling Products Chart -->
-      <div class="col-lg-6">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-trophy me-2" style="color: #7F1734;"></i>Top Selling Products
-            </h5>
-            <small class="text-muted">Best sellers in last 30 days</small>
-          </div>
-          <div class="chart-body">
-            <canvas id="topSellingChart" height="200"></canvas>
+      <!-- Product Distribution and User Registration Trend -->
+      <div class="row g-4 mb-4">
+        <!-- Product Distribution Pie Chart -->
+        <div class="col-lg-4">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-chart-pie me-2"></i>Product Distribution
+              </h5>
+              <small class="text-muted">Products by category</small>
+            </div>
+            <div class="card-body" style="height: 300px;">
+              <canvas id="categoriesChart"></canvas>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Product Movement Analysis Chart -->
-      <div class="col-lg-6">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-donut me-2" style="color: #7F1734;"></i>Product Movement Analysis
-            </h5>
-            <small class="text-muted">Product performance over last 30 days</small>
-          </div>
-          <div class="chart-body">
-            <canvas id="movementAnalysisChart" height="200"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Row 4: Order Status Bar Chart (Full Width) -->
-    <div class="row g-4 mb-5">
-      <div class="col-12">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-bar me-2" style="color: #7F1734;"></i>Order Status Overview
-            </h5>
-            <small class="text-muted">Distribution of orders by current status</small>
-          </div>
-          <div class="chart-body">
-            <canvas id="orderStatusChart" height="100"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Row 5: Inventory Value by Category (Full Width) -->
-    <div class="row g-4 mb-5">
-      <div class="col-12">
-        <div class="chart-container">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">
-              <i class="fas fa-chart-bar me-2" style="color: #7F1734;"></i>Inventory Value by Category
-            </h5>
-            <small class="text-muted">Total inventory value distribution across categories</small>
-          </div>
-          <div class="chart-body">
-            <canvas id="inventoryValueChart" height="200"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-
-
-    <!-- Data Tables -->
-    <div class="row g-4">
-      <!-- Recent Orders Table -->
-      <div class="col-lg-8">
-        <div class="table-modern">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0">Latest Orders</h5>
-            <small class="text-muted">Most recent customer orders</small>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead>
-                <tr>
-                  <th>Order ID</th>
-                  <th>Customer</th>
-                  <th>Status</th>
-                  <th>Order Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach($recentOrders as $order): ?>
-                <tr>
-                  <td class="fw-semibold">#<?php echo str_pad($order['id'], 4, '0', STR_PAD_LEFT); ?></td>
-                  <td><?php echo htmlspecialchars($order['username']); ?></td>
-                  <td>
-                    <?php
-                      $status = strtolower($order['status']);
-                      $badgeClass = 'bg-secondary';
-                      if ($status === 'pending') $badgeClass = 'bg-warning text-dark';
-                      elseif ($status === 'to ship') $badgeClass = 'bg-info';
-                      elseif ($status === 'shipped') $badgeClass = 'text-white';
-                      elseif ($status === 'completed' || $status === 'delivered') $badgeClass = 'bg-success';
-                    ?>
-                    <span class="status-badge <?php echo $badgeClass; ?>" 
-                          <?php if($status === 'shipped') echo 'style="background-color: #7F1734;"'; ?>>
-                      <?php echo ucwords($order['status']); ?>
-                    </span>
-                  </td>
-                  <td class="text-muted"><?php echo date('M j, Y g:i A', strtotime($order['created_at'])); ?></td>
-                </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
+        <!-- User Registration Trend -->
+        <div class="col-lg-8">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-user-plus me-2"></i>User Registration Trend
+              </h5>
+              <small class="text-muted">New users per month (last 12 months)</small>
+            </div>
+            <div class="card-body" style="height: 300px;">
+              <canvas id="userRegistrationChart"></canvas>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Low Stock Alert -->
-      <div class="col-lg-4">
-        <div class="table-modern">
-          <div class="chart-header">
-            <h5 class="fw-bold mb-0 text-danger">
-              <i class="fas fa-exclamation-triangle me-2" style="color: #7F1734;"></i>Stock Alerts
-            </h5>
-            <small class="text-muted">Products running low</small>
+      <!-- Top Selling Products and Product Movement Analysis -->
+      <div class="row g-4 mb-4">
+        <!-- Top Selling Products Chart -->
+        <div class="col-lg-6">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-trophy me-2"></i>Top Selling Products
+              </h5>
+              <small class="text-muted">Best sellers in last 30 days</small>
+            </div>
+            <div class="card-body">
+              <canvas id="topSellingChart" height="200"></canvas>
+            </div>
           </div>
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead>
-                <tr>
-                  <th>Product Name</th>
-                  <th class="text-center">Stock</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach($lowStockProducts as $product): ?>
-                <tr>
-                  <td class="fw-medium"><?php echo htmlspecialchars($product['name']); ?></td>
-                  <td class="text-center">
-                    <span class="badge bg-danger fs-6"><?php echo $product['stock']; ?></span>
-                  </td>
-                </tr>
-                <?php endforeach; ?>
-                <?php if (empty($lowStockProducts)): ?>
-                <tr>
-                  <td colspan="2" class="text-center text-muted py-4">
-                    <i class="fas fa-check-circle text-success me-2"></i>All products have sufficient stock
-                  </td>
-                </tr>
-                <?php endif; ?>
-              </tbody>
-            </table>
+        </div>
+
+        <!-- Product Movement Analysis Chart -->
+        <div class="col-lg-6">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-chart-donut me-2"></i>Product Movement Analysis
+              </h5>
+              <small class="text-muted">Product performance over last 30 days</small>
+            </div>
+            <div class="card-body">
+              <canvas id="movementAnalysisChart" height="200"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order Status Bar Chart -->
+      <div class="row g-4 mb-4">
+        <div class="col-12">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-chart-bar me-2"></i>Order Status Overview
+              </h5>
+              <small class="text-muted">Distribution of orders by current status</small>
+            </div>
+            <div class="card-body">
+              <canvas id="orderStatusChart" height="100"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inventory Value by Category -->
+      <div class="row g-4 mb-4">
+        <div class="col-12">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-chart-bar me-2"></i>Inventory Value by Category
+              </h5>
+              <small class="text-muted">Total inventory value distribution across categories</small>
+            </div>
+            <div class="card-body">
+              <canvas id="inventoryValueChart" height="200"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- Data Tables -->
+      <div class="row g-4">
+        <!-- Recent Orders Table -->
+        <div class="col-lg-8">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-list-alt me-2"></i>Latest Orders
+              </h5>
+              <small class="text-muted">Most recent customer orders</small>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th class="fw-semibold text-dark">Order ID</th>
+                    <th class="fw-semibold text-dark">Customer</th>
+                    <th class="fw-semibold text-dark">Status</th>
+                    <th class="fw-semibold text-dark">Order Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach($recentOrders as $order): ?>
+                  <tr>
+                    <td class="fw-semibold text-dark">#<?php echo str_pad($order['id'], 4, '0', STR_PAD_LEFT); ?></td>
+                    <td><?php echo htmlspecialchars($order['username']); ?></td>
+                    <td>
+                      <?php
+                        $status = strtolower($order['status']);
+                        $badgeStyle = 'background: #f8f9fa; color: #6c757d;';
+                        if ($status === 'pending') {
+                          $badgeStyle = 'background: #fff3cd; color: #856404;';
+                        } elseif ($status === 'to ship') {
+                          $badgeStyle = 'background: #d1ecf1; color: #0c5460;';
+                        } elseif ($status === 'shipped') {
+                          $badgeStyle = 'background: #cce5ff; color: #004085;';
+                        } elseif ($status === 'completed' || $status === 'delivered') {
+                          $badgeStyle = 'background: #d4edda; color: #155724;';
+                        } elseif ($status === 'cancelled') {
+                          $badgeStyle = 'background: #f5c6cb; color: #721c24;';
+                        }
+                      ?>
+                      <span class="badge" style="<?= $badgeStyle ?> border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                        <?php echo ucwords($order['status']); ?>
+                      </span>
+                    </td>
+                    <td class="text-muted"><?php echo date('M j, Y g:i A', strtotime($order['created_at'])); ?></td>
+                  </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Low Stock Alert -->
+        <div class="col-lg-4">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-exclamation-triangle me-2"></i>Stock Alerts
+              </h5>
+              <small class="text-muted">Products running low</small>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th class="fw-semibold text-dark">Product Name</th>
+                    <th class="fw-semibold text-dark text-center">Stock</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach($lowStockProducts as $product): ?>
+                  <tr>
+                    <td class="fw-medium"><?php echo htmlspecialchars($product['name']); ?></td>
+                    <td class="text-center">
+                      <span class="badge fs-6" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px;"><?php echo $product['stock']; ?></span>
+                    </td>
+                  </tr>
+                  <?php endforeach; ?>
+                  <?php if (empty($lowStockProducts)): ?>
+                  <tr>
+                    <td colspan="2" class="text-center text-muted py-4">
+                      <i class="fas fa-check-circle text-success me-2"></i>All products have sufficient stock
+                    </td>
+                  </tr>
+                  <?php endif; ?>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -628,7 +714,7 @@ try {
                 <?php 
                 $categoryNames = [];
                 $productCounts = [];
-                $colors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c'];
+                 $colors = ['#d4edda', '#f5c6cb', '#e2e3e5', '#fff3cd', '#d1ecf1', '#cce5ff', '#f8d7da', '#f8f9fa'];
                 foreach ($categoriesData as $index => $data) {
                     $categoryNames[] = "'" . htmlspecialchars($data['category']) . "'";
                     $productCounts[] = intval($data['product_count']);
@@ -707,28 +793,28 @@ try {
                 label: 'Number of Orders',
                 data: [<?php echo implode(', ', $statusCounts); ?>],
                 backgroundColor: [
-                    'rgba(255, 193, 7, 0.8)',   // Pending
-                    'rgba(13, 202, 240, 0.8)',  // To Ship / Processing
-                    'rgba(127, 23, 52, 0.8)',   // Shipped
-                    'rgba(25, 135, 84, 0.8)',   // Completed/Delivered
-                    'rgba(220, 53, 69, 0.8)',   // Cancelled
+                    'rgba(255, 243, 205, 0.8)',   // Pending - Light yellow
+                    'rgba(209, 236, 241, 0.8)',   // To Ship / Processing - Light blue
+                    'rgba(204, 229, 255, 0.8)',   // Out for delivery - Light blue
+                    'rgba(212, 237, 218, 0.8)',   // Completed/Delivered - Light green
+                    'rgba(245, 198, 203, 0.8)',   // Cancelled - Light red
                 ],
                 borderColor: [
-                    '#ffc107',
-                    '#0dcaf0', 
-                    '#7f1734',
-                    '#198754',
-                    '#dc3545',
+                    '#856404',
+                    '#0c5460', 
+                    '#004085',
+                    '#155724',
+                    '#721c24',
                 ],
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
                 hoverBackgroundColor: [
-                    'rgba(255, 193, 7, 1)',
-                    'rgba(13, 202, 240, 1)',
-                    'rgba(127, 23, 52, 1)',
-                    'rgba(25, 135, 84, 1)',
-                    'rgba(220, 53, 69, 1)',
+                    'rgba(255, 234, 167, 1)',   // Pending - Darker yellow
+                    'rgba(190, 229, 235, 1)',   // To Ship - Darker blue
+                    'rgba(179, 205, 255, 1)',   // Out for delivery - Darker blue
+                    'rgba(195, 230, 203, 1)',   // Completed - Darker green
+                    'rgba(240, 162, 169, 1)',   // Cancelled - Darker red
                 ]
             }]
         },
@@ -812,9 +898,9 @@ try {
                     <?php echo $movement_categories['Non Moving']; ?>
                 ],
                 backgroundColor: [
-                    '#28a745',
-                    '#ff5722',
-                    '#6c757d'
+                    '#d4edda',   // Fast Moving - Light green
+                    '#f5c6cb',   // Slow Moving - Light red
+                    '#e2e3e5'    // Non Moving - Light gray
                 ],
                 borderColor: '#ffffff',
                 borderWidth: 3,
@@ -870,8 +956,8 @@ try {
             datasets: [{
                 label: 'Units Sold',
                 data: soldQuantities,
-                backgroundColor: 'rgba(40, 167, 69, 0.8)',
-                borderColor: '#28a745',
+                backgroundColor: 'rgba(212, 237, 218, 0.8)',
+                borderColor: '#155724',
                 borderWidth: 2,
                 borderRadius: 4
             }]
@@ -922,16 +1008,16 @@ try {
             datasets: [{
                 label: 'Daily Revenue (₱)',
                 data: dailyRevenues,
-                borderColor: '#007bff',
-                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                borderColor: '#004085',
+                backgroundColor: 'rgba(204, 229, 255, 0.3)',
                 tension: 0.4,
                 fill: true,
                 yAxisID: 'y'
             }, {
                 label: 'Order Count',
                 data: dailyOrderCounts,
-                borderColor: '#28a745',
-                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                borderColor: '#155724',
+                backgroundColor: 'rgba(212, 237, 218, 0.3)',
                 tension: 0.4,
                 fill: false,
                 yAxisID: 'y1'
@@ -1021,8 +1107,8 @@ try {
             datasets: [{
                 label: 'New Users',
                 data: userCounts,
-                backgroundColor: 'rgba(13, 202, 240, 0.8)',
-                borderColor: '#0dcaf0',
+                backgroundColor: 'rgba(209, 236, 241, 0.8)',
+                borderColor: '#0c5460',
                 borderWidth: 2,
                 borderRadius: 4
             }]
@@ -1074,26 +1160,26 @@ try {
             datasets: [{
                 label: 'Inventory Value (₱)',
                 data: categoryValues,
-                backgroundColor: [
-                    'rgba(255, 99, 132, 0.8)',
-                    'rgba(54, 162, 235, 0.8)',
-                    'rgba(255, 205, 86, 0.8)',
-                    'rgba(75, 192, 192, 0.8)',
-                    'rgba(153, 102, 255, 0.8)',
-                    'rgba(255, 159, 64, 0.8)',
-                    'rgba(199, 199, 199, 0.8)',
-                    'rgba(83, 102, 255, 0.8)'
-                ],
-                borderColor: [
-                    '#FF6384',
-                    '#36A2EB',
-                    '#FFCE56',
-                    '#4BC0C0',
-                    '#9966FF',
-                    '#FF9F40',
-                    '#C7C7C7',
-                    '#5366FF'
-                ],
+                 backgroundColor: [
+                     'rgba(212, 237, 218, 0.8)',   // Light green
+                     'rgba(245, 198, 203, 0.8)',   // Light red
+                     'rgba(226, 227, 229, 0.8)',   // Light gray
+                     'rgba(255, 243, 205, 0.8)',   // Light yellow
+                     'rgba(209, 236, 241, 0.8)',   // Light blue
+                     'rgba(204, 229, 255, 0.8)',   // Light blue
+                     'rgba(248, 215, 218, 0.8)',   // Light pink
+                     'rgba(248, 249, 250, 0.8)'    // Light gray
+                 ],
+                 borderColor: [
+                     '#155724',   // Dark green
+                     '#721c24',   // Dark red
+                     '#383d41',   // Dark gray
+                     '#856404',   // Dark yellow
+                     '#0c5460',   // Dark blue
+                     '#004085',   // Dark blue
+                     '#721c24',   // Dark pink
+                     '#6c757d'    // Dark gray
+                 ],
                 borderWidth: 2,
                 borderRadius: 4
             }]
