@@ -291,6 +291,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
             font-size: 1.25rem;
         }
 
+        /* Order grid styles */
+        .order-header, .order-row {
+            display: grid;
+            grid-template-columns: 80px 1fr 120px 120px 140px; /* image, name, qty, unit, subtotal */
+            gap: 1rem;
+            align-items: center;
+        }
+        .order-header {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 0.75rem;
+        }
+        .order-row {
+            padding: 1rem;
+            border-bottom: 1px solid #e9ecef;
+            background: #ffffff;
+            border-radius: 0.5rem;
+        }
+        .order-row:last-child { border-bottom: none; }
+        .order-cell--image { display: flex; align-items: center; }
+        .order-col--sub { color: var(--bs-danger); font-weight: 700; }
+
+        @media (max-width: 768px) {
+            .order-header { display: none; }
+            .order-row { grid-template-columns: 80px 1fr; row-gap: 0.25rem; }
+            .order-row .od-qty, .order-row .od-unit, .order-row .od-sub { display: flex; gap: 0.5rem; font-size: 0.9rem; color: #6c757d; }
+            .order-row .od-sub { color: var(--bs-danger); font-weight: 700; }
+        }
+
         .order-summary {
             background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
             border-radius: 1rem;
@@ -509,16 +542,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
                                 <i class="fas fa-shopping-cart"></i>
                                 Your Order
                             </h3>
+
+                            <!-- Header like template -->
+                            <div class="order-header">
+                                <div></div>
+                                <div>Product Name</div>
+                                <div>Quantity</div>
+                                <div>Item Price</div>
+                                <div>Subtotal</div>
+                            </div>
+
                             <?php foreach ($cart_items as $item): ?>
-                                <div class="cart-item">
-                                    <img src="<?php echo !empty($item['product']['image1']) ? 'admin/' . htmlspecialchars($item['product']['image1']) : 'admin/uploads/placeholder.jpg'; ?>" 
-                                         alt="<?php echo htmlspecialchars($item['product']['name']); ?>" 
-                                         class="product-image">
-                                    <div class="product-details">
-                                        <div class="product-name"><?= htmlspecialchars($item['product']['name']) ?></div>
-                                        <div class="text-muted">Quantity: <?= $item['quantity'] ?></div>
+                                <?php 
+                                    $displayName = $item['product']['name'] ?? $item['product']['product_name'] ?? 'Item';
+                                    $unitPrice = isset($item['product']['price']) ? (float)$item['product']['price'] : 0;
+                                    $qty = (int)($item['quantity'] ?? 0);
+                                    $lineSubtotal = $unitPrice * $qty;
+                                    $imgSrc = !empty($item['product']['image1']) ? 'admin/' . htmlspecialchars($item['product']['image1']) : (!empty($item['product']['image']) ? 'admin/' . htmlspecialchars($item['product']['image']) : 'admin/uploads/placeholder.jpg');
+                                ?>
+                                <div class="order-row">
+                                    <div class="order-cell--image">
+                                        <img src="<?= $imgSrc ?>" alt="<?= htmlspecialchars($displayName) ?>" class="product-image">
                                     </div>
-                                    <div class="product-price">₱<?= number_format($item['product']['price'] * $item['quantity'], 2) ?></div>
+                                    <div class="fw-semibold text-dark">
+                                        <?= htmlspecialchars($displayName) ?>
+                                    </div>
+                                    <div class="od-qty">
+                                        <span class="d-none d-md-inline"></span> <?= $qty ?>
+                                    </div>
+                                    <div class="od-unit">
+                                        <span class="d-none d-md-inline">₱</span><?= number_format($unitPrice, 2) ?>
+                                    </div>
+                                    <div class="od-sub order-col--sub">
+                                        ₱<?= number_format($lineSubtotal, 2) ?>
+                                    </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -712,6 +769,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_method'])) {
                                     </div>
                                 <?php endif; ?>
                             </form>
+
+                            <!-- Items Breakdown -->
+                            <div class="mb-3">
+                                <div class="small fw-bold text-muted mb-2">Items</div>
+                                <?php foreach ($cart_items as $item): ?>
+                                    <?php 
+                                        $displayName = $item['product']['name'] ?? $item['product']['product_name'] ?? 'Item';
+                                        $unitPrice = isset($item['product']['price']) ? (float)$item['product']['price'] : 0;
+                                        $qty = (int)($item['quantity'] ?? 0);
+                                        $lineSubtotal = $unitPrice * $qty;
+                                    ?>
+                                    <div class="d-flex justify-content-between align-items-center small py-1 border-bottom">
+                                        <span><?= htmlspecialchars($displayName) ?> × <?= $qty ?></span>
+                                        <span>
+                                            ₱<?= number_format($unitPrice, 2) ?>
+                                            <span class="text-muted">|</span>
+                                            <strong>₱<?= number_format($lineSubtotal, 2) ?></strong>
+                                        </span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
 
                             <div class="summary-row">
                                 <span>Subtotal:</span>

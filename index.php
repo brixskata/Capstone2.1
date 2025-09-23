@@ -797,7 +797,9 @@ try {
                             100% Fresh & Organic
                         </div>
 
-                        <h1 class="hero-title simple-hero-title">Top Quality You Deserve</h1>
+                        <h1 class="hero-title">
+                            Top Quality <span class="text-highlight">You Deserve</span>
+                        </h1>
 
                         <p class="hero-subtitle">
                             Enjoy premium frozen meat and seafood delivered straight to your doorstep. 
