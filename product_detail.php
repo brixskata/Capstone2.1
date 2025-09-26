@@ -37,19 +37,29 @@ if ($product_id <= 0) {
         // Debug: Log the product ID being searched
         error_log("Searching for product ID: " . $product_id);
         
-        // Simple product query - let's try without the image subquery first
+        // Deterministic product query: use correlated subqueries to get latest stock/price to avoid duplicate join rows affecting stock display
         $stmt = $pdo->prepare("
             SELECT 
                 p.product_id as db_product_id,
                 p.product_name,
                 p.product_description,
                 c.category_name,
-                COALESCE(ps.current_stock, 0) as current_stock,
-                COALESCE(pp.selling_price, 0) as selling_price
+                COALESCE((
+                    SELECT ps.current_stock
+                    FROM product_stock ps
+                    WHERE ps.product_id = p.product_id
+                    ORDER BY ps.last_restock_date DESC, ps.productstock_id DESC
+                    LIMIT 1
+                ), 0) as current_stock,
+                COALESCE((
+                    SELECT pp.selling_price
+                    FROM product_pricing pp
+                    WHERE pp.product_id = p.product_id
+                    ORDER BY pp.productpricing_id DESC
+                    LIMIT 1
+                ), 0) as selling_price
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.category_id
-            LEFT JOIN product_stock ps ON p.product_id = ps.product_id
-            LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
             WHERE p.product_id = ? AND p.is_archive = 0
         ");
         $stmt->execute([$product_id]);
@@ -505,7 +515,7 @@ if ($product_id <= 0) {
 <body>
    <?php include 'includes/promo_banner.php'; ?>
 
-    <?php include 'includes/user_navbar.php'; ?>
+    <?php (function(){ include 'includes/user_navbar.php'; })(); ?>
 
     <div class="product-container">
         <button class="btn-back" onclick="history.back()">
@@ -518,18 +528,54 @@ if ($product_id <= 0) {
                 <?= htmlspecialchars($error) ?>
             </div>
         <?php elseif ($product): ?>
-            <!-- Debug Info (remove in production) -->
-            <div class="alert alert-info" role="alert">
-                <strong>Debug Info:</strong><br>
-                Raw ID: <?= htmlspecialchars($raw_id) ?><br>
-                Original Parsed ID: <?= $debug_product_id ?><br>
-                Current Product ID: <?= $product_id ?><br>
-                DB Product ID: <?= $product['db_product_id'] ?? 'NULL' ?><br>
-                Product Name: <?= htmlspecialchars($product['product_name'] ?? 'NULL') ?><br>
-                Category: <?= htmlspecialchars($product['category_name'] ?? 'NULL') ?><br>
-                Price: <?= $product['selling_price'] ?? 'NULL' ?><br>
-                Stock: <?= $product['current_stock'] ?? 'NULL' ?><br>
-                Image: <?= htmlspecialchars($product['primary_image'] ?? 'NULL') ?>
+            <!-- Product Meta -->
+            <?php 
+            // Fetch product rating (average and count) and total sold
+            $avg_rating = 0; $rating_count = 0; $total_sold = 0;
+            try {
+                // Average rating and count from order_ratings joined to orders and order_items for this product
+                $ratingStmt = $pdo->prepare("
+                    SELECT 
+                        AVG(orate.rating) AS avg_rating,
+                        COUNT(orate.rating_id) AS rating_count
+                    FROM order_ratings orate
+                    INNER JOIN orders o ON orate.order_id = o.orders_id
+                    INNER JOIN order_items oi ON oi.order_id = o.orders_id
+                    WHERE oi.product_id = ?
+                ");
+                $ratingStmt->execute([$product_id]);
+                $r = $ratingStmt->fetch(PDO::FETCH_ASSOC);
+                if ($r) { $avg_rating = (float)($r['avg_rating'] ?? 0); $rating_count = (int)($r['rating_count'] ?? 0); }
+
+                // Total sold based on order_items quantities for Completed/Delivered/Finished orders via order_status mapping
+                $soldStmt = $pdo->prepare("
+                    SELECT COALESCE(SUM(oi.quantity),0) AS total_sold
+                    FROM order_items oi
+                    INNER JOIN orders o ON oi.order_id = o.orders_id
+                    INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+                    WHERE oi.product_id = ? AND os.status_name IN ('Delivered','Completed','Finished')
+                ");
+                $soldStmt->execute([$product_id]);
+                $s = $soldStmt->fetch(PDO::FETCH_ASSOC);
+                if ($s) { $total_sold = (int)($s['total_sold'] ?? 0); }
+            } catch (Exception $e) { /* silently ignore */ }
+            ?>
+
+            <div class="d-flex align-items-center gap-3 mb-3">
+                <div class="text-warning" aria-label="Average rating">
+                    <?php 
+                    $rounded = max(0, min(5, round($avg_rating))); 
+                    for ($i=1; $i<=5; $i++): ?>
+                        <i class="fas fa-star <?= $i <= $rounded ? 'text-warning' : 'text-muted' ?>"></i>
+                    <?php endfor; ?>
+                    <span class="ms-2 fw-semibold"><?= number_format($avg_rating, 1) ?></span>
+                    <span class="text-muted">(<?= $rating_count ?> reviews)</span>
+                </div>
+                <div class="vr"></div>
+                <div class="text-muted" aria-label="Units sold">
+                    <i class="fas fa-shopping-bag me-1"></i>
+                    <?= $total_sold ?> sold
+                </div>
             </div>
             <div class="row">
                 <div class="col-lg-8">

@@ -23,16 +23,25 @@ function getProductData($pdo, $product_ids) {
                     p.product_id,
                     p.product_name,
                     p.product_description,
-                    COALESCE(pp.selling_price, 0) AS price,
-                    COALESCE(ps.current_stock, 0) AS stock,
+                    COALESCE((
+                        SELECT pp.selling_price
+                        FROM product_pricing pp
+                        WHERE pp.product_id = p.product_id
+                        ORDER BY pp.productpricing_id DESC
+                        LIMIT 1
+                    ), 0) AS price,
+                    COALESCE((
+                        SELECT ps.current_stock
+                        FROM product_stock ps
+                        WHERE ps.product_id = p.product_id
+                        ORDER BY ps.last_restock_date DESC, ps.productstock_id DESC
+                        LIMIT 1
+                    ), 0) AS stock,
                     (SELECT pi.image_url FROM product_images pi 
                      WHERE pi.product_id = p.product_id AND pi.is_primary = 1 
                      ORDER BY pi.product_image_id DESC LIMIT 1) AS image1
                 FROM products p
-                LEFT JOIN product_pricing pp ON pp.product_id = p.product_id
-                LEFT JOIN product_stock ps ON ps.product_id = p.product_id
-                WHERE p.product_id IN ($placeholders) AND p.is_archive = 0
-                ORDER BY pp.productpricing_id DESC";
+                WHERE p.product_id IN ($placeholders) AND p.is_archive = 0";
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute($product_ids);

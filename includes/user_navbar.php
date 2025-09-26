@@ -12,8 +12,10 @@ if (!isset($_SESSION['cart'])) {
     $_SESSION['cart'] = [];
 }
 
-// Include DB connection
-include_once 'db.php';
+// Include DB connection (robust path)
+include_once __DIR__ . '/db.php';
+// Make global PDO available when this file is included inside a function scope
+global $pdo;
 
 // Check ID verification status
 $id_verified = false;
@@ -30,49 +32,59 @@ $cart_total = 0;
 $selected_items_total = 0; // Initialize for selected items total
 
 if (!empty($_SESSION['cart'])) {
-    foreach ($_SESSION['cart'] as $product_id => $cart_item) {
+    foreach ($_SESSION['cart'] as $nav_product_id => $nav_cart_item) {
         try {
             $sql = "SELECT 
                         p.product_id,
                         p.product_name,
-                        COALESCE(ps.current_stock, 0) AS stock,
-                        COALESCE(pp.selling_price, 0) AS price,
-                        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+                        COALESCE((
+                            SELECT ps.current_stock
+                            FROM product_stock ps
+                            WHERE ps.product_id = p.product_id
+                            ORDER BY ps.last_restock_date DESC, ps.productstock_id DESC
+                            LIMIT 1
+                        ), 0) AS stock,
+                        COALESCE((
+                            SELECT pp.selling_price
+                            FROM product_pricing pp
+                            WHERE pp.product_id = p.product_id
+                            ORDER BY pp.productpricing_id DESC
+                            LIMIT 1
+                        ), 0) AS price,
+                        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 ORDER BY pi.product_image_id DESC LIMIT 1) AS image1
                     FROM products p
-                    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
-                    LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
                     WHERE p.product_id = :product_id AND p.is_archive = 0";
-            $stmt = $pdo->prepare($sql);
-            $stmt->bindParam(':product_id', $product_id);
-            $stmt->execute();
-            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            $nav_stmt = $pdo->prepare($sql);
+            $nav_stmt->bindParam(':product_id', $nav_product_id);
+            $nav_stmt->execute();
+            $navProduct = $nav_stmt->fetch(PDO::FETCH_ASSOC);
 
-            if ($product) {
-                $quantity = $cart_item['quantity'] ?? 1;
-                $item_total = ($product['price'] ?? 0) * $quantity;
-                $cart_total += $item_total;
+            if ($navProduct) {
+                $nav_quantity = $nav_cart_item['quantity'] ?? 1;
+                $nav_item_total = ($navProduct['price'] ?? 0) * $nav_quantity;
+                $cart_total += $nav_item_total;
 
                 // Check if the item is selected, default to false if not set
-                $is_selected = $cart_item['selected'] ?? false;
+                $is_selected = $nav_cart_item['selected'] ?? false;
                 if ($is_selected) {
-                    $selected_items_total += $item_total;
+                    $selected_items_total += $nav_item_total;
                 }
 
                 $cart_items[] = [
                     'product' => [
-                        'id' => $product['product_id'] ?? 0,
-                        'name' => $product['product_name'] ?? 'Unknown Product',
-                        'price' => $product['price'] ?? 0,
-                        'image1' => $product['image1'] ?? '',
-                        'stock' => $product['stock'] ?? 0
+                        'id' => $navProduct['product_id'] ?? 0,
+                        'name' => $navProduct['product_name'] ?? 'Unknown Product',
+                        'price' => $navProduct['price'] ?? 0,
+                        'image1' => $navProduct['image1'] ?? '',
+                        'stock' => $navProduct['stock'] ?? 0
                     ],
-                    'quantity' => $quantity,
-                    'total' => $item_total,
+                    'quantity' => $nav_quantity,
+                    'total' => $nav_item_total,
                     'selected' => $is_selected // Add selection status
                 ];
             }
         } catch (Exception $e) {
-            error_log("Error loading cart item for product $product_id: " . $e->getMessage());
+            error_log("Error loading cart item for product $nav_product_id: " . $e->getMessage());
             continue;
         }
     }
