@@ -1,0 +1,1779 @@
+<?php
+include '../includes/db.php';
+session_start();
+
+// Ensure user is logged in and has admin access (Super Admin or Admin)
+if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+    header("Location: login_admin.php");
+    exit;
+}
+
+// Handle order status updates
+if (isset($_POST['update_status'])) {
+    $order_id = $_POST['order_id'];
+    $new_status = $_POST['new_status'];
+
+    // Map status name to orderstatus_id and update
+    $stmt = $pdo->prepare("UPDATE orders o
+                            JOIN order_status os ON os.status_name = :status
+                            SET o.orderstatus_id = os.orderstatus_id
+                            WHERE o.orders_id = :order_id");
+    $stmt->execute(['status' => $new_status, 'order_id' => $order_id]);
+
+    header("Location: transaction_logs.php");
+    exit;
+}
+
+// Handle order cancellation with reason (admin action before processing)
+if (isset($_POST['cancel_order'])) {
+    $order_id = $_POST['order_id'];
+    $reason = trim($_POST['cancel_reason'] ?? '');
+    if ($order_id && $reason !== '') {
+        try {
+            // Ensure cancellations table exists
+            $pdo->exec("CREATE TABLE IF NOT EXISTS order_cancellations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_id INT NOT NULL,
+                reason TEXT NOT NULL,
+                cancelled_by VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX (order_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            $pdo->beginTransaction();
+
+            // Update order status to Cancelled via status name mapping
+            $stmt = $pdo->prepare("UPDATE orders o
+                                    JOIN order_status os ON os.status_name = 'Cancelled'
+                                    SET o.orderstatus_id = os.orderstatus_id
+                                    WHERE o.orders_id = :order_id");
+            $stmt->execute(['order_id' => $order_id]);
+
+            // Log cancellation reason
+            $adminName = $_SESSION['username'] ?? 'admin';
+            $ins = $pdo->prepare("INSERT INTO order_cancellations (order_id, reason, cancelled_by) VALUES (:order_id, :reason, :by)");
+            $ins->execute(['order_id' => $order_id, 'reason' => $reason, 'by' => $adminName]);
+
+            // Notify customer
+            $uidStmt = $pdo->prepare("SELECT user_id FROM orders WHERE orders_id = ?");
+            $uidStmt->execute([$order_id]);
+            $userId = $uidStmt->fetchColumn();
+            if ($userId) {
+                $notif = $pdo->prepare("INSERT INTO notifications (user_id, order_id, message, is_read, created_at) VALUES (?, ?, ?, 0, NOW())");
+                $notif->execute([$userId, $order_id, 'Your order has been cancelled by admin: ' . $reason]);
+            }
+
+            $pdo->commit();
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+        }
+    }
+    header("Location: transaction_logs.php");
+    exit;
+}
+
+// Fetch orders with filtering
+$status_filter = isset($_GET['status']) ? $_GET['status'] : '';
+$date_filter = isset($_GET['date']) ? $_GET['date'] : '';
+$search = isset($_GET['search']) ? $_GET['search'] : '';
+
+$query = "
+    SELECT o.orders_id AS id,
+           u.username,
+           ui.email,
+           ui.phone,
+           a.address_line,
+           a.address_line2,
+           a.city,
+           a.state,
+           a.postal_code,
+           a.country,
+           os.status_name AS status,
+           o.total_price as total_amount,
+           o.delivery_option,
+           o.created_at,
+           COALESCE(pay.method, '') as payment_method,
+           COALESCE(pay.proof, '') as payment_proof,
+           COALESCE(pay.transaction_id, '') as gcash_transaction_id,
+           GROUP_CONCAT(CONCAT(p.product_name, ' (', oi.quantity, ')') SEPARATOR ', ') as items
+    FROM orders o
+    INNER JOIN users u ON o.user_id = u.user_id
+    LEFT JOIN user_info ui ON ui.user_id = u.user_id
+    LEFT JOIN addresses a ON a.address_id = o.address_id
+    JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+    LEFT JOIN order_items oi ON o.orders_id = oi.order_id
+    LEFT JOIN products p ON oi.product_id = p.product_id
+    LEFT JOIN payments pay ON pay.orders_id = o.orders_id
+    WHERE os.status_name IS NOT NULL
+";
+
+if ($status_filter) {
+    $query .= " AND os.status_name = '" . str_replace("'", "''", $status_filter) . "'";
+}
+if ($date_filter) {
+    $query .= " AND DATE(o.created_at) = '" . str_replace("'", "''", $date_filter) . "'";
+}
+if ($search) {
+    $s = str_replace("'", "''", $search);
+    $query .= " AND (u.username LIKE '%$s%' OR o.orders_id LIKE '%$s%')";
+}
+
+$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof, pay.transaction_id ORDER BY o.created_at ASC";
+
+// Debug: Check the query
+echo "<!-- Debug Query: " . htmlspecialchars($query) . " -->\n";
+
+try {
+    $orders = $pdo->query($query)->fetchAll();
+} catch (PDOException $e) {
+    echo "<!-- SQL Error: " . htmlspecialchars($e->getMessage()) . " -->\n";
+    $orders = [];
+}
+
+// Debug: Check what payment data we're getting
+echo "<!-- Debug: Payment data -->\n";
+foreach ($orders as $order) {
+    echo "<!-- Order {$order['id']}: method='" . ($order['payment_method'] ?? 'NULL') . "', proof='" . ($order['payment_proof'] ?? 'NULL') . "' -->\n";
+}
+
+$stats = $pdo->query("
+    SELECT 
+        COUNT(*) as total_orders,
+        SUM(CASE WHEN os.status_name = 'Pending' THEN 1 ELSE 0 END) as pending_orders,
+        SUM(CASE WHEN os.status_name = 'To Ship' THEN 1 ELSE 0 END) as processing_orders,
+        SUM(CASE WHEN os.status_name = 'Ready for Pick Up' THEN 1 ELSE 0 END) as pickup_orders,
+        SUM(CASE WHEN os.status_name = 'Out for delivery' THEN 1 ELSE 0 END) as shipped_orders,
+        SUM(CASE WHEN os.status_name = 'Completed' THEN 1 ELSE 0 END) as completed_orders,
+        SUM(CASE WHEN os.status_name = 'Cancelled' THEN 1 ELSE 0 END) as cancelled_orders
+    FROM orders o
+    JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+")->fetch();
+
+// Get orders grouped by status
+$statuses = ['Pending', 'To Ship', 'Ready for Pick Up', 'Out for delivery', 'Completed', 'Cancelled'];
+$ordersByStatus = [];
+
+foreach ($statuses as $status) {
+    $statusQuery = "
+        SELECT o.orders_id AS id,
+               u.username,
+               ui.email,
+               ui.phone,
+               a.address_line,
+               a.address_line2,
+               a.city,
+               a.state,
+               a.postal_code,
+               a.country,
+               os.status_name AS status,
+               o.total_price as total_amount,
+               o.delivery_option,
+               o.created_at,
+               COALESCE(pay.method, '') as payment_method,
+               COALESCE(pay.proof, '') as payment_proof,
+               COALESCE(pay.transaction_id, '') as gcash_transaction_id,
+               GROUP_CONCAT(CONCAT(p.product_name, ' (', oi.quantity, ')') SEPARATOR ', ') as items
+        FROM orders o
+        INNER JOIN users u ON o.user_id = u.user_id
+        LEFT JOIN user_info ui ON ui.user_id = u.user_id
+        LEFT JOIN addresses a ON a.address_id = o.address_id
+        JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+        LEFT JOIN order_items oi ON o.orders_id = oi.order_id
+        LEFT JOIN products p ON oi.product_id = p.product_id
+        LEFT JOIN payments pay ON pay.orders_id = o.orders_id
+        WHERE os.status_name = :status
+        GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof, pay.transaction_id 
+        ORDER BY o.created_at ASC
+    ";
+    
+    $stmt = $pdo->prepare($statusQuery);
+    $stmt->execute(['status' => $status]);
+    $ordersByStatus[$status] = $stmt->fetchAll();
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <?php include 'includes/admin_head.php'; ?>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Transaction Logs - Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+     <!-- SweetAlert2 CSS -->
+     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    <?php include 'includes/admin_styles.php'; ?>
+    <style>
+        :root {
+            --bs-primary: #7F1734;
+            --bs-secondary: #6c757d;
+            --bs-success: #198754;
+            --bs-danger: #dc3545;
+            --bs-warning: #ffc107;
+            --bs-info: #0dcaf0;
+            --bs-light: #f8f9fa;
+            --bs-dark: #212529;
+        }
+        
+        /* Override admin styles for this page */
+        .main-content {
+            background-color: var(--bg-primary) !important;
+        }
+        
+        .main-container {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .page-header {
+            background: var(--bs-primary);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
+        }
+        
+        .page-header h2 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+        
+        .stats-container {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        /* Analytics Cards - Light Version */
+        .analytics-card {
+            background: white;
+            color: var(--bs-dark);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .analytics-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--bs-primary);
+        }
+
+        .analytics-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            background: rgba(127, 23, 52, 0.1);
+            color: var(--bs-primary);
+        }
+
+        .card-content {
+            flex: 1;
+        }
+
+        .card-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bs-primary);
+            margin: 0;
+            line-height: 1;
+        }
+
+        .card-label {
+            color: var(--bs-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 0.5rem 0 0 0;
+        }
+        
+        .stat-badge {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            padding: 24px;
+            transition: all 0.3s ease;
+            color: var(--text-primary) !important;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+        }
+        
+        .table-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            color: var(--text-primary) !important;
+        }
+        
+        .badge-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .filter-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            padding: 20px;
+            margin-bottom: 24px;
+            color: var(--text-primary) !important;
+        }
+        
+        .action-btn {
+            font-size: 0.75rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            text-decoration: none;
+            background: var(--bs-primary);
+            color: white;
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            color: inherit;
+        }
+        
+        .action-btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-process {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .btn-process:hover {
+            background: #ffeaa7;
+            color: #856404;
+        }
+        
+        .btn-ship {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .btn-ship:hover {
+            background: #bee5eb;
+            color: #0c5460;
+        }
+        
+        .btn-deliver {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .btn-deliver:hover {
+            background: #c3e6cb;
+            color: #155724;
+        }
+        
+        .btn-received {
+            background: #20c997;
+            color: white;
+            cursor: pointer;
+        }
+        
+        .btn-received:hover {
+            background: #1aa085;
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .btn-completed {
+            background: #d4edda;
+            color: #155724;
+            cursor: default;
+        }
+        
+        .btn-completed:hover {
+            background: #d4edda;
+            color: #155724;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-waiting {
+            background: #f8f9fa;
+            color: #6c757d;
+            cursor: default;
+            opacity: 0.9;
+        }
+        
+        .btn-waiting:hover {
+            background: #f8f9fa;
+            color: #6c757d;
+            transform: none;
+            box-shadow: none;
+            opacity: 0.9;
+        }
+        
+        /* Modal Styles */
+        .modal-content {
+            border-radius: 20px;
+            border: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-header {
+            border-radius: 20px 20px 0 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .modal-footer {
+            border-radius: 0 0 20px 20px;
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .modal-body .alert {
+            border-radius: 15px;
+            border: none;
+        }
+        
+        .modal-body i {
+            opacity: 0.8;
+        }
+        
+        .form-control {
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+            padding: 0.75rem;
+            transition: all 0.3s ease;
+        }
+        
+        .form-control:focus {
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
+        }
+        
+        .form-select {
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+            padding: 0.75rem;
+            transition: all 0.3s ease;
+        }
+        
+        .form-select:focus {
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
+        }
+        
+        .btn {
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn:active {
+            transform: translateY(-1px);
+        }
+        
+        .order-row {
+            transition: none;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--bs-secondary);
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            color: var(--bs-secondary);
+            margin-bottom: 1rem;
+        }
+        
+        .empty-state h4 {
+            color: var(--bs-dark);
+            margin-bottom: 1rem;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 1rem;
+            }
+            
+            .page-header {
+                padding: 1.5rem;
+            }
+            
+            .page-header h2 {
+                font-size: 1.5rem;
+            }
+            
+            .stats-container {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+        
+         /* SweetAlert2 Custom Styles */
+         .swal2-popup-custom {
+            border-radius: 20px !important;
+             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+             border: 1px solid #e9ecef !important;
+        }
+        
+         .swal2-title-custom {
+            color: var(--bs-primary) !important;
+             font-weight: 700 !important;
+             font-size: 1.5rem !important;
+        }
+        
+         .swal2-html-container-custom {
+             color: var(--bs-dark) !important;
+             font-size: 1rem !important;
+        }
+        
+         .swal2-confirm-button-custom {
+             background: linear-gradient(135deg, var(--bs-primary) 0%, #a91d42 100%) !important;
+             border: none !important;
+            border-radius: 10px !important;
+             padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+             font-size: 1rem !important;
+             transition: all 0.3s ease !important;
+         }
+
+         .swal2-confirm-button-custom:hover {
+             transform: translateY(-2px) !important;
+             box-shadow: 0 8px 25px rgba(127, 23, 52, 0.3) !important;
+             background: linear-gradient(135deg, #6b1429 0%, #8b1a36 100%) !important;
+         }
+
+         .swal2-cancel-button-custom {
+             border: 2px solid var(--bs-secondary) !important;
+             color: var(--bs-secondary) !important;
+            border-radius: 10px !important;
+             padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+             background: transparent !important;
+             font-size: 1rem !important;
+             transition: all 0.3s ease !important;
+         }
+
+         .swal2-cancel-button-custom:hover {
+             background: var(--bs-secondary) !important;
+             color: white !important;
+             transform: translateY(-2px) !important;
+             box-shadow: 0 8px 25px rgba(108, 117, 125, 0.2) !important;
+        }
+
+        /* Order Details Modal Styles */
+        .modal-lg {
+            max-width: 900px;
+        }
+
+        .modal-body .card {
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .modal-body .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .modal-body .card-header {
+            border-radius: 10px 10px 0 0 !important;
+            border: none;
+            font-weight: 600;
+        }
+
+        .modal-body .card-body {
+            padding: 1.5rem;
+        }
+
+        .modal-body .row {
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-body strong {
+            color: var(--bs-dark);
+            font-weight: 600;
+        }
+
+        .modal-body .badge {
+            font-size: 0.75rem;
+            padding: 0.5rem 0.75rem;
+        }
+
+        .modal-body .btn-outline-primary {
+            border-color: var(--bs-primary);
+            color: var(--bs-primary);
+            transition: all 0.3s ease;
+        }
+
+        .modal-body .btn-outline-primary:hover {
+            background-color: var(--bs-primary);
+            border-color: var(--bs-primary);
+            color: white;
+            transform: translateY(-1px);
+        }
+        
+        /* Tab Styles */
+        .nav-tabs {
+            border-bottom: 2px solid #e9ecef;
+            margin-bottom: 0;
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            border-radius: 10px 10px 0 0;
+            margin-right: 5px;
+            padding: 12px 20px;
+            font-weight: 600;
+            color: var(--bs-secondary);
+            background: transparent;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            color: var(--bs-primary);
+            background: rgba(127, 23, 52, 0.1);
+            border-color: transparent;
+        }
+        
+        .nav-tabs .nav-link.active {
+            color: var(--bs-primary);
+            background: white;
+            border-color: #e9ecef #e9ecef white;
+            border-bottom: 2px solid white;
+            font-weight: 700;
+        }
+        
+        .nav-tabs .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--bs-primary);
+        }
+        
+        .nav-tabs .badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .tab-content {
+            background: white;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            border-top: none;
+        }
+        
+        .tab-pane {
+            padding: 0;
+        }
+        
+        .tab-pane .table-card {
+            border-radius: 0;
+            box-shadow: none;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+  <?php include 'includes/admin_navbar.php'; ?>
+  <?php include 'includes/admin_sidebar.php'; ?>
+
+  <!-- Main Content -->
+  <main class="main-content" id="mainContent">
+    <div class="main-container">
+      <div class="page-header">
+        <h2><i class="fas fa-cart-shopping me-2"></i>Transaction Logs</h2>
+      </div>
+      
+      <!-- Analytics Cards -->
+      <div class="row g-4 mb-4">
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-shopping-cart"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?= $stats['total_orders'] ?></h3>
+              <p class="card-label">Total Orders</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?= $stats['pending_orders'] ?></h3>
+              <p class="card-label">Pending Orders</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-cog"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?= $stats['processing_orders'] ?></h3>
+              <p class="card-label">To Ship</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="analytics-card">
+            <div class="card-icon">
+              <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="card-content">
+              <h3 class="card-number"><?= $stats['completed_orders'] ?></h3>
+              <p class="card-label">Completed</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      
+      <!-- Status Tabs -->
+    <div class="filter-card">
+      <ul class="nav nav-tabs nav-fill" id="orderStatusTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="all-tab" data-bs-toggle="tab" data-bs-target="#all" type="button" role="tab" aria-controls="all" aria-selected="true">
+            <i class="fas fa-list me-2"></i>All Orders <span class="badge ms-1" style="background: transparent; color: #6c757d; border: 1px solid #6c757d;"><?= $stats['total_orders'] ?></span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="false">
+            <i class="fas fa-clock me-2"></i>Pending <span class="badge ms-1" style="background: transparent; color: #856404; border: 1px solid #856404;"><?= $stats['pending_orders'] ?></span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="toship-tab" data-bs-toggle="tab" data-bs-target="#toship" type="button" role="tab" aria-controls="toship" aria-selected="false">
+            <i class="fas fa-cog me-2"></i>To Ship <span class="badge ms-1" style="background: transparent; color: #0c5460; border: 1px solid #0c5460;"><?= $stats['processing_orders'] ?></span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="pickup-tab" data-bs-toggle="tab" data-bs-target="#pickup" type="button" role="tab" aria-controls="pickup" aria-selected="false">
+            <i class="fas fa-hand-paper me-2"></i>Pick Up <span class="badge ms-1" style="background: transparent; color: #721c24; border: 1px solid #721c24;"><?= $stats['pickup_orders'] ?></span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="delivery-tab" data-bs-toggle="tab" data-bs-target="#delivery" type="button" role="tab" aria-controls="delivery" aria-selected="false">
+            <i class="fas fa-truck me-2"></i>Out for Delivery <span class="badge ms-1" style="background: transparent; color: #004085; border: 1px solid #004085;"><?= $stats['shipped_orders'] ?></span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button" role="tab" aria-controls="completed" aria-selected="false">
+            <i class="fas fa-check-circle me-2"></i>Completed <span class="badge ms-1" style="background: transparent; color: #155724; border: 1px solid #155724;"><?= $stats['completed_orders'] ?></span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="cancelled-tab" data-bs-toggle="tab" data-bs-target="#cancelled" type="button" role="tab" aria-controls="cancelled" aria-selected="false">
+            <i class="fas fa-ban me-2"></i>Cancelled <span class="badge ms-1" style="background: transparent; color: #495057; border: 1px solid #495057;"><?= $stats['cancelled_orders'] ?></span>
+          </button>
+        </li>
+      </ul>
+    </div>
+
+      <!-- Tab Content -->
+    <div class="tab-content" id="orderStatusTabContent">
+        <!-- All Orders Tab -->
+        <div class="tab-pane fade show active" id="all" role="tabpanel" aria-labelledby="all-tab">
+        <?php include 'order_table_template.php'; ?>
+                  </div>
+
+      <!-- Status-specific tabs -->
+                <?php 
+      $tabMapping = [
+        'Pending' => 'pending',
+        'To Ship' => 'toship', 
+        'Ready for Pick Up' => 'pickup',
+        'Out for delivery' => 'delivery',
+        'Completed' => 'completed',
+        'Cancelled' => 'cancelled'
+      ];
+      foreach ($statuses as $status): 
+        $tabId = $tabMapping[$status];
+      ?>
+        <div class="tab-pane fade" id="<?= $tabId ?>" role="tabpanel" aria-labelledby="<?= $tabId ?>-tab">
+          <?php 
+            $orders = $ordersByStatus[$status];
+            include 'order_table_template.php'; 
+          ?>
+                  </div>
+                  <?php endforeach; ?>
+          </div>
+  </main>
+
+  <!-- Order Details Modal -->
+  <div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="orderDetailsModalLabel">
+            <i class="fas fa-info-circle me-2"></i>Order Details
+          </h5>
+                  </div>
+        <div class="modal-body">
+          <div class="row">
+            <!-- Order Information -->
+            <div class="col-md-6 mb-4">
+              <div class="card h-100">
+                <div class="card-header" style="background: #e3f2fd; color: #1976d2;">
+                  <h6 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>Order Information</h6>
+          </div>
+                <div class="card-body">
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Order ID:</strong></div>
+                    <div class="col-8" id="modalOrderId">-</div>
+        </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Status:</strong></div>
+                    <div class="col-8" id="modalOrderStatus">-</div>
+                      </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Total Amount:</strong></div>
+                    <div class="col-8" id="modalTotalAmount">-</div>
+          </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Delivery:</strong></div>
+                    <div class="col-8" id="modalDeliveryOption">-</div>
+        </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Order Date:</strong></div>
+                    <div class="col-8" id="modalOrderDate">-</div>
+                      </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Items:</strong></div>
+                    <div class="col-8" id="modalOrderItems">-</div>
+                  </div>
+                </div>
+          </div>
+        </div>
+
+            <!-- Customer Information -->
+            <div class="col-md-6 mb-4">
+              <div class="card h-100">
+                <div class="card-header" style="background: #f1f8e9; color: #689f38;">
+                  <h6 class="mb-0"><i class="fas fa-user me-2"></i>Customer Information</h6>
+                  </div>
+                <div class="card-body">
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Username:</strong></div>
+                    <div class="col-8" id="modalCustomerUsername">-</div>
+                                  </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Email:</strong></div>
+                    <div class="col-8" id="modalCustomerEmail">-</div>
+                                </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Phone:</strong></div>
+                    <div class="col-8" id="modalCustomerPhone">-</div>
+                            </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Address:</strong></div>
+                    <div class="col-8" id="modalCustomerAddress">-</div>
+                          </div>
+                        </div>
+              </div>
+            </div>
+
+            <!-- Payment Information -->
+            <div class="col-12 mb-4">
+              <div class="card">
+                <div class="card-header" style="background: #fff8e1; color: #f57c00;">
+                  <h6 class="mb-0"><i class="fas fa-credit-card me-2"></i>Payment Information</h6>
+                          </div>
+                <div class="card-body">
+                  <div class="row">
+                    <div class="col-md-3 mb-2">
+                      <strong>Payment Method:</strong>
+                      <div id="modalPaymentMethod">-</div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                      <strong>Transaction ID:</strong>
+                      <div id="modalTransactionId">-</div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                      <strong>Payment Proof:</strong>
+                      <div id="modalPaymentProof">-</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+                        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times me-1"></i>Close
+          </button>
+                      </div>
+                          </div>
+                        </div>
+                      </div>
+
+
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+   <!-- SweetAlert2 JS -->
+   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <?php include 'includes/admin_scripts.php'; ?>
+  
+  <script>
+    // Handle modal data population
+    document.addEventListener('DOMContentLoaded', function() {
+      // Show success/error messages with SweetAlert2
+      <?php if (isset($_SESSION['success'])): ?>
+        Swal.fire({
+          icon: 'success',
+          title: 'Success!',
+          text: '<?= addslashes($_SESSION['success']) ?>',
+          confirmButtonColor: '#7F1734',
+          timer: 3000,
+          timerProgressBar: true,
+          customClass: {
+            popup: 'swal2-popup-custom',
+            title: 'swal2-title-custom',
+            htmlContainer: 'swal2-html-container-custom',
+            confirmButton: 'swal2-confirm-button-custom'
+          }
+        });
+        <?php unset($_SESSION['success']); ?>
+      <?php endif; ?>
+
+      <?php if (isset($_SESSION['error'])): ?>
+      Swal.fire({
+          icon: 'error',
+          title: 'Error!',
+          text: '<?= addslashes($_SESSION['error']) ?>',
+          confirmButtonColor: '#7F1734',
+          customClass: {
+            popup: 'swal2-popup-custom',
+            title: 'swal2-title-custom',
+            htmlContainer: 'swal2-html-container-custom',
+            confirmButton: 'swal2-confirm-button-custom'
+          }
+        });
+        <?php unset($_SESSION['error']); ?>
+      <?php endif; ?>
+
+      // Add SweetAlert2 confirmations to form submissions
+      const processForm = document.getElementById('processForm');
+      if (processForm) {
+        processForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          const orderId = document.getElementById('processOrderIdInput').value;
+          const newStatus = document.getElementById('processNewStatusInput').value;
+          
+          Swal.fire({
+            title: 'Process Order?',
+            html: `
+              <div class="text-start">
+                <p><strong>Order #${orderId}</strong></p>
+                <p>This will change the order status to <strong>"${newStatus}"</strong></p>
+              </div>
+            `,
+        icon: 'question',
+        showCancelButton: true,
+            confirmButtonColor: '#7F1734',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-cog me-2"></i>Yes, Process Order',
+        cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+            customClass: {
+              popup: 'swal2-popup-custom',
+              title: 'swal2-title-custom',
+              htmlContainer: 'swal2-html-container-custom',
+              confirmButton: 'swal2-confirm-button-custom',
+              cancelButton: 'swal2-cancel-button-custom'
+            }
+      }).then((result) => {
+        if (result.isConfirmed) {
+              this.submit();
+            }
+          });
+        });
+      }
+
+      const shipForm = document.getElementById('shipForm');
+      if (shipForm) {
+        shipForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          const orderId = document.getElementById('shipOrderIdInput').value;
+          
+      Swal.fire({
+            title: 'Ship Order?',
+            html: `
+              <div class="text-start">
+                <p><strong>Order #${orderId}</strong></p>
+                <p>This will change the order status to <strong>"Out for Delivery"</strong></p>
+                <p class="text-info">The customer will be notified that their order is on the way.</p>
+              </div>
+            `,
+        icon: 'question',
+        showCancelButton: true,
+            confirmButtonColor: '#7F1734',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-truck me-2"></i>Yes, Ship Order',
+        cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+            customClass: {
+              popup: 'swal2-popup-custom',
+              title: 'swal2-title-custom',
+              htmlContainer: 'swal2-html-container-custom',
+              confirmButton: 'swal2-confirm-button-custom',
+              cancelButton: 'swal2-cancel-button-custom'
+            }
+      }).then((result) => {
+        if (result.isConfirmed) {
+              this.submit();
+            }
+          });
+        });
+      }
+
+      const completePickupForm = document.getElementById('completePickupForm');
+      if (completePickupForm) {
+        completePickupForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          const orderId = document.getElementById('pickupOrderIdInput').value;
+          
+      Swal.fire({
+            title: 'Complete Pickup?',
+            html: `
+              <div class="text-start">
+                <p><strong>Order #${orderId}</strong></p>
+                <p>This will change the order status to <strong>"Completed"</strong></p>
+                <p class="text-success">Confirm that the customer has picked up their order.</p>
+              </div>
+            `,
+            icon: 'question',
+        showCancelButton: true,
+            confirmButtonColor: '#7F1734',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-check me-2"></i>Yes, Complete',
+        cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+            customClass: {
+              popup: 'swal2-popup-custom',
+              title: 'swal2-title-custom',
+              htmlContainer: 'swal2-html-container-custom',
+              confirmButton: 'swal2-confirm-button-custom',
+              cancelButton: 'swal2-cancel-button-custom'
+            }
+      }).then((result) => {
+        if (result.isConfirmed) {
+              this.submit();
+            }
+          });
+        });
+      }
+
+      const cancelOrderForm = document.getElementById('cancelOrderForm');
+      if (cancelOrderForm) {
+        cancelOrderForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          const orderId = document.getElementById('cancelOrderIdInput').value;
+          const reason = document.getElementById('cancelReason').value;
+          
+          if (!reason.trim()) {
+      Swal.fire({
+        icon: 'warning',
+              title: 'Missing Information',
+              text: 'Please provide a cancellation reason.',
+              confirmButtonColor: '#7F1734',
+              customClass: {
+                popup: 'swal2-popup-custom',
+                title: 'swal2-title-custom',
+                htmlContainer: 'swal2-html-container-custom',
+                confirmButton: 'swal2-confirm-button-custom'
+              }
+            });
+            return;
+          }
+          
+          Swal.fire({
+            title: 'Cancel Order?',
+            html: `
+              <div class="text-start">
+                <p><strong>Order #${orderId}</strong></p>
+                <p><strong>Reason:</strong> ${reason}</p>
+                <p class="text-danger">This will change the order status to <strong>"Cancelled"</strong></p>
+                <p class="text-danger">The customer will be notified of the cancellation.</p>
+              </div>
+            `,
+            icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-ban me-2"></i>Yes, Cancel Order',
+        cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+            customClass: {
+              popup: 'swal2-popup-custom',
+              title: 'swal2-title-custom',
+              htmlContainer: 'swal2-html-container-custom',
+              confirmButton: 'swal2-confirm-button-custom',
+              cancelButton: 'swal2-cancel-button-custom'
+            }
+      }).then((result) => {
+        if (result.isConfirmed) {
+              this.submit();
+            }
+          });
+        });
+      }
+
+      // Process Modal
+      const processModal = document.getElementById('processModal');
+      if (processModal) {
+        processModal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          const orderId = button.getAttribute('data-order-id');
+          const customer = button.getAttribute('data-customer');
+          const newStatus = button.getAttribute('data-new-status') || 'To Ship';
+          
+          document.getElementById('processOrderId').textContent = 'Order #' + orderId;
+          document.getElementById('processCustomer').textContent = 'Customer: ' + customer;
+          document.getElementById('processOrderIdInput').value = orderId;
+          const statusInput = document.getElementById('processNewStatusInput');
+          const statusLabel = document.getElementById('processNewStatusLabel');
+          if (statusInput) statusInput.value = newStatus;
+          if (statusLabel) statusLabel.textContent = '"' + newStatus + '"';
+        });
+      }
+
+      // Ship Modal
+      const shipModal = document.getElementById('shipModal');
+      if (shipModal) {
+        shipModal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          const orderId = button.getAttribute('data-order-id');
+          const customer = button.getAttribute('data-customer');
+          
+          document.getElementById('shipOrderId').textContent = 'Order #' + orderId;
+          document.getElementById('shipCustomer').textContent = 'Customer: ' + customer;
+          document.getElementById('shipOrderIdInput').value = orderId;
+        });
+      }
+
+      // Complete Pickup Modal
+      const completePickupModal = document.getElementById('completePickupModal');
+      if (completePickupModal) {
+        completePickupModal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          const orderId = button.getAttribute('data-order-id');
+          const customer = button.getAttribute('data-customer');
+
+          document.getElementById('pickupOrderId').textContent = 'Order #' + orderId;
+          document.getElementById('pickupCustomer').textContent = 'Customer: ' + customer;
+          document.getElementById('pickupOrderIdInput').value = orderId;
+        });
+      }
+
+      // Cancel Order Modal
+      const cancelOrderModal = document.getElementById('cancelOrderModal');
+      if (cancelOrderModal) {
+        cancelOrderModal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          const orderId = button.getAttribute('data-order-id');
+          const customer = button.getAttribute('data-customer');
+          document.getElementById('cancelOrderId').textContent = 'Order #' + orderId;
+          document.getElementById('cancelCustomer').textContent = 'Customer: ' + customer;
+          document.getElementById('cancelOrderIdInput').value = orderId;
+          document.getElementById('cancelReason').value = '';
+        });
+      }
+
+    });
+
+    // SweetAlert2 Functions
+    function processOrder(orderId, newStatus) {
+        Swal.fire({
+        title: 'Process Order?',
+        html: `
+          <div class="text-start">
+            <p><strong>Order #${orderId}</strong></p>
+            <p>This will change the order status to <strong>"${newStatus}"</strong></p>
+          </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#7F1734',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-cog me-2"></i>Yes, Process Order',
+        cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          htmlContainer: 'swal2-html-container-custom',
+          confirmButton: 'swal2-confirm-button-custom',
+          cancelButton: 'swal2-cancel-button-custom'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Create and submit form
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.innerHTML = `
+            <input type="hidden" name="order_id" value="${orderId}">
+            <input type="hidden" name="new_status" value="${newStatus}">
+            <input type="hidden" name="update_status" value="1">
+          `;
+          document.body.appendChild(form);
+          form.submit();
+        }
+      });
+    }
+
+    function shipOrder(orderId) {
+      Swal.fire({
+        title: 'Ship Order?',
+        html: `
+          <div class="text-start">
+            <p><strong>Order #${orderId}</strong></p>
+            <p>This will change the order status to <strong>"Out for Delivery"</strong></p>
+            <p class="text-info">The customer will be notified that their order is on the way.</p>
+          </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#7F1734',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-truck me-2"></i>Yes, Ship Order',
+        cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          htmlContainer: 'swal2-html-container-custom',
+          confirmButton: 'swal2-confirm-button-custom',
+          cancelButton: 'swal2-cancel-button-custom'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Create and submit form
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.innerHTML = `
+            <input type="hidden" name="order_id" value="${orderId}">
+            <input type="hidden" name="new_status" value="Out for Delivery">
+            <input type="hidden" name="update_status" value="1">
+          `;
+          document.body.appendChild(form);
+          form.submit();
+        }
+      });
+    }
+
+    function completePickup(orderId) {
+      Swal.fire({
+        title: 'Complete Pickup?',
+        html: `
+          <div class="text-start">
+            <p><strong>Order #${orderId}</strong></p>
+            <p>This will change the order status to <strong>"Completed"</strong></p>
+            <p class="text-success">Confirm that the customer has picked up their order.</p>
+          </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#7F1734',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-check me-2"></i>Yes, Complete',
+        cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          htmlContainer: 'swal2-html-container-custom',
+          confirmButton: 'swal2-confirm-button-custom',
+          cancelButton: 'swal2-cancel-button-custom'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Create and submit form
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.innerHTML = `
+            <input type="hidden" name="order_id" value="${orderId}">
+            <input type="hidden" name="new_status" value="Completed">
+            <input type="hidden" name="update_status" value="1">
+          `;
+          document.body.appendChild(form);
+          form.submit();
+        }
+      });
+    }
+
+    function cancelOrder(orderId) {
+          Swal.fire({
+        title: 'Cancel Order?',
+        html: `
+          <div class="text-start">
+            <p><strong>Order #${orderId}</strong></p>
+            <p class="text-danger">This will change the order status to <strong>"Cancelled"</strong></p>
+            <p class="text-danger">The customer will be notified of the cancellation.</p>
+          </div>
+        `,
+        icon: 'question',
+        input: 'textarea',
+        inputLabel: 'Cancellation Reason',
+        inputPlaceholder: 'Enter reason for cancellation...',
+        inputAttributes: {
+          'aria-label': 'Cancellation reason'
+        },
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-ban me-2"></i>Yes, Cancel Order',
+        cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+        inputValidator: (value) => {
+          if (!value) {
+            return 'You need to provide a cancellation reason!';
+          }
+        },
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          htmlContainer: 'swal2-html-container-custom',
+          confirmButton: 'swal2-confirm-button-custom',
+          cancelButton: 'swal2-cancel-button-custom'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Create and submit form
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.innerHTML = `
+            <input type="hidden" name="order_id" value="${orderId}">
+            <input type="hidden" name="cancel_reason" value="${result.value}">
+            <input type="hidden" name="cancel_order" value="1">
+          `;
+          document.body.appendChild(form);
+          form.submit();
+        }
+      });
+    }
+
+    function viewPaymentProof(orderId, paymentProof) {
+      console.log('Opening payment proof for order:', orderId, 'proof:', paymentProof);
+      
+      if (paymentProof && paymentProof.trim() !== '') {
+        // Payment proofs are stored directly in uploads/ directory
+        // Try multiple possible paths since admin is in subdirectory
+      const possiblePaths = [
+          '../uploads/' + paymentProof,
+          'uploads/' + paymentProof,
+          '/capstone2.1/uploads/' + paymentProof
+        ];
+        
+        console.log('Trying possible paths:', possiblePaths);
+        
+        // Test each path until one works
+      let currentPathIndex = 0;
+      
+      function tryNextPath() {
+        if (currentPathIndex >= possiblePaths.length) {
+            // All paths failed
+          Swal.fire({
+              title: 'Payment Proof Not Found',
+              html: `
+                <div class="text-center">
+                  <i class="fas fa-exclamation-triangle text-warning" style="font-size: 4rem;"></i>
+                  <p class="text-muted mt-3">Payment proof image not found for Order #${orderId}</p>
+                  <p class="text-muted small">File: ${paymentProof}</p>
+                  <p class="text-muted small">Tried paths: ${possiblePaths.join(', ')}</p>
+                </div>
+              `,
+              confirmButtonColor: '#7F1734',
+              customClass: {
+                popup: 'swal2-popup-custom',
+                title: 'swal2-title-custom',
+                htmlContainer: 'swal2-html-container-custom',
+                confirmButton: 'swal2-confirm-button-custom'
+              }
+          });
+          return;
+        }
+        
+          const imagePath = possiblePaths[currentPathIndex];
+          console.log('Trying image path:', imagePath);
+          
+          // Create image element to test if image exists
+          const testImage = new Image();
+          testImage.onload = function() {
+            // Image loaded successfully
+            showPaymentProofModal(orderId, imagePath, paymentProof);
+          };
+          testImage.onerror = function() {
+            // This path failed, try the next one
+          currentPathIndex++;
+          tryNextPath();
+        };
+          testImage.src = imagePath;
+        }
+        
+        // Start trying paths
+      tryNextPath();
+      } else {
+        // No payment proof filename
+        Swal.fire({
+          title: 'No Payment Proof',
+          html: `
+            <div class="text-center">
+              <i class="fas fa-image text-muted" style="font-size: 4rem;"></i>
+              <p class="text-muted mt-3">No payment proof uploaded for Order #${orderId}</p>
+            </div>
+          `,
+          confirmButtonColor: '#7F1734',
+          customClass: {
+            popup: 'swal2-popup-custom',
+            title: 'swal2-title-custom',
+            htmlContainer: 'swal2-html-container-custom',
+            confirmButton: 'swal2-confirm-button-custom'
+          }
+        });
+      }
+    }
+
+    function showPaymentProofModal(orderId, imagePath, paymentProof) {
+      const isSuperAdmin = <?php echo (isset($_SESSION['usertype_id']) && $_SESSION['usertype_id'] == 1) ? 'true' : 'false'; ?>;
+      
+      Swal.fire({
+        title: `Payment Proof - Order #${orderId}`,
+        html: `
+          <div class="text-center">
+            <img src="${imagePath}" alt="Payment Proof" class="img-fluid rounded" style="max-height: 400px; max-width: 100%; border: 2px solid #e9ecef;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div style="display: none; padding: 2rem; background: #f8f9fa; border-radius: 10px; border: 2px dashed #dee2e6;">
+              <i class="fas fa-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+              <p class="text-muted mt-2">Failed to load image</p>
+              <p class="text-muted small">Path: ${imagePath}</p>
+            </div>
+            <div class="mt-3">
+              <a href="${imagePath}" download="${paymentProof}" class="btn btn-primary me-2" style="background: #7F1734; border: none;">
+                <i class="fas fa-download me-1"></i>Download
+              </a>
+              ${isSuperAdmin ? `
+                <button class="btn btn-danger" onclick="rejectPaymentProof(${orderId}, '${paymentProof.replace(/'/g, "\\'")}')">
+                  <i class="fas fa-times-circle me-1"></i>Reject Payment
+                </button>
+              ` : ''}
+            </div>
+            <div class="mt-2">
+              <small class="text-muted">File: ${paymentProof}</small>
+            </div>
+          </div>
+        `,
+        showConfirmButton: false,
+        showCancelButton: true,
+        cancelButtonText: 'Close',
+        cancelButtonColor: '#6c757d',
+        width: '600px',
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          htmlContainer: 'swal2-html-container-custom',
+          cancelButton: 'swal2-cancel-button-custom'
+        }
+      });
+    }
+
+    function rejectPaymentProof(orderId, paymentProof) {
+      Swal.fire({
+         title: 'Reject Payment Proof?',
+         html: `
+           <div class="text-start">
+             <p><strong>Order #${orderId}</strong></p>
+             <p class="text-danger">This action will:</p>
+             <ul class="text-danger">
+               <li>Remove the payment proof from the database</li>
+               <li>Change the order status to "Cancelled"</li>
+               <li>Notify the customer</li>
+             </ul>
+             <p class="text-danger"><strong>This action cannot be undone!</strong></p>
+           </div>
+         `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+         confirmButtonText: '<i class="fas fa-ban me-2"></i>Yes, Reject Payment',
+         cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+         customClass: {
+           popup: 'swal2-popup-custom',
+           title: 'swal2-title-custom',
+           htmlContainer: 'swal2-html-container-custom',
+           confirmButton: 'swal2-confirm-button-custom',
+           cancelButton: 'swal2-cancel-button-custom'
+         }
+      }).then((result) => {
+        if (result.isConfirmed) {
+           // Show loading state
+           Swal.fire({
+             title: 'Processing...',
+             text: 'Rejecting payment proof',
+             icon: 'info',
+             allowOutsideClick: false,
+             allowEscapeKey: false,
+             showConfirmButton: false,
+             didOpen: () => {
+               Swal.showLoading();
+             }
+           });
+           
+          // Send AJAX request to reject payment
+          fetch('reject_payment_proof.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `order_id=${orderId}&payment_proof=${encodeURIComponent(paymentProof)}`
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              Swal.fire({
+                 icon: 'success',
+                title: 'Success!',
+                text: 'Payment proof rejected successfully!',
+                 confirmButtonColor: '#7F1734',
+                 timer: 2000,
+                 timerProgressBar: true
+              }).then(() => {
+                location.reload();
+              });
+            } else {
+              Swal.fire({
+                icon: 'error',
+              title: 'Error',
+                 text: data.message || 'Unknown error occurred',
+                 confirmButtonColor: '#7F1734'
+              });
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            Swal.fire({
+          icon: 'error',
+              title: 'Error',
+              text: 'Error rejecting payment proof. Please try again.',
+               confirmButtonColor: '#7F1734'
+            });
+          });
+        }
+      });
+    }
+
+    function viewOrderDetails(orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate) {
+      // Debug: Log the received data
+      console.log('Order Details Data:', {
+        orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, 
+        items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate
+      });
+      
+      // Populate modal with order data
+      document.getElementById('modalOrderId').textContent = '#' + orderId;
+      document.getElementById('modalCustomerUsername').textContent = username || 'N/A';
+      document.getElementById('modalCustomerEmail').textContent = email || 'N/A';
+      document.getElementById('modalCustomerPhone').textContent = phone || 'N/A';
+      
+      // Format address
+      let address = '';
+      if (addressLine) address += addressLine;
+      if (addressLine2) address += ', ' + addressLine2;
+      if (city) address += ', ' + city;
+      if (state) address += ', ' + state;
+      if (postalCode) address += ' ' + postalCode;
+      if (country) address += ', ' + country;
+      document.getElementById('modalCustomerAddress').textContent = address || 'N/A';
+      
+      // Format order status with badge
+      const statusBadge = `<span class="badge" style="background: ${getStatusColor(status)}; color: ${getStatusTextColor(status)}; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">${status}</span>`;
+      document.getElementById('modalOrderStatus').innerHTML = statusBadge;
+      
+      document.getElementById('modalTotalAmount').innerHTML = `<strong>₱${parseFloat(totalAmount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>`;
+      document.getElementById('modalDeliveryOption').textContent = deliveryOption ? deliveryOption.charAt(0).toUpperCase() + deliveryOption.slice(1) : 'N/A';
+      
+      // Format order date
+      const date = new Date(orderDate);
+      const formattedDate = date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      document.getElementById('modalOrderDate').textContent = formattedDate;
+      
+      // Format items
+      document.getElementById('modalOrderItems').innerHTML = items ? items.replace(/,/g, '<br>') : 'N/A';
+      
+      // Payment information
+      document.getElementById('modalPaymentMethod').textContent = paymentMethod || 'Cash On Delivery';
+      
+      // Transaction ID - show only for GCash payments
+      let transactionIdHtml = 'N/A';
+      if (transactionId && transactionId.trim() !== '' && paymentMethod && paymentMethod.toLowerCase() === 'gcash') {
+        transactionIdHtml = `<span class="badge" style="background: #e8f5e8; color: #2d5a2d; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem; font-family: 'Courier New', monospace;">${transactionId}</span>`;
+      }
+      document.getElementById('modalTransactionId').innerHTML = transactionIdHtml;
+      
+      // Payment proof
+      let paymentProofHtml = 'N/A';
+      if (paymentMethod && paymentMethod.toLowerCase() === 'gcash') {
+        if (paymentProof && paymentProof.trim() !== '') {
+          paymentProofHtml = `<button class="btn btn-sm" style="background: #e6f3ff; color: #0066cc; border-radius: 15px; padding: 2px 8px; font-size: 0.7rem;" onclick="viewPaymentProof(${orderId}, '${paymentProof.replace(/'/g, "\\'")}')">
+            <i class="fas fa-image me-1"></i>View Proof
+          </button>`;
+        } else {
+          paymentProofHtml = '<span class="text-muted">No proof uploaded</span>';
+        }
+      }
+      document.getElementById('modalPaymentProof').innerHTML = paymentProofHtml;
+      
+      // Show modal
+      const modal = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
+      modal.show();
+    }
+    
+    function getStatusColor(status) {
+      const statusLower = status.toLowerCase();
+      if (statusLower === 'pending') return '#fff3cd';
+      if (statusLower === 'to ship') return '#d1ecf1';
+      if (statusLower === 'ready for pick up') return '#f8d7da';
+      if (statusLower === 'out for delivery') return '#cce5ff';
+      if (statusLower === 'cancelled') return '#f5c6cb';
+      if (statusLower === 'delivered' || statusLower === 'completed') return '#d4edda';
+      return '#f8f9fa';
+    }
+
+    function getStatusTextColor(status) {
+      const statusLower = status.toLowerCase();
+      if (statusLower === 'pending') return '#856404';
+      if (statusLower === 'to ship') return '#0c5460';
+      if (statusLower === 'ready for pick up') return '#721c24';
+      if (statusLower === 'out for delivery') return '#004085';
+      if (statusLower === 'cancelled') return '#721c24';
+      if (statusLower === 'delivered' || statusLower === 'completed') return '#155724';
+      return '#6c757d';
+    }
+
+    // Search functionality
+    function initializeSearch() {
+      const searchInput = document.getElementById('orderSearchInput');
+      if (!searchInput) return;
+
+      searchInput.addEventListener('keyup', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        const tableRows = document.querySelectorAll('.order-row');
+        
+        tableRows.forEach(row => {
+          const orderId = row.cells[0].textContent.toLowerCase();
+          const customer = row.cells[1].textContent.toLowerCase();
+          const contact = row.cells[2].textContent.toLowerCase();
+          const items = row.cells[3].textContent.toLowerCase();
+          const total = row.cells[4].textContent.toLowerCase();
+          const payment = row.cells[5].textContent.toLowerCase();
+          const transactionId = row.cells[6].textContent.toLowerCase();
+          const status = row.cells[7].textContent.toLowerCase();
+          const delivery = row.cells[8].textContent.toLowerCase();
+          const date = row.cells[9].textContent.toLowerCase();
+          
+          const searchableText = `${orderId} ${customer} ${contact} ${items} ${total} ${payment} ${transactionId} ${status} ${delivery} ${date}`;
+          
+          if (searchTerm === '' || searchableText.includes(searchTerm)) {
+            row.style.display = '';
+          } else {
+            row.style.display = 'none';
+          }
+        });
+        
+        // Show/hide empty state
+        const visibleRows = Array.from(tableRows).filter(row => row.style.display !== 'none');
+        const emptyState = document.querySelector('.empty-state');
+        if (emptyState) {
+          emptyState.style.display = visibleRows.length === 0 && searchTerm !== '' ? 'block' : 'none';
+        }
+      });
+    }
+
+    // Initialize search when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      initializeSearch();
+    });
+
+  </script>
+</body>
+</html>
