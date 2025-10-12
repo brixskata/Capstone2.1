@@ -958,7 +958,7 @@ foreach ($statuses as $status) {
                       <div id="modalPaymentMethod">-</div>
                     </div>
                     <div class="col-md-3 mb-2">
-                      <strong>Transaction ID:</strong>
+                      <strong>Reference Number:</strong>
                       <div id="modalTransactionId">-</div>
                     </div>
                     <div class="col-md-6 mb-2">

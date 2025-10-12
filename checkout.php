@@ -1000,16 +1000,16 @@ if (empty($_SESSION['selected_address_id']) && !empty($all_addresses)) {
                                     
                                     <div class="row g-3">
                                         <div class="col-12">
-                                            <label class="form-label fw-bold">GCash Transaction ID *</label>
+                                            <label class="form-label fw-bold">GCash Reference Number *</label>
                                             <input type="text" name="gcash_transaction_id" class="form-control" 
-                                                   placeholder="Enter your GCash transaction ID (13 digits)" 
+                                                   placeholder="Enter your GCash Reference Number (13 digits)" 
                                                    pattern="[0-9]{13}" 
                                                    maxlength="13"
                                                    minlength="13"
-                                                   title="Please enter exactly 13 digits for your GCash transaction ID">
+                                                   title="Please enter exactly 13 digits for your GCash Reference Number">
                                             <small class="form-text text-muted">
                                                 <i class="fas fa-info-circle me-1"></i>
-                                                Enter exactly 13 digits from your GCash transaction history or receipt
+                                                Enter exactly 13 digits from your GCash Reference Number
                                             </small>
                                         </div>
                                         <div class="col-12">

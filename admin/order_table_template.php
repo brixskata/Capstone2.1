@@ -25,7 +25,7 @@
           <th class="fw-semibold text-dark">Items</th>
           <th class="fw-semibold text-dark">Total</th>
           <th class="fw-semibold text-dark">Payment</th>
-          <th class="fw-semibold text-dark">Transaction ID</th>
+          <th class="fw-semibold text-dark">Reference Number</th>
           <th class="fw-semibold text-dark">Status</th>
           <th class="fw-semibold text-dark">Delivery</th>
           <th class="fw-semibold text-dark">Date</th>
