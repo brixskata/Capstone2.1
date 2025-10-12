@@ -1270,7 +1270,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($pendingOrders as $order): ?>
-                                    <div class="order-card">
+                                    <div class="order-card" data-order-id="<?= $order['id'] ?>">
                                         <div class="order-header">
                                             <div>
                                                 <div class="order-number">Order #<?= $order['id'] ?></div>
@@ -1334,7 +1334,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($toShipOrders as $order): ?>
-                                    <div class="order-card">
+                                    <div class="order-card" data-order-id="<?= $order['id'] ?>">
                                         <div class="order-header">
                                             <div>
                                                 <div class="order-number">Order #<?= $order['id'] ?></div>
@@ -1398,7 +1398,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($outForDeliveryOrders as $order): ?>
-                                    <div class="order-card">
+                                    <div class="order-card" data-order-id="<?= $order['id'] ?>">
                                         <div class="order-header">
                                             <div>
                                                 <div class="order-number">Order #<?= $order['id'] ?></div>
@@ -1468,7 +1468,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($readyForPickupOrders as $order): ?>
-                                    <div class="order-card">
+                                    <div class="order-card" data-order-id="<?= $order['id'] ?>">
                                         <div class="order-header">
                                             <div>
                                                 <div class="order-number">Order #<?= $order['id'] ?></div>
@@ -1533,7 +1533,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($completedOrders as $order): ?>
-                                    <div class="order-card">
+                                    <div class="order-card" data-order-id="<?= $order['id'] ?>">
                                         <div class="order-header">
                                             <div>
                                                 <div class="order-number">Order #<?= $order['id'] ?></div>
@@ -1653,7 +1653,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($cancelledOrders as $order): ?>
-                                    <div class="order-card">
+                                    <div class="order-card" data-order-id="<?= $order['id'] ?>">
                                         <div class="order-header">
                                             <div>
                                                 <div class="order-number">Order #<?= $order['id'] ?></div>
@@ -2861,6 +2861,339 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     initAddressAutocomplete('editAddressLine', 'edit-address-suggestions');
                 });
             }
+        });
+        
+        // AJAX Auto-Refresh for Order Status Updates
+        let autoRefreshInterval;
+        let isModalOpen = false;
+        let isUserInteracting = false;
+        let lastOrderStatuses = new Map();
+
+        function initializeOrderAutoRefresh() {
+            console.log('Initializing order auto-refresh...');
+            
+            // Initialize with current order statuses
+            document.querySelectorAll('.order-card').forEach(card => {
+                const orderId = card.getAttribute('data-order-id');
+                const statusElement = card.querySelector('.order-status');
+                if (orderId && statusElement) {
+                    const statusText = statusElement.textContent.trim();
+                    lastOrderStatuses.set(orderId, statusText);
+                    console.log(`Initialized order ${orderId} with status: ${statusText}`);
+                }
+            });
+
+            console.log('Initial order statuses:', Array.from(lastOrderStatuses.entries()));
+
+            // Start auto-refresh
+            startOrderAutoRefresh();
+
+            // Pause when modals are opened
+            document.addEventListener('show.bs.modal', function() {
+                isModalOpen = true;
+                pauseOrderAutoRefresh();
+            });
+
+            // Resume when modals are closed
+            document.addEventListener('hidden.bs.modal', function() {
+                isModalOpen = false;
+                if (!isUserInteracting) {
+                    setTimeout(() => {
+                        if (!isModalOpen && !isUserInteracting) {
+                            resumeOrderAutoRefresh();
+                        }
+                    }, 2000);
+                }
+            });
+
+            // Pause when user interacts with orders
+            const ordersContainer = document.querySelector('.orders-container');
+            if (ordersContainer) {
+                ordersContainer.addEventListener('mouseenter', function() {
+                    isUserInteracting = true;
+                    pauseOrderAutoRefresh();
+                });
+
+                ordersContainer.addEventListener('mouseleave', function() {
+                    isUserInteracting = false;
+                    setTimeout(() => {
+                        if (!isModalOpen && !isUserInteracting) {
+                            resumeOrderAutoRefresh();
+                        }
+                    }, 2000);
+                });
+            }
+        }
+
+        function startOrderAutoRefresh() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            autoRefreshInterval = setInterval(fetchCustomerOrders, 10000); // 10 seconds
+            showOrderRefreshIndicator(true);
+        }
+
+        function pauseOrderAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+            showOrderRefreshIndicator(false);
+        }
+
+        function resumeOrderAutoRefresh() {
+            if (!autoRefreshInterval) {
+                startOrderAutoRefresh();
+            }
+        }
+
+        function showOrderRefreshIndicator(active) {
+            let indicator = document.getElementById('orderRefreshIndicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.id = 'orderRefreshIndicator';
+                indicator.innerHTML = '<i class="fas fa-sync-alt"></i>';
+                indicator.style.cssText = `
+                  position: fixed;
+                  bottom: 20px;
+                  right: 20px;
+                  width: 40px;
+                  height: 40px;
+                  background: #28a745;
+                  color: white;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  z-index: 9999;
+                  opacity: 0.8;
+                  transition: all 0.3s ease;
+                `;
+                document.body.appendChild(indicator);
+            }
+            
+            if (active) {
+                indicator.style.display = 'flex';
+                indicator.style.animation = 'pulse 2s infinite';
+            } else {
+                indicator.style.display = 'none';
+                indicator.style.animation = 'none';
+            }
+        }
+
+        async function fetchCustomerOrders() {
+            try {
+                console.log('Fetching customer orders...');
+                const response = await fetch('fetch_customer_orders.php');
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Orders updated:', data.counts);
+                    updateOrderStatuses(data);
+                }
+            } catch (error) {
+                console.error('Error fetching orders:', error);
+            }
+        }
+
+        function updateOrderStatuses(data) {
+            // Check ALL orders for status changes, not just current orders
+            const allOrders = data.orders.all;
+            console.log('Updating order statuses for', allOrders.length, 'orders');
+            
+            allOrders.forEach(order => {
+                const orderCard = document.querySelector(`[data-order-id="${order.id}"]`);
+                console.log(`Looking for order ${order.id}:`, orderCard ? 'found' : 'not found');
+                
+                if (orderCard) {
+                    const statusElement = orderCard.querySelector('.order-status');
+                    const lastStatus = lastOrderStatuses.get(order.id.toString());
+                    const currentStatus = order.status;
+                    
+                    console.log(`Order ${order.id}: last="${lastStatus}", current="${currentStatus}"`);
+                    
+                    if (statusElement && lastStatus && lastStatus !== currentStatus) {
+                        // Status changed - show notification and update
+                        console.log(`Status changed for order ${order.id}: ${lastStatus} → ${currentStatus}`);
+                        showStatusChangeNotification(order.id, lastStatus, currentStatus);
+                        
+                        // Move order to correct section
+                        moveOrderToCorrectSection(orderCard, order, currentStatus);
+                        
+                        // Add highlight animation
+                        orderCard.style.animation = 'highlightStatusChange 3s ease-out';
+                    }
+                    
+                    // Update last known status
+                    lastOrderStatuses.set(order.id.toString(), currentStatus);
+                } else {
+                    console.warn(`Order card not found for order ${order.id}`);
+                }
+            });
+        }
+
+        function moveOrderToCorrectSection(orderCard, order, newStatus) {
+            console.log(`Moving order ${order.id} to ${newStatus} section`);
+            
+            // Update the order card content
+            updateOrderStatusDisplay(orderCard, newStatus);
+            
+            // Find the correct section container
+            const targetSection = getSectionForStatus(newStatus);
+            if (!targetSection) {
+                console.warn(`No section found for status: ${newStatus}`);
+                return;
+            }
+            
+            // Clone the order card
+            const newOrderCard = orderCard.cloneNode(true);
+            
+            // Remove the old order card
+            orderCard.remove();
+            
+            // Add the updated order card to the correct section
+            targetSection.appendChild(newOrderCard);
+            
+            // Update the last known status for the new card
+            lastOrderStatuses.set(order.id.toString(), newStatus);
+            
+            // Update tab counts
+            updateTabCounts();
+            
+            console.log(`Order ${order.id} moved to ${newStatus} section`);
+        }
+
+        function getSectionForStatus(status) {
+            const sectionMap = {
+                'Pending': document.querySelector('#pending-orders'),
+                'To Ship': document.querySelector('#to-ship-orders'),
+                'Out for delivery': document.querySelector('#out-for-delivery-orders'),
+                'Ready for Pick Up': document.querySelector('#ready-pickup-orders'),
+                'Completed': document.querySelector('#completed-orders'),
+                'Cancelled': document.querySelector('#cancelled-orders')
+            };
+            
+            const section = sectionMap[status];
+            console.log(`Looking for section ${status}:`, section ? 'found' : 'not found');
+            return section;
+        }
+
+        function updateOrderStatusDisplay(orderCard, newStatus) {
+            const statusElement = orderCard.querySelector('.order-status');
+            if (!statusElement) return;
+
+            // Remove old status classes
+            statusElement.className = 'order-status';
+            
+            // Add new status class and content
+            const statusConfig = getStatusConfig(newStatus);
+            statusElement.className += ` ${statusConfig.class}`;
+            statusElement.innerHTML = `<i class="${statusConfig.icon} me-1"></i>${newStatus}`;
+        }
+
+        function getStatusConfig(status) {
+            const configs = {
+                'Pending': { class: 'status-pending', icon: 'fas fa-clock' },
+                'To Ship': { class: 'status-to-ship', icon: 'fas fa-box' },
+                'Out for delivery': { class: 'status-out-for-delivery', icon: 'fas fa-truck' },
+                'Ready for Pick Up': { class: 'status-ready-pickup', icon: 'fas fa-hand-holding' },
+                'Completed': { class: 'status-completed', icon: 'fas fa-check-circle' },
+                'Cancelled': { class: 'status-cancelled', icon: 'fas fa-times-circle' }
+            };
+            return configs[status] || { class: 'status-pending', icon: 'fas fa-clock' };
+        }
+
+        function updateTabCounts() {
+            // Count orders in each section
+            const counts = {
+                'Pending': document.querySelectorAll('#pending-orders .order-card').length,
+                'To Ship': document.querySelectorAll('#to-ship-orders .order-card').length,
+                'Out for delivery': document.querySelectorAll('#out-for-delivery-orders .order-card').length,
+                'Ready for Pick Up': document.querySelectorAll('#ready-pickup-orders .order-card').length,
+                'Completed': document.querySelectorAll('#completed-orders .order-card').length,
+                'Cancelled': document.querySelectorAll('#cancelled-orders .order-card').length
+            };
+
+            // Update tab text with new counts
+            const tabTexts = [
+                { selector: 'button[data-tab="pending"]', text: `Pending (${counts['Pending']})` },
+                { selector: 'button[data-tab="to-ship"]', text: `To Ship (${counts['To Ship']})` },
+                { selector: 'button[data-tab="out-for-delivery"]', text: `Out for Delivery (${counts['Out for delivery']})` },
+                { selector: 'button[data-tab="ready-pickup"]', text: `Ready for Pickup (${counts['Ready for Pick Up']})` },
+                { selector: 'button[data-tab="completed"]', text: `Completed (${counts['Completed']})` },
+                { selector: 'button[data-tab="cancelled"]', text: `Cancelled (${counts['Cancelled']})` }
+            ];
+
+            tabTexts.forEach(tab => {
+                const tabElement = document.querySelector(tab.selector);
+                console.log(`Looking for tab: ${tab.selector}`, tabElement ? 'found' : 'not found');
+                if (tabElement) {
+                    // Extract the icon and update the text
+                    const icon = tabElement.querySelector('i');
+                    if (icon) {
+                        console.log(`Updating tab: ${tab.text}`);
+                        tabElement.innerHTML = `${icon.outerHTML} ${tab.text}`;
+                    }
+                }
+            });
+
+            console.log('Tab counts updated:', JSON.stringify(counts, null, 2));
+        }
+
+        function showStatusChangeNotification(orderId, oldStatus, newStatus) {
+            const notification = document.createElement('div');
+            notification.innerHTML = `
+              <div style="position: fixed; top: 80px; right: 20px; background: #17a2b8; color: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10000; animation: slideInRight 0.3s ease-out; max-width: 300px;">
+                <div class="d-flex align-items-center">
+                  <i class="fas fa-bell me-2"></i>
+                  <div>
+                    <strong>Order #${orderId} Updated!</strong>
+                    <div style="font-size: 0.9rem; opacity: 0.9;">
+                      ${oldStatus} → ${newStatus}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.3s ease-in';
+                setTimeout(() => notification.remove(), 300);
+            }, 4000);
+        }
+
+        // Add CSS animations
+        const orderStyle = document.createElement('style');
+        orderStyle.textContent = `
+          @keyframes highlightStatusChange {
+            0% { background-color: rgba(23, 162, 184, 0.3); transform: scale(1.02); }
+            50% { background-color: rgba(23, 162, 184, 0.2); transform: scale(1.01); }
+            100% { background-color: transparent; transform: scale(1); }
+          }
+          
+          @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+          }
+          
+          @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+          
+          @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+          }
+        `;
+        document.head.appendChild(orderStyle);
+
+        // Initialize auto-refresh when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add a small delay to ensure all order cards are rendered
+            setTimeout(() => {
+                initializeOrderAutoRefresh();
+            }, 1000);
         });
     </script>
     

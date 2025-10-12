@@ -28,15 +28,16 @@ class BatchManager {
             
             $stmt = $this->pdo->prepare("
                 INSERT INTO product_batches 
-                (product_id, supplier_id, batch_number, quantity_received, quantity_remaining, 
+                (product_id, supplier_id, brand_id, batch_number, quantity_received, quantity_remaining, 
                  unit_cost, expiration_date, received_date, created_by, reference_type, 
                  reference_id, notes) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $stmt->execute([
                 $data['product_id'],
                 $data['supplier_id'] ?? null,
+                $data['brand_id'] ?? null,
                 $data['batch_number'],
                 $data['quantity_received'],
                 $data['quantity_received'], // Initially, remaining = received
@@ -70,7 +71,7 @@ class BatchManager {
     /**
      * Get available batches for a product (FIFO order)
      */
-    public function getAvailableBatches($product_id, $quantity_needed = null, $supplier_id = null) {
+    public function getAvailableBatches($product_id, $quantity_needed = null, $supplier_id = null, $brand_id = null) {
         $sql = "
             SELECT * FROM product_batches 
             WHERE product_id = ? AND quantity_remaining > 0 AND is_active = 1
@@ -84,24 +85,50 @@ class BatchManager {
             $params[] = $supplier_id;
         }
         
-        $sql .= " ORDER BY received_date ASC, batch_id ASC";
+        // Filter by brand if provided
+        if ($brand_id) {
+            $sql .= " AND brand_id = ?";
+            $params[] = $brand_id;
+        }
+        
+        $sql .= " ORDER BY expiration_date ASC, received_date ASC, batch_id ASC";
         
         if ($quantity_needed) {
             $sql .= " LIMIT ?";
             $params[] = $quantity_needed;
         }
         
+        error_log("getAvailableBatches SQL: $sql");
+        error_log("getAvailableBatches params: " . json_encode($params));
+        
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        error_log("getAvailableBatches result: " . json_encode($result));
+        return $result;
+    }
+    
+    /**
+     * Get combined stock for a product (optionally filtered by brand)
+     */
+    public function getCombinedStock($product_id, $brand_id = null) {
+        $available_batches = $this->getAvailableBatches($product_id, null, null, $brand_id);
+        $total_stock = 0;
+        foreach ($available_batches as $batch) {
+            $total_stock += floatval($batch['quantity_remaining']);
+        }
+        return $total_stock;
     }
     
     /**
      * Consume stock from batches (FIFO)
      */
-    public function consumeStock($product_id, $quantity, $movement_type, $reference_type = null, $reference_id = null, $created_by = null, $notes = null, $supplier_id = null) {
+    public function consumeStock($product_id, $quantity, $movement_type, $reference_type = null, $reference_id = null, $created_by = null, $notes = null, $supplier_id = null, $brand_id = null) {
         // Check if there's already an active transaction
         $has_transaction = $this->pdo->inTransaction();
+        
+        error_log("BatchManager::consumeStock called with: product_id=$product_id, quantity=$quantity, brand_id=$brand_id");
         
         try {
             // Only start a transaction if there isn't one already
@@ -112,8 +139,10 @@ class BatchManager {
             $remaining_quantity = $quantity;
             $batches_used = [];
             
-            // Get available batches in FIFO order (filtered by supplier if provided)
-            $batches = $this->getAvailableBatches($product_id, null, $supplier_id);
+            // Get available batches in FIFO order (filtered by supplier and brand if provided)
+            error_log("Getting available batches for product_id=$product_id, supplier_id=$supplier_id, brand_id=$brand_id");
+            $batches = $this->getAvailableBatches($product_id, null, $supplier_id, $brand_id);
+            error_log("Found " . count($batches) . " available batches");
             
             foreach ($batches as $batch) {
                 if ($remaining_quantity <= 0) break;

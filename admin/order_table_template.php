@@ -4,9 +4,14 @@
       <h5 class="fw-bold mb-0 text-dark">
         <i class="fas fa-list-alt me-2"></i>Order Transactions
       </h5>
-      <div class="text-muted small">
+      <div class="text-muted small d-flex align-items-center">
         <i class="fas fa-search me-1"></i>
-        <input type="text" id="orderSearchInput" class="form-control form-control-sm d-inline-block" style="width: 300px;" placeholder="Search orders by ID, customer, items, status..." autocomplete="off">
+        <div class="position-relative" style="width: 300px;">
+          <input type="text" id="orderSearchInput" class="form-control form-control-sm" placeholder="Search orders by ID, customer, items, status..." autocomplete="off">
+          <button type="button" class="btn btn-sm position-absolute end-0 top-50 translate-middle-y me-1 search-clear-btn" style="background: none; border: none; color: #6c757d;" onclick="clearSearch()" title="Clear search">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
     </div>
   </div>

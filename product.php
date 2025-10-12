@@ -27,33 +27,53 @@ try {
         $selectedCategory = $_GET['category'];
 
         if ($selectedCategory === 'all') {
-            // Fetch all non-archived products with normalized data
+            // Fetch all products (one card per product, not per brand)
             $products = $pdo->query("
                 SELECT 
                     p.product_id AS id,
                     p.product_name AS name,
                     p.product_description AS description,
                     uom.name AS uom_name,
-                    COALESCE(ps.current_stock, 0) AS stock,
-                    COALESCE(pp.markup_price, 0) AS markup_value,
-                    COALESCE(
+                    -- Get lowest price among all brands for this product
+                    MIN(COALESCE(pp.markup_price, 0) + COALESCE(
                         (SELECT pb.unit_cost FROM product_batches pb 
-                         WHERE pb.product_id = p.product_id AND pb.quantity_remaining > 0 
-                         ORDER BY pb.expiration_date ASC, pb.created_at ASC LIMIT 1),
+                         WHERE pb.product_id = p.product_id AND pb.brand_id = b.id 
+                         AND pb.quantity_remaining > 0 AND pb.is_active = 1
+                         ORDER BY pb.expiration_date ASC LIMIT 1),
                         pp.cost_price, 0
-                    ) AS cost_per_unit,
-                    COALESCE(pp.markup_price, 0) + COALESCE(
-                        (SELECT pb.unit_cost FROM product_batches pb 
-                         WHERE pb.product_id = p.product_id AND pb.quantity_remaining > 0 
-                         ORDER BY pb.expiration_date ASC, pb.created_at ASC LIMIT 1),
-                        pp.cost_price, 0
-                    ) AS price,
-                    (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+                    )) AS price,
+                    -- Total stock from all brands combined
+                    COALESCE(SUM(
+                        (SELECT SUM(pb.quantity_remaining) FROM product_batches pb 
+                         WHERE pb.product_id = p.product_id AND pb.brand_id = b.id AND pb.is_active = 1)
+                    ), 0) AS stock,
+                    -- Products sold (from order_items)
+                    COALESCE((
+                        SELECT SUM(oi.quantity) FROM order_items oi 
+                        WHERE oi.product_id = p.product_id
+                    ), 0) AS products_sold,
+                        -- Average rating (from order_ratings via order_items)
+                        COALESCE((
+                            SELECT AVG(ord_rat.rating) 
+                            FROM order_ratings ord_rat
+                            JOIN orders o ON ord_rat.order_id = o.orders_id
+                            JOIN order_items oi ON o.orders_id = oi.order_id
+                            WHERE oi.product_id = p.product_id
+                        ), 0) AS avg_rating,
+                    -- Count of brands available
+                    COUNT(DISTINCT b.id) AS brand_count,
+                    (SELECT pi.image_url FROM product_images pi 
+                     WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
                 FROM products p
                 LEFT JOIN uom uom ON p.uom_id = uom.uom_id
-                LEFT JOIN product_stock ps ON p.product_id = ps.product_id
                 LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
-                WHERE p.is_archive = 0
+                LEFT JOIN brands b ON b.is_archived = 0
+                WHERE p.is_archive = 0 
+                AND EXISTS (
+                    SELECT 1 FROM product_batches pb 
+                    WHERE pb.product_id = p.product_id AND pb.brand_id = b.id AND pb.is_active = 1
+                )
+                GROUP BY p.product_id, p.product_name, p.product_description, uom.name
                 ORDER BY stock DESC, name ASC
             ")->fetchAll(PDO::FETCH_ASSOC);
         } else {
@@ -63,33 +83,53 @@ try {
             $categoryData = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($categoryData) {
-                // Fetch products for selected category with normalized data
+                // Fetch products for selected category (one card per product, not per brand)
                 $stmt = $pdo->prepare("
                     SELECT 
                         p.product_id AS id,
                         p.product_name AS name,
                         p.product_description AS description,
                         uom.name AS uom_name,
-                        COALESCE(ps.current_stock, 0) AS stock,
-                        COALESCE(pp.markup_price, 0) AS markup_value,
-                        COALESCE(
+                        -- Get lowest price among all brands for this product
+                        MIN(COALESCE(pp.markup_price, 0) + COALESCE(
                             (SELECT pb.unit_cost FROM product_batches pb 
-                             WHERE pb.product_id = p.product_id AND pb.quantity_remaining > 0 
-                             ORDER BY pb.expiration_date ASC, pb.created_at ASC LIMIT 1),
+                             WHERE pb.product_id = p.product_id AND pb.brand_id = b.id 
+                             AND pb.quantity_remaining > 0 AND pb.is_active = 1
+                             ORDER BY pb.expiration_date ASC LIMIT 1),
                             pp.cost_price, 0
-                        ) AS cost_per_unit,
-                        COALESCE(pp.markup_price, 0) + COALESCE(
-                            (SELECT pb.unit_cost FROM product_batches pb 
-                             WHERE pb.product_id = p.product_id AND pb.quantity_remaining > 0 
-                             ORDER BY pb.expiration_date ASC, pb.created_at ASC LIMIT 1),
-                            pp.cost_price, 0
-                        ) AS price,
-                        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+                        )) AS price,
+                        -- Total stock from all brands combined
+                        COALESCE(SUM(
+                            (SELECT SUM(pb.quantity_remaining) FROM product_batches pb 
+                             WHERE pb.product_id = p.product_id AND pb.brand_id = b.id AND pb.is_active = 1)
+                        ), 0) AS stock,
+                        -- Products sold (from order_items)
+                        COALESCE((
+                            SELECT SUM(oi.quantity) FROM order_items oi 
+                            WHERE oi.product_id = p.product_id
+                        ), 0) AS products_sold,
+                        -- Average rating (from order_ratings via order_items)
+                        COALESCE((
+                            SELECT AVG(ord_rat.rating) 
+                            FROM order_ratings ord_rat
+                            JOIN orders o ON ord_rat.order_id = o.orders_id
+                            JOIN order_items oi ON o.orders_id = oi.order_id
+                            WHERE oi.product_id = p.product_id
+                        ), 0) AS avg_rating,
+                        -- Count of brands available
+                        COUNT(DISTINCT b.id) AS brand_count,
+                        (SELECT pi.image_url FROM product_images pi 
+                         WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
                     FROM products p
                     LEFT JOIN uom uom ON p.uom_id = uom.uom_id
-                    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
                     LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
-                    WHERE p.category_id = :category_id AND p.is_archive = 0
+                    LEFT JOIN brands b ON b.is_archived = 0
+                    WHERE p.category_id = :category_id AND p.is_archive = 0 
+                    AND EXISTS (
+                        SELECT 1 FROM product_batches pb 
+                        WHERE pb.product_id = p.product_id AND pb.brand_id = b.id AND pb.is_active = 1
+                    )
+                    GROUP BY p.product_id, p.product_name, p.product_description, uom.name
                     ORDER BY stock DESC, name ASC
                 ");
                 $stmt->execute(['category_id' => $categoryData['category_id']]);
@@ -97,33 +137,53 @@ try {
             }
         }
     } else {
-        // Fetch all non-archived products with normalized data by default
+        // Fetch all products by default (one card per product, not per brand)
         $products = $pdo->query("
             SELECT 
                 p.product_id AS id,
                 p.product_name AS name,
                 p.product_description AS description,
                 uom.name AS uom_name,
-                COALESCE(ps.current_stock, 0) AS stock,
-                COALESCE(pp.markup_price, 0) AS markup_value,
-                COALESCE(
+                -- Get lowest price among all brands for this product
+                MIN(COALESCE(pp.markup_price, 0) + COALESCE(
                     (SELECT pb.unit_cost FROM product_batches pb 
-                     WHERE pb.product_id = p.product_id AND pb.quantity_remaining > 0 
-                     ORDER BY pb.expiration_date ASC, pb.created_at ASC LIMIT 1),
+                     WHERE pb.product_id = p.product_id AND pb.brand_id = b.id 
+                     AND pb.quantity_remaining > 0 AND pb.is_active = 1
+                     ORDER BY pb.expiration_date ASC LIMIT 1),
                     pp.cost_price, 0
-                ) AS cost_per_unit,
-                COALESCE(pp.markup_price, 0) + COALESCE(
-                    (SELECT pb.unit_cost FROM product_batches pb 
-                     WHERE pb.product_id = p.product_id AND pb.quantity_remaining > 0 
-                     ORDER BY pb.expiration_date ASC, pb.created_at ASC LIMIT 1),
-                    pp.cost_price, 0
-                ) AS price,
-                (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+                )) AS price,
+                -- Total stock from all brands combined
+                COALESCE(SUM(
+                    (SELECT SUM(pb.quantity_remaining) FROM product_batches pb 
+                     WHERE pb.product_id = p.product_id AND pb.brand_id = b.id AND pb.is_active = 1)
+                ), 0) AS stock,
+                -- Products sold (from order_items)
+                COALESCE((
+                    SELECT SUM(oi.quantity) FROM order_items oi 
+                    WHERE oi.product_id = p.product_id
+                ), 0) AS products_sold,
+                        -- Average rating (from order_ratings via order_items)
+                        COALESCE((
+                            SELECT AVG(ord_rat.rating) 
+                            FROM order_ratings ord_rat
+                            JOIN orders o ON ord_rat.order_id = o.orders_id
+                            JOIN order_items oi ON o.orders_id = oi.order_id
+                            WHERE oi.product_id = p.product_id
+                        ), 0) AS avg_rating,
+                -- Count of brands available
+                COUNT(DISTINCT b.id) AS brand_count,
+                (SELECT pi.image_url FROM product_images pi 
+                 WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
             FROM products p
             LEFT JOIN uom uom ON p.uom_id = uom.uom_id
-            LEFT JOIN product_stock ps ON p.product_id = ps.product_id
             LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
-            WHERE p.is_archive = 0
+            LEFT JOIN brands b ON b.is_archived = 0
+            WHERE p.is_archive = 0 
+            AND EXISTS (
+                SELECT 1 FROM product_batches pb 
+                WHERE pb.product_id = p.product_id AND pb.brand_id = b.id AND pb.is_active = 1
+            )
+            GROUP BY p.product_id, p.product_name, p.product_description, uom.name
             ORDER BY stock DESC, name ASC
         ")->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -651,6 +711,20 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
             justify-content: space-between !important;
             gap: 1rem !important;
         }
+
+        /* Product Meta Styles */
+        .product-meta {
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .product-meta small {
+            display: inline-flex;
+            align-items: center;
+        }
     </style>
 </head>
 <body>
@@ -719,11 +793,13 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
                             <div class="swiper-pagination"></div>
                         </div>
 
-                        <h3 class="product-title" onclick="window.location.href='product_detail.php?id=<?= $product['id'] ?>'" style="cursor: pointer;"><?= htmlspecialchars($product['name']) ?></h3>
+                        <h3 class="product-title" onclick="window.location.href='product_detail.php?id=<?= $product['id'] ?>'" style="cursor: pointer;">
+                            <?= htmlspecialchars($product['name']) ?>
+                        </h3>
                         <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
 
                         <div class="product-price">
-                            ₱<?= number_format($product['price'], 2) ?>
+                            From ₱<?= number_format($product['price'], 2) ?>
                             <span class="fs-6 text-muted"> / <?= htmlspecialchars($product['uom_name'] ?? '') ?></span>
                         </div>
 
@@ -737,24 +813,35 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
                             <?php endif; ?>
                         </div>
 
-                        <?php if ((float)$product['stock'] > 0): ?>
-                            <div class="d-flex align-items-center gap-2 mb-2">
-                                <input type="number" class="form-control quantity-input" value="1" step="0.1" min="1" max="<?= (float)$product['stock'] ?>" inputmode="decimal" aria-label="Quantity" />
-                                <span class="text-muted" style="white-space: nowrap;"><?= htmlspecialchars($product['uom_name'] ?? '') ?></span>
-                            </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <button type="button" class="btn-add-cart flex-grow-1" data-product-id="<?= $product['id'] ?>">
-                                    <i class="fas fa-cart-plus me-2"></i>Add to Cart
-                                </button>
-                                <button type="button" class="btn-favorite <?= in_array($product['id'], $user_favorites) ? 'favorited' : '' ?>" data-product-id="<?= $product['id'] ?>">
-                                    <i class="fas fa-heart"></i>
-                                </button>
-                            </div>
-                        <?php else: ?>
-                            <button class="btn-out-of-stock" disabled>
-                                <i class="fas fa-times-circle me-2"></i>Out of Stock
+                        <!-- Product Meta: Sold, Rating, Brands -->
+                        <div class="product-meta mb-2">
+                            <small class="text-muted">
+                                <i class="fas fa-shopping-bag me-1"></i><?= number_format($product['products_sold']) ?> sold
+                            </small>
+                            <?php if ($product['avg_rating'] > 0): ?>
+                                <small class="text-warning ms-2">
+                                    <i class="fas fa-star"></i> <?= number_format($product['avg_rating'], 1) ?>
+                                </small>
+                            <?php else: ?>
+                                <small class="text-muted ms-2">
+                                    <i class="fas fa-star"></i> No rating yet
+                                </small>
+                            <?php endif; ?>
+                            <?php if ($product['brand_count'] > 1): ?>
+                                <small class="text-info ms-2">
+                                    <i class="fas fa-tags me-1"></i><?= $product['brand_count'] ?> brands
+                                </small>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn-add-cart flex-grow-1" onclick="window.location.href='product_detail.php?id=<?= $product['id'] ?>'">
+                                <i class="fas fa-eye me-2"></i>View Details
                             </button>
-                        <?php endif; ?>
+                            <button type="button" class="btn-favorite <?= in_array($product['id'], $user_favorites) ? 'favorited' : '' ?>" data-product-id="<?= $product['id'] ?>">
+                                <i class="fas fa-heart"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             <?php endforeach; ?>

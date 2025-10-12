@@ -101,7 +101,8 @@ try {
                 <p class="newsletter-text">Get exclusive deals and fresh product updates delivered to your inbox.</p>
                 <form class="newsletter-form" onsubmit="handleNewsletter(event)">
                     <div class="input-group">
-                        <input type="email" class="form-control newsletter-input" placeholder="Enter your email" required>
+                        <label for="newsletter-email" class="visually-hidden">Email address for newsletter</label>
+                        <input type="email" id="newsletter-email" name="newsletter-email" class="form-control newsletter-input" placeholder="Enter your email" required>
                         <button type="submit" class="btn newsletter-btn">
                             <i class="fas fa-paper-plane"></i>
                         </button>

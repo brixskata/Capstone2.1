@@ -11,11 +11,7 @@ requireAdmin($pdo);
 $stmt = $pdo->query("SELECT category_id AS id, category_name AS name FROM categories");
 $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch brands from the database
-$stmt = $pdo->query("SELECT id, name FROM brands WHERE is_archived = 0");
-$brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Note: Suppliers will be set during restocking process
+// Note: Brands and suppliers will be set during restocking process
 
 // Set UOM to Kilos only
 $uoms = [['id' => 1, 'name' => 'Kilos']]; // Assuming Kilos has ID 1
@@ -28,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_product'])) {
         $description = trim($_POST['description']);
         $markup_value = (float)$_POST['markup_value'];
         $category_id = (int)$_POST['category_id'];
-        $brand_id = (int)$_POST['brand_id'];
         $uom_id = 1; // Always set to Kilos
+        // Note: brand_id will be set during restocking, not during product creation
 
         // Validate required fields
         if (empty($name) || empty($description) || $markup_value < 0) {
@@ -65,9 +61,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_product'])) {
 
         $pdo->beginTransaction();
 
-        // Create product core (supplier will be set during restocking)
-        $stmt = $pdo->prepare("INSERT INTO products (product_name, product_description, category_id, brand_id, supplier_id, uom_id) VALUES (?, ?, ?, ?, NULL, ?)");
-        $stmt->execute([$name, $description, $category_id, $brand_id, $uom_id]);
+        // Create product core (brand and supplier will be set during restocking)
+        $stmt = $pdo->prepare("INSERT INTO products (product_name, product_description, category_id, brand_id, supplier_id, uom_id) VALUES (?, ?, ?, NULL, NULL, ?)");
+        $stmt->execute([$name, $description, $category_id, $uom_id]);
         $newProductId = (int)$pdo->lastInsertId();
 
         // Pricing (cost price will be set during restocking)
@@ -337,22 +333,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_product'])) {
                     </div>
                 </div>
                 
-                <!-- Brand -->
-                <div class="row mb-3">
-                    <div class="col-md-3">
-                        <label class="form-label fw-bold">Brand:</label>
-                    </div>
-                    <div class="col-md-9">
-                        <select name="brand_id" class="form-select" required>
-                            <option value="">Select Brand</option>
-                            <?php foreach ($brands as $brand): ?>
-                                <option value="<?= $brand['id'] ?>"><?= htmlspecialchars($brand['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-                
-                <!-- Note: Supplier will be set during restocking process -->
+                <!-- Note: Brand and Supplier will be set during restocking process -->
                 
                 <!-- Base UOM (Fixed to Kilos) -->
                 <div class="row mb-3">

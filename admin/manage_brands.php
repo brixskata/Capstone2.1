@@ -37,18 +37,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_brand'])) {
     exit;
 }
 
+// Handle brand archiving
+if (isset($_GET['archive'])) {
+    $brand_id = (int)$_GET['archive'];
+    
+    try {
+        // Get brand name for logging
+        $stmt = $pdo->prepare("SELECT name FROM brands WHERE id = ?");
+        $stmt->execute([$brand_id]);
+        $brand = $stmt->fetch();
+        
+        if ($brand) {
+            // Archive brand (soft delete)
+            $stmt = $pdo->prepare("UPDATE brands SET is_archived = 1 WHERE id = ?");
+            $stmt->execute([$brand_id]);
+            
+            $_SESSION['success'] = "Brand '{$brand['name']}' archived successfully";
+            logHistory($pdo, 'Brand Archived', "Archived brand: {$brand['name']}", $_SESSION['username']);
+        } else {
+            $_SESSION['error'] = "Brand not found";
+        }
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Error archiving brand: " . $e->getMessage();
+    }
+    
+    header("Location: manage_brands.php");
+    exit;
+}
+
+// Handle brand unarchiving
+if (isset($_GET['unarchive'])) {
+    $brand_id = (int)$_GET['unarchive'];
+    
+    try {
+        // Get brand name for logging
+        $stmt = $pdo->prepare("SELECT name FROM brands WHERE id = ?");
+        $stmt->execute([$brand_id]);
+        $brand = $stmt->fetch();
+        
+        if ($brand) {
+            // Unarchive brand (restore)
+            $stmt = $pdo->prepare("UPDATE brands SET is_archived = 0 WHERE id = ?");
+            $stmt->execute([$brand_id]);
+            
+            $_SESSION['success'] = "Brand '{$brand['name']}' restored successfully";
+            logHistory($pdo, 'Brand Restored', "Restored brand: {$brand['name']}", $_SESSION['username']);
+        } else {
+            $_SESSION['error'] = "Brand not found";
+        }
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Error restoring brand: " . $e->getMessage();
+    }
+    
+    header("Location: manage_brands.php");
+    exit;
+}
+
 // Handle brand deletion
 if (isset($_GET['delete'])) {
     $brand_id = (int)$_GET['delete'];
     
     try {
-        // Check if brand is in use
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM products WHERE brand_id = ?");
-        $stmt->execute([$brand_id]);
-        $productCount = $stmt->fetchColumn();
+        // Check if brand is in use across all tables
+        $usage_checks = [
+            'products' => "SELECT COUNT(*) FROM products WHERE brand_id = ?",
+            'product_batches' => "SELECT COUNT(*) FROM product_batches WHERE brand_id = ?",
+            'cart_items' => "SELECT COUNT(*) FROM cart_items WHERE brand_id = ?",
+            'order_items' => "SELECT COUNT(*) FROM order_items WHERE brand_id = ?"
+        ];
         
-        if ($productCount > 0) {
-            $_SESSION['error'] = "Cannot delete brand: $productCount product(s) are using this brand";
+        $total_usage = 0;
+        $usage_details = [];
+        
+        foreach ($usage_checks as $table => $query) {
+            $stmt = $pdo->prepare($query);
+            $stmt->execute([$brand_id]);
+            $count = $stmt->fetchColumn();
+            $total_usage += $count;
+            if ($count > 0) {
+                $usage_details[] = "$count in $table";
+            }
+        }
+        
+        if ($total_usage > 0) {
+            $details = implode(', ', $usage_details);
+            $_SESSION['error'] = "Cannot delete brand: Brand is being used ($details)";
         } else {
             // Get brand name for logging
             $stmt = $pdo->prepare("SELECT name FROM brands WHERE id = ?");
@@ -70,17 +143,35 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
-// Fetch all brands with product counts
+// Fetch all brands with product and batch counts
 $stmt = $pdo->query("
     SELECT b.id, b.name, b.is_archived,
-           COUNT(p.product_id) as product_count
+           COUNT(DISTINCT p.product_id) as product_count,
+           COUNT(DISTINCT pb.batch_id) as batch_count,
+           COALESCE(SUM(pb.quantity_remaining), 0) as total_stock
     FROM brands b
     LEFT JOIN products p ON b.id = p.brand_id
+    LEFT JOIN product_batches pb ON b.id = pb.brand_id AND pb.is_active = 1
     WHERE b.is_archived = 0
     GROUP BY b.id, b.name, b.is_archived
     ORDER BY b.name
 ");
 $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch archived brands
+$archived_stmt = $pdo->query("
+    SELECT b.id, b.name, b.is_archived,
+           COUNT(DISTINCT p.product_id) as product_count,
+           COUNT(DISTINCT pb.batch_id) as batch_count,
+           COALESCE(SUM(pb.quantity_remaining), 0) as total_stock
+    FROM brands b
+    LEFT JOIN products p ON b.id = p.brand_id
+    LEFT JOIN product_batches pb ON b.id = pb.brand_id AND pb.is_active = 1
+    WHERE b.is_archived = 1
+    GROUP BY b.id, b.name, b.is_archived
+    ORDER BY b.name
+");
+$archived_brands = $archived_stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -92,6 +183,8 @@ $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <title>Manage Brands - Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- SweetAlert2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
     <?php include 'includes/admin_styles.php'; ?>
     <style>
         :root {
@@ -261,6 +354,58 @@ $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 font-size: 1.5rem;
             }
         }
+        
+        /* SweetAlert2 Custom Styles */
+        .swal2-popup-custom {
+            border-radius: 20px !important;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            border: 1px solid #e9ecef !important;
+        }
+        
+        .swal2-title-custom {
+            color: var(--bs-primary) !important;
+            font-weight: 700 !important;
+            font-size: 1.5rem !important;
+        }
+        
+        .swal2-html-container-custom {
+            color: var(--bs-dark) !important;
+            font-size: 1rem !important;
+        }
+        
+        .swal2-confirm-button-custom {
+            background: linear-gradient(135deg, var(--bs-primary) 0%, #a91d42 100%) !important;
+            border: none !important;
+            border-radius: 10px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            font-size: 1rem !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .swal2-confirm-button-custom:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 8px 25px rgba(127, 23, 52, 0.3) !important;
+            background: linear-gradient(135deg, #6b1429 0%, #8b1a36 100%) !important;
+        }
+
+        .swal2-cancel-button-custom {
+            border: 2px solid var(--bs-secondary) !important;
+            color: var(--bs-secondary) !important;
+            border-radius: 10px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            background: transparent !important;
+            font-size: 1rem !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .swal2-cancel-button-custom:hover {
+            background: var(--bs-secondary) !important;
+            color: white !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 8px 25px rgba(108, 117, 125, 0.2) !important;
+        }
     </style>
 </head>
 <body>
@@ -270,19 +415,7 @@ $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <!-- Main Content -->
     <main class="main-content" id="mainContent">
         <div class="main-container">
-            <?php if (isset($_SESSION['success'])): ?>
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    <i class="fa fa-check-circle me-2"></i><?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            <?php endif; ?>
-            
-            <?php if (isset($_SESSION['error'])): ?>
-                <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                    <i class="fa fa-exclamation-circle me-2"></i><?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            <?php endif; ?>
+            <!-- Success/Error messages handled by SweetAlert2 -->
 
             <div class="page-header">
                 <div class="d-flex justify-content-between align-items-center">
@@ -290,11 +423,20 @@ $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <h2><i class="fas fa-trademark me-2"></i>Manage Brands</h2>
                         <p class="mb-0 opacity-75">Create and manage product brands</p>
                     </div>
-                    <button class="btn text-white fw-bold px-4" 
-                            style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);" 
-                            data-bs-toggle="modal" data-bs-target="#addBrandModal">
-                        <i class="fa fa-plus me-2"></i>Add Brand
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button class="btn text-white fw-bold px-4" 
+                                style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);" 
+                                data-bs-toggle="modal" data-bs-target="#addBrandModal">
+                            <i class="fa fa-plus me-2"></i>Add Brand
+                        </button>
+                        <?php if (!empty($archived_brands)): ?>
+                            <button class="btn text-white fw-bold px-4" 
+                                    style="background-color: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);" 
+                                    data-bs-toggle="modal" data-bs-target="#archivedBrandsModal">
+                                <i class="fa fa-archive me-2"></i>Archived (<?= count($archived_brands) ?>)
+                            </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
 
@@ -314,11 +456,11 @@ $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <div class="col-md-4">
                     <div class="analytics-card">
                         <div class="card-icon">
-                            <i class="fas fa-box"></i>
+                            <i class="fas fa-warehouse"></i>
                         </div>
                         <div class="card-content">
-                            <h3 class="card-number"><?php echo array_sum(array_column($brands, 'product_count')); ?></h3>
-                            <p class="card-label">Total Products</p>
+                            <h3 class="card-number"><?php echo number_format(array_sum(array_column($brands, 'total_stock')), 1); ?></h3>
+                            <p class="card-label">Total Stock (kg)</p>
                         </div>
                     </div>
                 </div>
@@ -361,24 +503,43 @@ $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <i class="fa fa-ellipsis-v"></i>
                                         </button>
                                         <ul class="dropdown-menu">
-                                            <li>
-                                                <a class="dropdown-item text-danger" href="manage_brands.php?delete=<?php echo $brand['id']; ?>" 
-                                                   onclick="return confirm('Are you sure you want to delete this brand? This action cannot be undone.')">
-                                                    <i class="fa fa-trash me-2"></i>Delete
-                                                </a>
-                                            </li>
+                                             <li>
+                                                 <a class="dropdown-item text-warning" href="#" 
+                                                    onclick="confirmArchive(<?php echo $brand['id']; ?>, '<?php echo htmlspecialchars($brand['name']); ?>'); return false;">
+                                                     <i class="fa fa-archive me-2"></i>Archive
+                                                 </a>
+                                             </li>
                                         </ul>
                                     </div>
                                 </div>
                                 
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fa fa-box me-2 text-muted"></i>
-                                        <span class="text-muted"><?php echo $brand['product_count']; ?> product(s)</span>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fa fa-box me-2 text-muted"></i>
+                                            <small class="text-muted"><?php echo $brand['product_count']; ?> product(s)</small>
+                                        </div>
                                     </div>
-                                    
-                                    <?php if ($brand['product_count'] > 0): ?>
+                                    <div class="col-6">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fa fa-boxes me-2 text-muted"></i>
+                                            <small class="text-muted"><?php echo $brand['batch_count']; ?> batch(es)</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <?php if ($brand['total_stock'] > 0): ?>
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="fa fa-warehouse me-2 text-success"></i>
+                                        <small class="text-success"><?php echo number_format($brand['total_stock'], 1); ?> kg stock</small>
+                                    </div>
+                                <?php endif; ?>
+                                
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <?php if ($brand['batch_count'] > 0): ?>
                                         <span class="badge bg-success">Active</span>
+                                    <?php elseif ($brand['product_count'] > 0): ?>
+                                        <span class="badge bg-warning">No Stock</span>
                                     <?php else: ?>
                                         <span class="badge bg-secondary">Empty</span>
                                     <?php endif; ?>
@@ -419,7 +580,172 @@ $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
     </div>
 
+    <!-- Archived Brands Modal -->
+    <div class="modal fade" id="archivedBrandsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa fa-archive me-2"></i>Archived Brands</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <?php if (empty($archived_brands)): ?>
+                        <div class="text-center py-4">
+                            <i class="fa fa-archive fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No archived brands</h5>
+                            <p class="text-muted">Archived brands will appear here</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="row g-3">
+                            <?php foreach ($archived_brands as $brand): ?>
+                                <div class="col-md-6">
+                                    <div class="brand-card" style="opacity: 0.7;">
+                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                                            <h6 class="fw-bold mb-0 text-dark"><?php echo htmlspecialchars($brand['name']); ?></h6>
+                                            <div class="d-flex gap-2">
+                                                <span class="badge bg-secondary">Archived</span>
+                                                <button class="btn btn-sm btn-success" 
+                                                        onclick="confirmRestore(<?php echo $brand['id']; ?>, '<?php echo htmlspecialchars($brand['name']); ?>')">
+                                                    <i class="fa fa-undo me-1"></i>Restore
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-6">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fa fa-box me-2 text-muted"></i>
+                                                    <small class="text-muted"><?php echo $brand['product_count']; ?> product(s)</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fa fa-boxes me-2 text-muted"></i>
+                                                    <small class="text-muted"><?php echo $brand['batch_count']; ?> batch(es)</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <?php if ($brand['total_stock'] > 0): ?>
+                                            <div class="d-flex align-items-center mb-2">
+                                                <i class="fa fa-warehouse me-2 text-success"></i>
+                                                <small class="text-success"><?php echo number_format($brand['total_stock'], 1); ?> kg stock</small>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <?php include 'includes/admin_scripts.php'; ?>
+    
+    <script>
+        // Handle success/error messages with SweetAlert2
+        document.addEventListener('DOMContentLoaded', function() {
+            <?php if (isset($_SESSION['success'])): ?>
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success!',
+                    text: '<?= addslashes($_SESSION['success']) ?>',
+                    confirmButtonColor: '#7F1734',
+                    timer: 3000,
+                    timerProgressBar: true,
+                    customClass: {
+                        popup: 'swal2-popup-custom',
+                        title: 'swal2-title-custom',
+                        htmlContainer: 'swal2-html-container-custom',
+                        confirmButton: 'swal2-confirm-button-custom'
+                    }
+                });
+                <?php unset($_SESSION['success']); ?>
+            <?php endif; ?>
+
+            <?php if (isset($_SESSION['error'])): ?>
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error!',
+                    text: '<?= addslashes($_SESSION['error']) ?>',
+                    confirmButtonColor: '#7F1734',
+                    customClass: {
+                        popup: 'swal2-popup-custom',
+                        title: 'swal2-title-custom',
+                        htmlContainer: 'swal2-html-container-custom',
+                        confirmButton: 'swal2-confirm-button-custom'
+                    }
+                });
+                <?php unset($_SESSION['error']); ?>
+            <?php endif; ?>
+        });
+
+        // SweetAlert2 confirmation functions
+        function confirmArchive(brandId, brandName) {
+            Swal.fire({
+                title: 'Archive Brand',
+                html: `
+                    <div class="text-start">
+                        <p>Are you sure you want to archive <strong>"${brandName}"</strong>?</p>
+                        <p class="text-muted">This will hide it from the system but preserve all data.</p>
+                    </div>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ffc107',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fas fa-archive me-2"></i>Yes, Archive',
+                cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+                customClass: {
+                    popup: 'swal2-popup-custom',
+                    title: 'swal2-title-custom',
+                    htmlContainer: 'swal2-html-container-custom',
+                    confirmButton: 'swal2-confirm-button-custom',
+                    cancelButton: 'swal2-cancel-button-custom'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = `manage_brands.php?archive=${brandId}`;
+                }
+            });
+        }
+        
+        function confirmRestore(brandId, brandName) {
+            Swal.fire({
+                title: 'Restore Brand',
+                html: `
+                    <div class="text-start">
+                        <p>Are you sure you want to restore <strong>"${brandName}"</strong>?</p>
+                        <p class="text-muted">This will make it visible in the system again.</p>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#198754',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fas fa-undo me-2"></i>Yes, Restore',
+                cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+                customClass: {
+                    popup: 'swal2-popup-custom',
+                    title: 'swal2-title-custom',
+                    htmlContainer: 'swal2-html-container-custom',
+                    confirmButton: 'swal2-confirm-button-custom',
+                    cancelButton: 'swal2-cancel-button-custom'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = `manage_brands.php?unarchive=${brandId}`;
+                }
+            });
+        }
+    </script>
 </body>
 </html>

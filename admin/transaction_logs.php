@@ -814,12 +814,7 @@ foreach ($statuses as $status) {
     <div class="filter-card">
       <ul class="nav nav-tabs nav-fill" id="orderStatusTabs" role="tablist">
         <li class="nav-item" role="presentation">
-          <button class="nav-link active" id="all-tab" data-bs-toggle="tab" data-bs-target="#all" type="button" role="tab" aria-controls="all" aria-selected="true">
-            <i class="fas fa-list me-2"></i>All Orders <span class="badge ms-1" style="background: transparent; color: #6c757d; border: 1px solid #6c757d;"><?= $stats['total_orders'] ?></span>
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="false">
+          <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="true">
             <i class="fas fa-clock me-2"></i>Pending <span class="badge ms-1" style="background: transparent; color: #856404; border: 1px solid #856404;"><?= $stats['pending_orders'] ?></span>
           </button>
         </li>
@@ -853,11 +848,6 @@ foreach ($statuses as $status) {
 
       <!-- Tab Content -->
     <div class="tab-content" id="orderStatusTabContent">
-        <!-- All Orders Tab -->
-        <div class="tab-pane fade show active" id="all" role="tabpanel" aria-labelledby="all-tab">
-        <?php include 'order_table_template.php'; ?>
-                  </div>
-
       <!-- Status-specific tabs -->
                 <?php 
       $tabMapping = [
@@ -870,8 +860,9 @@ foreach ($statuses as $status) {
       ];
       foreach ($statuses as $status): 
         $tabId = $tabMapping[$status];
+        $isActive = ($status === 'Pending') ? 'show active' : '';
       ?>
-        <div class="tab-pane fade" id="<?= $tabId ?>" role="tabpanel" aria-labelledby="<?= $tabId ?>-tab">
+        <div class="tab-pane fade <?= $isActive ?>" id="<?= $tabId ?>" role="tabpanel" aria-labelledby="<?= $tabId ?>-tab">
           <?php 
             $orders = $ordersByStatus[$status];
             include 'order_table_template.php'; 
@@ -1772,7 +1763,540 @@ foreach ($statuses as $status) {
     // Initialize search when DOM is loaded
     document.addEventListener('DOMContentLoaded', function() {
       initializeSearch();
+      initializeAutoRefresh();
+      
+      // Clear search when switching tabs
+      const tabButtons = document.querySelectorAll('[data-bs-toggle="tab"]');
+      tabButtons.forEach(button => {
+        button.addEventListener('shown.bs.tab', function() {
+          // Clear all search inputs
+          const searchInputs = document.querySelectorAll('#orderSearchInput');
+          searchInputs.forEach(input => {
+            input.value = '';
+          });
+          
+          // Show all rows in the newly active tab
+          const activeTabPane = document.querySelector('.tab-pane.active');
+          if (activeTabPane) {
+            const tableRows = activeTabPane.querySelectorAll('.order-row');
+            tableRows.forEach(row => {
+              row.style.display = '';
+            });
+            
+            // Hide empty state
+            const emptyState = activeTabPane.querySelector('.empty-state');
+            if (emptyState) {
+              emptyState.style.display = 'none';
+            }
+          }
+        });
+      });
     });
+
+    // Search functionality for all tabs
+    function initializeSearch() {
+      const searchInputs = document.querySelectorAll('#orderSearchInput');
+      
+      searchInputs.forEach(searchInput => {
+        // Remove existing event listeners to prevent duplicates
+        const newSearchInput = searchInput.cloneNode(true);
+        searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+        
+        newSearchInput.addEventListener('keyup', function() {
+          const searchTerm = this.value.toLowerCase().trim();
+          const activeTabPane = document.querySelector('.tab-pane.active');
+          const tableRows = activeTabPane ? activeTabPane.querySelectorAll('.order-row') : document.querySelectorAll('.order-row');
+          
+          tableRows.forEach(row => {
+            const orderId = row.cells[0].textContent.toLowerCase();
+            const customer = row.cells[1].textContent.toLowerCase();
+            const contact = row.cells[2].textContent.toLowerCase();
+            const items = row.cells[3].textContent.toLowerCase();
+            const total = row.cells[4].textContent.toLowerCase();
+            const payment = row.cells[5].textContent.toLowerCase();
+            const transactionId = row.cells[6].textContent.toLowerCase();
+            const status = row.cells[7].textContent.toLowerCase();
+            const delivery = row.cells[8].textContent.toLowerCase();
+            const date = row.cells[9].textContent.toLowerCase();
+            
+            const searchableText = `${orderId} ${customer} ${contact} ${items} ${total} ${payment} ${transactionId} ${status} ${delivery} ${date}`;
+            
+            if (searchTerm === '' || searchableText.includes(searchTerm)) {
+              row.style.display = '';
+            } else {
+              row.style.display = 'none';
+            }
+          });
+          
+          // Show/hide empty state
+          const visibleRows = Array.from(tableRows).filter(row => row.style.display !== 'none');
+          const emptyState = activeTabPane ? activeTabPane.querySelector('.empty-state') : document.querySelector('.empty-state');
+          if (emptyState) {
+            emptyState.style.display = visibleRows.length === 0 && searchTerm !== '' ? 'block' : 'none';
+          }
+        });
+      });
+    }
+
+    // Clear search function
+    function clearSearch() {
+      const searchInputs = document.querySelectorAll('#orderSearchInput');
+      searchInputs.forEach(input => {
+        input.value = '';
+      });
+      
+      // Show all rows in the active tab
+      const activeTabPane = document.querySelector('.tab-pane.active');
+      if (activeTabPane) {
+        const tableRows = activeTabPane.querySelectorAll('.order-row');
+        tableRows.forEach(row => {
+          row.style.display = '';
+        });
+        
+        // Hide empty state
+        const emptyState = activeTabPane.querySelector('.empty-state');
+        if (emptyState) {
+          emptyState.style.display = 'none';
+        }
+      }
+    }
+
+    // AJAX Auto-Refresh Functionality
+    let autoRefreshInterval;
+    let isModalOpen = false;
+    let isUserInteracting = false;
+    let lastOrderCount = 0;
+    let lastOrderIds = new Set();
+    let refreshPaused = false;
+
+    function initializeAutoRefresh() {
+      console.log('Initializing auto-refresh...');
+      
+      // Initialize with current order count
+      lastOrderCount = document.querySelectorAll('.order-row').length;
+      console.log('Initial order count:', lastOrderCount);
+      
+      document.querySelectorAll('.order-row').forEach(row => {
+        const orderId = row.cells[0].textContent.replace('#', '').trim();
+        lastOrderIds.add(orderId);
+      });
+      
+      console.log('Initial order IDs:', Array.from(lastOrderIds));
+
+      // Start auto-refresh
+      startAutoRefresh();
+
+      // Pause when modals are opened
+      document.addEventListener('show.bs.modal', function() {
+        isModalOpen = true;
+        pauseAutoRefresh();
+      });
+
+      // Resume when modals are closed
+      document.addEventListener('hidden.bs.modal', function() {
+        isModalOpen = false;
+        if (!isUserInteracting) {
+          setTimeout(() => {
+            if (!isModalOpen && !isUserInteracting) {
+              resumeAutoRefresh();
+            }
+          }, 2000);
+        }
+      });
+
+      // Pause when user interacts with table
+      const tableContainer = document.querySelector('.table-responsive');
+      if (tableContainer) {
+        tableContainer.addEventListener('mouseenter', function() {
+          isUserInteracting = true;
+          pauseAutoRefresh();
+        });
+
+        tableContainer.addEventListener('mouseleave', function() {
+          isUserInteracting = false;
+          setTimeout(() => {
+            if (!isModalOpen && !isUserInteracting) {
+              resumeAutoRefresh();
+            }
+          }, 2000);
+        });
+      }
+    }
+
+    function startAutoRefresh() {
+      console.log('Starting auto-refresh...');
+      if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+      autoRefreshInterval = setInterval(fetchOrders, 10000); // 10 seconds
+      console.log('Auto-refresh interval set to 10 seconds');
+      showRefreshIndicator(true);
+    }
+
+    function pauseAutoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+      }
+      showRefreshIndicator(false);
+    }
+
+    function resumeAutoRefresh() {
+      if (!autoRefreshInterval && !refreshPaused) {
+        startAutoRefresh();
+      }
+    }
+
+    function showRefreshIndicator(active) {
+      let indicator = document.getElementById('refreshIndicator');
+      if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'refreshIndicator';
+        indicator.innerHTML = '<i class="fas fa-sync-alt"></i>';
+        indicator.style.cssText = `
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          width: 40px;
+          height: 40px;
+          background: var(--bs-primary);
+          color: white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+          opacity: 0.8;
+          transition: all 0.3s ease;
+        `;
+        document.body.appendChild(indicator);
+      }
+      
+      if (active) {
+        indicator.style.display = 'flex';
+        indicator.style.animation = 'pulse 2s infinite';
+      } else {
+        indicator.style.display = 'none';
+        indicator.style.animation = 'none';
+      }
+    }
+
+    async function fetchOrders() {
+      try {
+        console.log('Fetching orders...');
+        const activeTab = document.querySelector('.nav-link.active');
+        let status = 'pending'; // Default to pending tab
+        
+        if (activeTab) {
+          const target = activeTab.getAttribute('data-bs-target');
+          if (target) {
+            status = target.replace('#', '');
+          }
+        }
+        
+        console.log('Active tab status:', status);
+        const response = await fetch(`fetch_orders.php?status=${status}`);
+        console.log('Response status:', response.status);
+        
+        const data = await response.json();
+        console.log('Response data:', data);
+
+        if (data.success) {
+          console.log('Updating table with', data.orders.length, 'orders');
+          updateOrderTable(data);
+          updateStatistics(data.stats);
+          updateTabBadges(data.stats);
+        } else {
+          console.error('API returned error:', data.error);
+        }
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+      }
+    }
+
+    function updateOrderTable(data) {
+      const tbody = document.querySelector('tbody');
+      if (!tbody) return;
+
+      const currentOrderIds = new Set();
+      document.querySelectorAll('.order-row').forEach(row => {
+        const orderId = row.cells[0].textContent.replace('#', '').trim();
+        currentOrderIds.add(orderId);
+      });
+
+      // Check for new orders
+      const newOrders = data.orders.filter(order => !currentOrderIds.has(order.id.toString()));
+      
+      if (newOrders.length > 0) {
+        showNewOrderNotification(newOrders.length);
+      }
+
+      // Update table content
+      tbody.innerHTML = generateTableRows(data.orders, data.is_super_admin);
+      
+      // Highlight new orders
+      newOrders.forEach(order => {
+        const newRow = document.querySelector(`tr[data-order-id="${order.id}"]`);
+        if (newRow) {
+          newRow.style.animation = 'highlightNew 2s ease-out';
+        }
+      });
+
+      // Update last known data
+      lastOrderCount = data.orders.length;
+      lastOrderIds.clear();
+      data.orders.forEach(order => lastOrderIds.add(order.id.toString()));
+      
+      // Reinitialize search for new table content
+      setTimeout(() => {
+        initializeSearch();
+      }, 100);
+    }
+
+    function generateTableRows(orders, isSuperAdmin) {
+      if (orders.length === 0) {
+        return `
+          <tr>
+            <td colspan="11" class="text-center py-5">
+              <div class="empty-state">
+                <i class="fas fa-search text-muted mb-3" style="font-size: 4rem;"></i>
+                <h4 class="text-muted">No Orders Found</h4>
+                <p class="text-muted">There are currently no orders to display.</p>
+              </div>
+            </td>
+          </tr>
+        `;
+      }
+
+      return orders.map((order, index) => {
+        try {
+        const status = (order.status || 'unknown').toLowerCase();
+        let badgeStyle = 'background: #f8f9fa;';
+        if (status === 'pending') {
+          badgeStyle = 'background: #fff3cd; color: #856404;';
+        } else if (status === 'to ship') {
+          badgeStyle = 'background: #e3f2fd; color: #1976d2;';
+        } else if (status === 'ready for pick up') {
+          badgeStyle = 'background: #fce4ec; color: #c2185b;';
+        } else if (status === 'out for delivery') {
+          badgeStyle = 'background: #e8f5e8; color: #388e3c;';
+        } else if (status === 'cancelled') {
+          badgeStyle = 'background: #ffebee; color: #d32f2f;';
+        } else if (status === 'delivered' || status === 'completed') {
+          badgeStyle = 'background: #f1f8e9; color: #689f38;';
+        }
+
+        return `
+          <tr class="order-row" data-order-id="${order.id || 'unknown'}" style="transition: all 0.2s ease;">
+            <td class="fw-semibold text-dark">#${order.id || 'N/A'}</td>
+            <td>
+              <div class="d-flex align-items-center">
+                <div class="user-avatar me-2" style="width: 32px; height: 32px; border-radius: 50%; background: #6c757d; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 0.8rem;">
+                  ${(order.username || 'U').charAt(0).toUpperCase()}
+                </div>
+                <span class="fw-semibold text-dark">${escapeHtml(order.username || 'Unknown User')}</span>
+              </div>
+            </td>
+            <td>
+              <div class="contact-info">
+                <small class="text-muted">${escapeHtml(order.email || '')}</small>
+              </div>
+            </td>
+            <td>
+              <div class="items-preview">
+                <small class="text-dark">${escapeHtml(order.items && order.items.length > 30 ? order.items.substring(0, 30) + '...' : (order.items || 'No items'))}</small>
+              </div>
+            </td>
+            <td class="fw-bold text-dark">₱${parseFloat(order.total_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+            <td>
+              <div class="d-flex flex-column gap-1">
+                ${order.payment_method ? `
+                  <span class="badge" style="background: #f0f8ff; color: #4a90e2; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                    ${escapeHtml(order.payment_method)}
+                  </span>
+                  ${order.payment_method.toLowerCase() === 'gcash' && order.payment_proof ? `
+                    <button class="btn btn-sm" style="background: #e6f3ff; color: #0066cc; border-radius: 15px; padding: 2px 8px; font-size: 0.7rem;" onclick="event.stopPropagation(); viewPaymentProof(${order.id}, '${order.payment_proof.replace(/'/g, "\\'")}')">
+                      View Proof
+                    </button>
+                  ` : ''}
+                ` : `
+                  <span class="badge" style="background: #f5f5f5; color: #8b8b8b; border: 1px solid #e0e0e0; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                    Cash On Delivery
+                  </span>
+                `}
+              </div>
+            </td>
+            <td>
+              ${order.payment_method && order.payment_method.toLowerCase() === 'gcash' && order.gcash_transaction_id ? `
+                <span style="color: #2d5a2d; font-size: 0.7rem; font-family: 'Courier New', monospace; font-weight: bold;">
+                  ${escapeHtml(order.gcash_transaction_id)}
+                </span>
+              ` : `
+                <span class="text-muted" style="font-size: 0.7rem;">-</span>
+              `}
+            </td>
+            <td>
+              <span class="badge" style="${badgeStyle} border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                ${escapeHtml(order.status || 'Unknown')}
+              </span>
+            </td>
+            <td>
+              ${order.delivery_option ? `
+                <span class="badge" style="background: #f0f4f8; color: #5a6c7d; border: 1px solid #d1d9e0; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                  ${escapeHtml(order.delivery_option.charAt(0).toUpperCase() + order.delivery_option.slice(1))}
+                </span>
+              ` : `
+                <span class="text-muted">N/A</span>
+              `}
+            </td>
+            <td class="text-muted">
+              ${order.created_at ? new Date(order.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : 'N/A'}
+              <br><small>${order.created_at ? new Date(order.created_at).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'}) : 'N/A'}</small>
+            </td>
+            <td>
+              <div class="d-flex gap-1 flex-wrap">
+                <button type="button" class="action-btn" style="background: #6c757d; color: white;" onclick="event.stopPropagation(); viewOrderDetails(${order.id || 0}, '${(order.username || '').replace(/'/g, "\\'")}', '${(order.email || '').replace(/'/g, "\\'")}', '${(order.phone || '').replace(/'/g, "\\'")}', '${(order.address_line || '').replace(/'/g, "\\'")}', '${(order.address_line2 || '').replace(/'/g, "\\'")}', '${(order.city || '').replace(/'/g, "\\'")}', '${(order.state || '').replace(/'/g, "\\'")}', '${(order.postal_code || '').replace(/'/g, "\\'")}', '${(order.country || '').replace(/'/g, "\\'")}', '${(order.items || '').replace(/'/g, "\\'")}', '${order.total_amount || 0}', '${(order.payment_method || '').replace(/'/g, "\\'")}', '${(order.payment_proof || '').replace(/'/g, "\\'")}', '${(order.gcash_transaction_id || '').replace(/'/g, "\\'")}', '${(order.status || '').replace(/'/g, "\\'")}', '${(order.delivery_option || '').replace(/'/g, "\\'")}', '${order.created_at || ''}')">
+                  <i class="fas fa-eye me-1"></i>View Details
+                </button>
+                ${generateActionButtons(order, isSuperAdmin)}
+              </div>
+            </td>
+          </tr>
+        `;
+        } catch (error) {
+          console.error(`Error processing order ${index}:`, error, order);
+          return `<tr><td colspan="11" class="text-center text-danger">Error loading order ${order.id || 'unknown'}</td></tr>`;
+        }
+      }).join('');
+    }
+
+    function generateActionButtons(order, isSuperAdmin) {
+      let buttons = '';
+      
+      if (order.status === 'Pending') {
+        if (order.delivery_option && order.delivery_option.toLowerCase() === 'pickup') {
+          buttons += `<button type="button" class="action-btn btn-process" onclick="event.stopPropagation(); processOrder(${order.id}, 'Ready for Pick Up')">
+            <i class="fas fa-cog me-1"></i>Process
+          </button>`;
+        } else {
+          buttons += `<button type="button" class="action-btn btn-process" onclick="event.stopPropagation(); processOrder(${order.id}, 'To Ship')">
+            <i class="fas fa-cog me-1"></i>Process
+          </button>`;
+        }
+        buttons += `<button type="button" class="action-btn" style="background: #f5c6cb; color: #721c24;" onclick="event.stopPropagation(); cancelOrder(${order.id})">
+          <i class="fas fa-ban me-1"></i>Cancel
+        </button>`;
+      } else if (order.status === 'To Ship') {
+        buttons += `<button type="button" class="action-btn btn-ship" onclick="event.stopPropagation(); shipOrder(${order.id})">
+          <i class="fas fa-truck me-1"></i>Ship
+        </button>`;
+      } else if (order.status === 'Ready for Pick Up') {
+        if (isSuperAdmin) {
+          buttons += `<button type="button" class="action-btn btn-deliver" onclick="event.stopPropagation(); completePickup(${order.id})">
+            <i class="fas fa-check me-1"></i>Complete
+          </button>`;
+        } else {
+          buttons += `<span class="action-btn btn-waiting" title="Waiting for Super Admin confirmation">
+            <i class="fas fa-clock me-1"></i>Waiting
+          </span>`;
+        }
+      } else if (order.status === 'Out for delivery') {
+        buttons += `<span class="action-btn btn-waiting" title="Waiting for customer to confirm receipt">
+          <i class="fas fa-clock me-1"></i>Waiting
+        </span>`;
+      } else if (order.status === 'Completed') {
+        buttons += `<span class="action-btn btn-completed">
+          <i class="fas fa-check-circle me-1"></i>Done
+        </span>`;
+      }
+      
+      return buttons;
+    }
+
+    function updateStatistics(stats) {
+      document.querySelector('.card-number').textContent = stats.total_orders;
+      document.querySelectorAll('.card-number')[1].textContent = stats.pending_orders;
+      document.querySelectorAll('.card-number')[2].textContent = stats.processing_orders;
+      document.querySelectorAll('.card-number')[3].textContent = stats.completed_orders;
+    }
+
+    function updateTabBadges(stats) {
+      const badges = document.querySelectorAll('.nav-link .badge');
+      if (badges.length >= 7) {
+        badges[0].textContent = stats.total_orders;
+        badges[1].textContent = stats.pending_orders;
+        badges[2].textContent = stats.processing_orders;
+        badges[3].textContent = stats.pickup_orders;
+        badges[4].textContent = stats.shipped_orders;
+        badges[5].textContent = stats.completed_orders;
+        badges[6].textContent = stats.cancelled_orders;
+      }
+    }
+
+    function showNewOrderNotification(count) {
+      const notification = document.createElement('div');
+      notification.innerHTML = `
+        <div style="position: fixed; top: 80px; right: 20px; background: #28a745; color: white; padding: 12px 20px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10000; animation: slideInRight 0.3s ease-out;">
+          <i class="fas fa-shopping-cart me-2"></i>
+          ${count} new order${count > 1 ? 's' : ''} received!
+        </div>
+      `;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.style.animation = 'slideOutRight 0.3s ease-in';
+        setTimeout(() => notification.remove(), 300);
+      }, 3000);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Add CSS animations
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes highlightNew {
+        0% { background-color: rgba(40, 167, 69, 0.3); }
+        100% { background-color: transparent; }
+      }
+      
+      @keyframes pulse {
+        0% { transform: scale(1); opacity: 0.8; }
+        50% { transform: scale(1.1); opacity: 1; }
+        100% { transform: scale(1); opacity: 0.8; }
+      }
+      
+      @keyframes slideInRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      
+      @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+      }
+      
+      /* Search input styling */
+      #orderSearchInput {
+        padding-right: 30px;
+      }
+      
+      #orderSearchInput:focus {
+        border-color: var(--bs-primary);
+        box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
+      }
+      
+      .search-clear-btn {
+        transition: all 0.2s ease;
+      }
+      
+      .search-clear-btn:hover {
+        color: var(--bs-danger) !important;
+        transform: scale(1.1);
+      }
+    `;
+    document.head.appendChild(style);
 
   </script>
 </body>

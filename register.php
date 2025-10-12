@@ -87,6 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         /* Cache buster: <?= time() ?> */
         :root {
@@ -248,6 +249,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             margin-bottom: 1.5rem;
         }
 
+        .password-input-container {
+            position: relative;
+        }
+
         .form-group .row {
             margin-bottom: 0;
         }
@@ -281,6 +286,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             transform: translateY(-50%);
             color: #6c757d;
             font-size: 1rem;
+            z-index: 2;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+            cursor: pointer;
+            transition: color 0.3s ease;
             z-index: 2;
         }
 
@@ -366,6 +382,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         .password-strength {
             margin-top: 0.5rem;
             font-size: 0.85rem;
+            position: relative;
+            z-index: 1;
+            background: white;
+            padding: 0.25rem 0;
+            margin-bottom: 0.5rem;
         }
 
         .strength-weak {
@@ -551,9 +572,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 </div>
 
                                 <div class="form-group">
-                                    <i class="fas fa-lock form-icon"></i>
-                                    <input type="password" name="password" id="password" class="form-control" placeholder="Password" required>
-                                    <i class="fas fa-eye toggle-password" onclick="togglePassword('password')"></i>
+                                    <div class="password-input-container">
+                                        <i class="fas fa-lock form-icon"></i>
+                                        <input type="password" name="password" id="password" class="form-control" placeholder="Password" required>
+                                        <i class="fas fa-eye toggle-password" onclick="togglePassword('password')"></i>
+                                    </div>
                                     <div class="password-strength" id="passwordStrength"></div>
                                 </div>
 
@@ -692,6 +715,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         });
 
         // Password confirmation validation
+        document.getElementById('confirm_password').addEventListener('blur', function() {
+            const password = document.getElementById('password').value;
+            const confirmPassword = this.value;
+            
+            if (confirmPassword.length > 0 && password.length > 0) {
+                if (password === confirmPassword) {
+                    this.style.borderColor = '#198754';
+                } else {
+                    this.style.borderColor = '#dc3545';
+                    // Show SweetAlert when passwords don't match
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Password Mismatch',
+                        text: 'The passwords you entered do not match. Please try again.',
+                        confirmButtonColor: '#7F1734',
+                        timer: 3000,
+                        timerProgressBar: true,
+                        showConfirmButton: true
+                    });
+                }
+            } else {
+                this.style.borderColor = '#e9ecef';
+            }
+        });
+
+        // Real-time password confirmation validation (without alert)
         document.getElementById('confirm_password').addEventListener('input', function() {
             const password = document.getElementById('password').value;
             const confirmPassword = this.value;
@@ -719,34 +768,74 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Validate required fields
             if (!firstName || !lastName || !username || !email || !password || !confirmPassword) {
                 e.preventDefault();
-                alert('All fields are required!');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Missing Information',
+                    text: 'All fields are required!',
+                    confirmButtonColor: '#7F1734',
+                    timer: 3000,
+                    timerProgressBar: true,
+                    showConfirmButton: true
+                });
                 return;
             }
             
             // Validate name lengths
             if (firstName.length < 2) {
                 e.preventDefault();
-                alert('First name must be at least 2 characters long!');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Invalid First Name',
+                    text: 'First name must be at least 2 characters long!',
+                    confirmButtonColor: '#7F1734',
+                    timer: 3000,
+                    timerProgressBar: true,
+                    showConfirmButton: true
+                });
                 return;
             }
             
             if (lastName.length < 2) {
                 e.preventDefault();
-                alert('Last name must be at least 2 characters long!');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Invalid Last Name',
+                    text: 'Last name must be at least 2 characters long!',
+                    confirmButtonColor: '#7F1734',
+                    timer: 3000,
+                    timerProgressBar: true,
+                    showConfirmButton: true
+                });
                 return;
             }
             
             // Validate password match
             if (password !== confirmPassword) {
                 e.preventDefault();
-                alert('Passwords do not match!');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Password Mismatch',
+                    text: 'Passwords do not match!',
+                    confirmButtonColor: '#7F1734',
+                    timer: 3000,
+                    timerProgressBar: true,
+                    showConfirmButton: true
+                });
                 return;
             }
             
             // Validate password length
             if (password.length < 6) {
                 e.preventDefault();
-                alert('Password must be at least 6 characters long!');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Weak Password',
+                    text: 'Password must be at least 6 characters long!',
+                    confirmButtonColor: '#7F1734',
+                    timer: 3000,
+                    timerProgressBar: true,
+                    showConfirmButton: true
+                });
                 return;
             }
             

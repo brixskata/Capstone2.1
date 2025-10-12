@@ -20,8 +20,41 @@ try {
             b.name AS brand_name,
             uom.name AS uom_name,
             COALESCE(ps.current_stock, 0) AS stock,
-            COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) AS price,
-            COALESCE(pp.cost_price, 0) AS cost_price,
+            -- Calculate total price: markup_price + (best available cost from batches or general cost_price)
+            COALESCE(pp.markup_price, 0) + COALESCE((
+                SELECT COALESCE(
+                    (SELECT pb.unit_cost 
+                     FROM product_batches pb 
+                     WHERE pb.product_id = p.product_id 
+                     AND pb.quantity_remaining > 0 
+                     AND pb.is_active = 1
+                     ORDER BY pb.expiration_date ASC 
+                     LIMIT 1),
+                    pp.cost_price, 
+                    0
+                )
+            ), 0) AS price,
+            -- Get lowest price among all brands for this product
+            MIN(COALESCE(pp.markup_price, 0) + COALESCE(
+                (SELECT pb.unit_cost 
+                 FROM product_batches pb 
+                 WHERE pb.product_id = p.product_id 
+                 AND pb.quantity_remaining > 0 
+                 AND pb.is_active = 1
+                 ORDER BY pb.expiration_date ASC 
+                 LIMIT 1),
+                pp.cost_price, 
+                0
+            )) AS lowest_price,
+            -- Count products sold
+            COALESCE((
+                SELECT SUM(oi.quantity) 
+                FROM order_items oi
+                INNER JOIN orders o ON oi.order_id = o.orders_id
+                INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+                WHERE oi.product_id = p.product_id 
+                AND os.status_name IN ('Delivered','Completed','Finished')
+            ), 0) AS products_sold,
             (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1,
             p.created_at
         FROM products p
@@ -31,6 +64,7 @@ try {
         LEFT JOIN product_stock ps ON p.product_id = ps.product_id
         LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
         WHERE p.is_archive = 0 AND COALESCE(ps.current_stock, 0) > 0
+        GROUP BY p.product_id
         ORDER BY p.created_at DESC
         LIMIT 8
     ");
@@ -684,11 +718,21 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             will-change: transform;
             backface-visibility: hidden;
             transform: translateZ(0);
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
         }
 
         .product-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .product-card:visited {
+            color: inherit;
+            text-decoration: none;
         }
 
         .product-badge {
@@ -741,10 +785,11 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             margin-bottom: 1rem;
         }
 
-        .product-stock {
+        .product-sold {
             font-size: 0.8rem;
             color: #6c757d;
             margin-bottom: 1rem;
+            font-weight: 500;
         }
 
         .btn-add-cart {
@@ -1176,35 +1221,20 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                 <?php else: ?>
                     <?php foreach ($featuredProducts as $product): ?>
                         <div class="col-md-6 col-lg-3">
-                            <div class="product-card">
-                                    <div class="product-badge">
-                                        Featured
-                                    </div>
-
-                                    <img data-src="<?= !empty($product['image1']) ? 'admin/' . htmlspecialchars($product['image1']) : 'images/placeholder.jpg' ?>" alt="<?= htmlspecialchars($product['name']) ?>" class="product-image lazy lazy-placeholder" onerror="this.src='images/placeholder.jpg'" onclick="window.location.href='product_detail.php?id=<?= $product['id'] ?>'" style="cursor: pointer;">
-
-                                    <h3 class="product-title" onclick="window.location.href='product_detail.php?id=<?= $product['id'] ?>'" style="cursor: pointer;"><?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?></h3>
-                                    <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
-
-                                    <div class="product-price">₱<?= number_format($product['price'], 2) ?></div>
-                                    <div class="product-stock">Stock: <?= number_format((float)$product['stock'], 1) ?> <?= htmlspecialchars($product['uom_name'] ?? '') ?> available</div>
-
-                                    <?php if ((float)$product['stock'] > 0): ?>
-                                        <div class="d-flex align-items-center gap-2 mb-2">
-                                            <input type="number" class="form-control quantity-input" value="1" step="0.1" min="1" max="<?= (float)$product['stock'] ?>" inputmode="decimal" aria-label="Quantity" />
-                                            <span class="text-muted" style="white-space: nowrap;"><?= htmlspecialchars($product['uom_name'] ?? '') ?></span>
-                                        </div>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <button type="button" class="btn-add-cart flex-grow-1" data-product-id="<?= $product['id'] ?>">
-                                                <i class="fas fa-cart-plus me-2"></i>Add to Cart
-                                            </button>
-                                        </div>
-                                    <?php else: ?>
-                                        <button class="btn-out-of-stock" disabled>
-                                            <i class="fas fa-times-circle me-2"></i>Out of Stock
-                                        </button>
-                                    <?php endif; ?>
+                            <a href="product_detail.php?id=<?= $product['id'] ?>" class="product-card text-decoration-none">
+                                <div class="product-badge">
+                                    Featured
                                 </div>
+
+                                <img data-src="<?= !empty($product['image1']) ? 'admin/' . htmlspecialchars($product['image1']) : 'images/placeholder.jpg' ?>" alt="<?= htmlspecialchars($product['name']) ?>" class="product-image lazy lazy-placeholder" onerror="this.src='images/placeholder.jpg'">
+
+                                <h3 class="product-title"><?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?></h3>
+                                <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
+
+                                <div class="product-price">From ₱<?= number_format($product['lowest_price'], 2) ?></div>
+                                <div class="product-stock">Stock: <?= number_format((float)$product['stock'], 1) ?> <?= htmlspecialchars($product['uom_name'] ?? '') ?> available</div>
+                                <div class="product-sold"><?= number_format($product['products_sold']) ?> sold</div>
+                            </a>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>

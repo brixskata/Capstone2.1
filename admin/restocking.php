@@ -85,10 +85,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             $stmt->execute([$restock['product_id']]);
             $cost_price = $stmt->fetchColumn() ?: 0;
             
-            // Create a new batch for the restocked items
+           
+            // Get brand_id from the restocking record if available, otherwise use the first available brand for this product
+            $brand_id = null;
+            if (isset($restock['brand_id']) && $restock['brand_id']) {
+                $brand_id = $restock['brand_id'];
+            } else {
+                // For legacy restocking records without brand_id, get the first available brand for this product
+                $stmt = $pdo->prepare("SELECT id FROM brands WHERE is_archived = 0 ORDER BY id ASC LIMIT 1");
+                $stmt->execute();
+                $brand_id = $stmt->fetchColumn();
+            }
+            
             $batch_data = [
                 'product_id' => $restock['product_id'],
                 'supplier_id' => $restock['supplier_id'],
+                'brand_id' => $brand_id,
                 'quantity_received' => $restock['quantity_added'],
                 'unit_cost' => $cost_price,
                 'expiration_date' => $restock['expiration_date'] ?? null,
@@ -100,6 +112,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             ];
             
             $batch_id = $batchManager->createBatch($batch_data);
+            
+            // Store the batch_id in the restocking record
+            $stmt = $pdo->prepare("UPDATE restocking SET batch_id = ? WHERE restocking_id = ?");
+            $stmt->execute([$batch_id, $restock_id]);
             
             // Update product_stock current_stock and last_restock_date
             $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ? WHERE product_id = ?");
@@ -139,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
     try {
         // Validate required fields
-        $required_fields = ['product_id', 'supplier_id', 'quantity_added', 'cost_per_unit', 'expiration_date'];
+        $required_fields = ['product_id', 'supplier_id', 'brand_id', 'quantity_added', 'cost_per_unit', 'expiration_date'];
         foreach ($required_fields as $field) {
             if (empty($_POST[$field])) {
                 throw new Exception("Field '$field' is required.");
@@ -148,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
 
         $product_id = (int)$_POST['product_id'];
         $supplier_id = (int)$_POST['supplier_id'];
+        $brand_id = (int)$_POST['brand_id'];
         $quantity_added = (float)$_POST['quantity_added'];
         $cost_per_unit = (float)$_POST['cost_per_unit'];
         $total_cost = $quantity_added * $cost_per_unit;
@@ -192,6 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
         $batch_data = [
             'product_id' => $product_id,
             'supplier_id' => $supplier_id,
+            'brand_id' => $brand_id,
             'quantity_received' => $quantity_added,
             'unit_cost' => $cost_per_unit, // Use the cost_per_unit from form
             'expiration_date' => $expiration_date,
@@ -203,6 +221,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
         ];
         
         $batch_id = $batchManager->createBatch($batch_data);
+
+        // Store the batch_id in the restocking record
+        $stmt = $pdo->prepare("UPDATE restocking SET batch_id = ? WHERE restocking_id = ?");
+        $stmt->execute([$batch_id, $restock_id]);
 
         // Update product_stock current_stock, last_restock_date, and expiration_date
         $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ?, expiration_date = ? WHERE product_id = ?");
@@ -261,6 +283,10 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // Fetch suppliers
 $stmt = $pdo->query("SELECT supplier_id AS id, name FROM suppliers WHERE is_archive = 0 ORDER BY name");
 $suppliers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch brands
+$stmt = $pdo->query("SELECT id, name FROM brands WHERE is_archived = 0 ORDER BY name");
+$brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Handle AJAX request for getting suppliers by product
 if ($_SERVER['REQUEST_METHOD'] == 'GET' && isset($_GET['action']) && $_GET['action'] == 'get_suppliers_by_product') {
@@ -776,6 +802,19 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                                 <div class="form-text">
                                     <i class="fa fa-info-circle me-1"></i>
                                     Suppliers will be filtered based on the selected product
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Brand <span class="text-danger">*</span></label>
+                                <select name="brand_id" class="form-select" required>
+                                    <option value="">Select Brand</option>
+                                    <?php foreach ($brands as $brand): ?>
+                                        <option value="<?= $brand['id'] ?>"><?= htmlspecialchars($brand['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="form-text">
+                                    <i class="fa fa-info-circle me-1"></i>
+                                    Brand for this batch (affects pricing per brand)
                                 </div>
                             </div>
                             <div class="col-md-6">

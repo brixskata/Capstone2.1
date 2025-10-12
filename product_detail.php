@@ -65,6 +65,7 @@ if ($product_id <= 0) {
                     ORDER BY pp.productpricing_id DESC
                     LIMIT 1
                 ), 0) as cost_per_unit,
+                -- Calculate total price: markup_price + (best available cost from batches or general cost_price)
                 COALESCE((
                     SELECT pp.markup_price
                     FROM product_pricing pp
@@ -72,7 +73,17 @@ if ($product_id <= 0) {
                     ORDER BY pp.productpricing_id DESC
                     LIMIT 1
                 ), 0) + COALESCE((
-                    SELECT pp.cost_price
+                    SELECT COALESCE(
+                        (SELECT pb.unit_cost 
+                         FROM product_batches pb 
+                         WHERE pb.product_id = p.product_id 
+                         AND pb.quantity_remaining > 0 
+                         AND pb.is_active = 1
+                         ORDER BY pb.expiration_date ASC 
+                         LIMIT 1),
+                        pp.cost_price, 
+                        0
+                    )
                     FROM product_pricing pp
                     WHERE pp.product_id = p.product_id
                     ORDER BY pp.productpricing_id DESC
@@ -98,11 +109,80 @@ if ($product_id <= 0) {
         if (!$product) {
             $error = 'Product not found or has been archived';
         } else {
-            // Get image separately if product exists
-            $img_stmt = $pdo->prepare("SELECT image_url FROM product_images WHERE product_id = ? AND is_primary = 1 LIMIT 1");
+            // Get up to 3 product images (primary first, then others)
+            $img_stmt = $pdo->prepare("
+                SELECT image_url, is_primary 
+                FROM product_images 
+                WHERE product_id = ? 
+                ORDER BY is_primary DESC, product_image_id ASC 
+                LIMIT 3
+            ");
             $img_stmt->execute([$product_id]);
-            $image_result = $img_stmt->fetch(PDO::FETCH_ASSOC);
-            $product['primary_image'] = $image_result ? $image_result['image_url'] : null;
+            $image_results = $img_stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Set primary image and all images
+            $product['primary_image'] = !empty($image_results) ? $image_results[0]['image_url'] : null;
+            $product['all_images'] = array_column($image_results, 'image_url');
+            
+            // Get alternative brands for the same product type (same category)
+            $alternative_brands = [];
+            try {
+                $brand_stmt = $pdo->prepare("
+                    SELECT DISTINCT 
+                        b.id as brand_id,
+                        b.name as brand_name,
+                        pb.batch_id,
+                        pb.quantity_remaining,
+                        pb.unit_cost,
+                        pb.expiration_date,
+                        pb.received_date,
+                        pb.unit_cost as cost_price,
+                        COALESCE(pp.markup_price, 0) as markup_price,
+                        (COALESCE(pb.unit_cost, 0) + COALESCE(pp.markup_price, 0)) as total_price
+                    FROM product_batches pb
+                    INNER JOIN brands b ON pb.brand_id = b.id
+                    LEFT JOIN product_pricing pp ON pb.product_id = pp.product_id
+                    WHERE pb.product_id = ? 
+                    AND pb.quantity_remaining > 0 
+                    AND pb.is_active = 1
+                    AND b.is_archived = 0
+                    ORDER BY pb.expiration_date ASC, pb.received_date ASC
+                ");
+                $brand_stmt->execute([$product_id]);
+                $alternative_brands = $brand_stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                // Group by brand and get the best price/stock for each brand
+                $brands_grouped = [];
+                foreach ($alternative_brands as $brand) {
+                    $brand_id = $brand['brand_id'];
+                    if (!isset($brands_grouped[$brand_id])) {
+                        $brands_grouped[$brand_id] = [
+                            'brand_id' => $brand['brand_id'],
+                            'brand_name' => $brand['brand_name'],
+                            'total_stock' => 0,
+                            'best_price' => PHP_FLOAT_MAX,
+                            'best_batch_id' => null,
+                            'expiration_date' => null,
+                            'batches' => []
+                        ];
+                    }
+                    
+                    $brands_grouped[$brand_id]['total_stock'] += $brand['quantity_remaining'];
+                    $brands_grouped[$brand_id]['batches'][] = $brand;
+                    
+                    if ($brand['total_price'] < $brands_grouped[$brand_id]['best_price']) {
+                        $brands_grouped[$brand_id]['best_price'] = $brand['total_price'];
+                        $brands_grouped[$brand_id]['best_batch_id'] = $brand['batch_id'];
+                        $brands_grouped[$brand_id]['expiration_date'] = $brand['expiration_date'];
+                    }
+                }
+                
+                $product['alternative_brands'] = array_values($brands_grouped);
+                
+            } catch (Exception $e) {
+                error_log("Error fetching alternative brands: " . $e->getMessage());
+                $product['alternative_brands'] = [];
+            }
             
             // Debug: Log final product data
             error_log("Final product data: " . print_r($product, true));
@@ -200,9 +280,181 @@ if ($product_id <= 0) {
         .product-image:hover {
             transform: scale(1.02);
         }
+
+        /* Image Carousel Styles */
+        .image-carousel {
+            position: relative;
+            margin-bottom: 2rem;
+        }
+
+        .main-image-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            height: 450px;
+            margin: 0 auto;
+            border-radius: 1.25rem;
+            overflow: hidden;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }
+
+        .main-image-container .product-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .main-image-container .product-image:hover {
+            transform: scale(1.02);
+        }
+
+        /* Navigation Arrows */
+        .carousel-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        .carousel-nav:hover {
+            background: white;
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .carousel-nav.prev {
+            left: 15px;
+        }
+
+        .carousel-nav.next {
+            right: 15px;
+        }
+
+        .carousel-nav i {
+            font-size: 1.2rem;
+            color: var(--brand-primary);
+        }
+
+        /* Thumbnail Container */
+        .thumbnail-container {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            padding: 0 1rem;
+        }
+
+        .thumbnail {
+            width: 80px;
+            height: 80px;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 3px solid transparent;
+            position: relative;
+        }
+
+        .thumbnail:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .thumbnail.active {
+            border-color: var(--brand-primary);
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(127, 23, 52, 0.3);
+        }
+
+        .thumbnail.active::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(127, 23, 52, 0.1) 0%, rgba(169, 29, 66, 0.1) 100%);
+            pointer-events: none;
+        }
+
+        .thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .thumbnail:hover img {
+            transform: scale(1.1);
+        }
+
+        /* Responsive Design for Carousel */
+        @media (max-width: 768px) {
+            .main-image-container {
+                height: 300px;
+            }
+
+            .carousel-nav {
+                width: 40px;
+                height: 40px;
+            }
+
+            .carousel-nav.prev {
+                left: 10px;
+            }
+
+            .carousel-nav.next {
+                right: 10px;
+            }
+
+            .thumbnail-container {
+                gap: 0.75rem;
+            }
+
+            .thumbnail {
+                width: 60px;
+                height: 60px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .main-image-container {
+                height: 250px;
+            }
+
+            .carousel-nav {
+                width: 35px;
+                height: 35px;
+            }
+
+            .carousel-nav i {
+                font-size: 1rem;
+            }
+
+            .thumbnail-container {
+                gap: 0.5rem;
+            }
+
+            .thumbnail {
+                width: 50px;
+                height: 50px;
+            }
+        }
         
         .product-title {
-            font-size: 2.5rem;
+            font-size: 1.8rem;
             font-weight: 800;
             color: var(--brand-primary);
             margin-bottom: 1rem;
@@ -213,22 +465,8 @@ if ($product_id <= 0) {
             background-clip: text;
         }
         
-        .product-category {
-            color: #6c757d;
-            font-size: 1.2rem;
-            margin-bottom: 1.5rem;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .product-category i {
-            color: var(--brand-primary);
-        }
-        
         .product-description {
-            font-size: 1.2rem;
+            font-size: 1rem;
             line-height: 1.7;
             color: #495057;
             margin-bottom: 2rem;
@@ -266,15 +504,21 @@ if ($product_id <= 0) {
         }
         
         .price {
-            font-size: 2.5rem;
+            font-size: 1.8rem;
             font-weight: 800;
             margin-bottom: 0.5rem;
             position: relative;
             z-index: 2;
+            transition: all 0.3s ease;
+        }
+
+        .price.updating {
+            transform: scale(1.05);
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
         }
         
         .unit {
-            font-size: 1.2rem;
+            font-size: 1rem;
             opacity: 0.9;
             position: relative;
             z-index: 2;
@@ -319,7 +563,7 @@ if ($product_id <= 0) {
         }
 
         .option-title {
-            font-size: 1.8rem;
+            font-size: 1.4rem;
             font-weight: 700;
             color: var(--brand-primary);
             margin-bottom: 2rem;
@@ -419,7 +663,7 @@ if ($product_id <= 0) {
         }
 
         .quantity-label {
-            font-size: 1.2rem;
+            font-size: 1rem;
             font-weight: 700;
             color: var(--bs-dark);
             margin-bottom: 1rem;
@@ -473,7 +717,7 @@ if ($product_id <= 0) {
             }
 
             .product-title {
-                font-size: 2rem;
+                font-size: 1.5rem;
             }
 
             .product-image {
@@ -481,7 +725,7 @@ if ($product_id <= 0) {
             }
 
             .price {
-                font-size: 2rem;
+                font-size: 1.5rem;
             }
 
             .quantity-input {
@@ -579,6 +823,97 @@ if ($product_id <= 0) {
         .swal2-cancel {
             background: #6c757d !important; /* Gray for cancel */
         }
+
+        /* Brand Selection Styles */
+        .brand-selection {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .brand-option {
+            border: 2px solid #e9ecef;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+            position: relative;
+        }
+
+        .brand-option:hover {
+            border-color: var(--brand-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(127, 23, 52, 0.1);
+        }
+
+        .brand-option.selected {
+            border-color: var(--brand-primary);
+            background: linear-gradient(135deg, rgba(127, 23, 52, 0.05) 0%, rgba(169, 29, 66, 0.05) 100%);
+            box-shadow: 0 4px 15px rgba(127, 23, 52, 0.2);
+        }
+
+        .brand-option.selected::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--brand-gradient);
+            border-radius: 0.75rem 0.75rem 0 0;
+        }
+
+        .brand-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .brand-name {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--brand-primary);
+        }
+
+        .brand-price {
+            font-weight: 800;
+            font-size: 1rem;
+            color: var(--bs-success);
+            background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .brand-details {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .brand-details i {
+            color: var(--brand-primary);
+        }
+
+        /* Responsive brand selection */
+        @media (max-width: 768px) {
+            .brand-selection {
+                gap: 0.5rem;
+            }
+
+            .brand-option {
+                padding: 0.75rem;
+            }
+
+            .brand-name {
+                font-size: 1rem;
+            }
+
+            .brand-price {
+                font-size: 1.1rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -587,7 +922,7 @@ if ($product_id <= 0) {
     <?php (function(){ include 'includes/user_navbar.php'; })(); ?>
 
     <div class="product-container">
-        <button class="btn-back" onclick="history.back()">
+        <button class="btn-back" onclick="window.location.href='product.php'">
             <i class="fas fa-arrow-left me-2"></i>Back to Products
         </button>
 
@@ -616,17 +951,15 @@ if ($product_id <= 0) {
                 $r = $ratingStmt->fetch(PDO::FETCH_ASSOC);
                 if ($r) { $avg_rating = (float)($r['avg_rating'] ?? 0); $rating_count = (int)($r['rating_count'] ?? 0); }
 
-                // Total sold based on order_items quantities for Completed/Delivered/Finished orders via order_status mapping
+                // Total sold based on order_items quantities (all orders regardless of status)
                 $soldStmt = $pdo->prepare("
                     SELECT COALESCE(SUM(oi.quantity),0) AS total_sold
                     FROM order_items oi
-                    INNER JOIN orders o ON oi.order_id = o.orders_id
-                    INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
-                    WHERE oi.product_id = ? AND os.status_name IN ('Delivered','Completed','Finished')
+                    WHERE oi.product_id = ?
                 ");
                 $soldStmt->execute([$product_id]);
                 $s = $soldStmt->fetch(PDO::FETCH_ASSOC);
-                if ($s) { $total_sold = (int)($s['total_sold'] ?? 0); }
+                if ($s) { $total_sold = (float)($s['total_sold'] ?? 0); }
             } catch (Exception $e) { /* silently ignore */ }
             ?>
 
@@ -643,27 +976,55 @@ if ($product_id <= 0) {
                 <div class="vr"></div>
                 <div class="text-muted" aria-label="Units sold">
                     <i class="fas fa-shopping-bag me-1"></i>
-                    <?= $total_sold ?> sold
+                    <?= number_format($total_sold) ?> sold
                 </div>
             </div>
             <div class="row">
                 <div class="col-lg-8">
                     <div class="product-card">
-                        <img src="<?= !empty($product['primary_image']) ? 'admin/' . htmlspecialchars($product['primary_image']) : 'images/placeholder.jpg' ?>" 
-                             alt="<?= htmlspecialchars($product['product_name']) ?>" 
-                             class="product-image" 
-                             onerror="this.src='images/placeholder.jpg'">
+                        <!-- Image Carousel -->
+                        <div class="image-carousel">
+                            <!-- Main Image Display -->
+                            <div class="main-image-container">
+                                <img id="main-image" 
+                                     src="<?= !empty($product['all_images']) ? 'admin/' . htmlspecialchars($product['all_images'][0]) : 'images/placeholder.jpg' ?>" 
+                                     alt="<?= htmlspecialchars($product['product_name']) ?>" 
+                                     class="product-image" 
+                                     onerror="this.src='images/placeholder.jpg'">
+                                
+                                <!-- Navigation Arrows -->
+                                <?php if (count($product['all_images']) > 1): ?>
+                                <button class="carousel-nav prev" onclick="changeImage(-1)">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="carousel-nav next" onclick="changeImage(1)">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <!-- Thumbnail Navigation -->
+                            <?php if (count($product['all_images']) > 1): ?>
+                            <div class="thumbnail-container">
+                                <?php foreach ($product['all_images'] as $index => $image): ?>
+                                <div class="thumbnail <?= $index === 0 ? 'active' : '' ?>" 
+                                     onclick="setActiveImage(<?= $index ?>)" 
+                                     data-index="<?= $index ?>">
+                                    <img src="admin/<?= htmlspecialchars($image) ?>" 
+                                         alt="<?= htmlspecialchars($product['product_name']) ?> - Image <?= $index + 1 ?>"
+                                         onerror="this.src='images/placeholder.jpg'">
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <?php endif; ?>
+                        </div>
                         
                         <h1 class="product-title"><?= htmlspecialchars($product['product_name']) ?></h1>
-                        <div class="product-category">
-                            <i class="fas fa-tag me-2"></i>
-                            <?= htmlspecialchars($product['category_name'] ?? 'Uncategorized') ?>
-                        </div>
                         
                         <p class="product-description"><?= htmlspecialchars($product['product_description'] ?? 'No description available') ?></p>
                         
                         <div class="price-section">
-                            <div class="price">₱<?= number_format($product['total_price'] ?? 0, 2) ?></div>
+                            <div class="price" id="main-price">₱<?= number_format($product['total_price'] ?? 0, 2) ?></div>
                             <div class="unit">per kilo</div>
                         </div>
                     </div>
@@ -673,14 +1034,52 @@ if ($product_id <= 0) {
                     <div class="product-card">
                         <h3>Add to Cart</h3>
                         
+                        <!-- Brand Selection -->
+                        <?php if (!empty($product['alternative_brands'])): ?>
+                        <div class="mb-4">
+                            <?php if (count($product['alternative_brands']) > 1): ?>
+                                <label class="quantity-label">Choose Brand:</label>
+                            <?php else: ?>
+                                <label class="quantity-label">Available Brand:</label>
+                            <?php endif; ?>
+                            <div class="brand-selection">
+                                <?php foreach ($product['alternative_brands'] as $index => $brand): ?>
+                                <div class="brand-option <?= $index === 0 ? 'selected' : '' ?>" 
+                                     data-brand-id="<?= $brand['brand_id'] ?>" 
+                                     data-batch-id="<?= $brand['best_batch_id'] ?>"
+                                     data-price="<?= $brand['best_price'] ?>"
+                                     data-stock="<?= $brand['total_stock'] ?>"
+                                     data-expiration="<?= $brand['expiration_date'] ?>">
+                                    <div class="brand-header">
+                                        <span class="brand-name"><?= htmlspecialchars($brand['brand_name']) ?></span>
+                                        <span class="brand-price">₱<?= number_format($brand['best_price'], 2) ?></span>
+                                    </div>
+                                    <div class="brand-details">
+                                        <small class="text-muted">
+                                            <i class="fas fa-boxes me-1"></i><?= number_format($brand['total_stock'], 1) ?> kilos
+                                            <?php if ($brand['expiration_date']): ?>
+                                                <span class="ms-2">
+                                                    <i class="fas fa-calendar me-1"></i>Expires: <?= date('M d, Y', strtotime($brand['expiration_date'])) ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </small>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                        
                         <div class="stock-info">
                             <i class="fas fa-boxes me-2"></i>
-                            Stock: <?= number_format((float)($product['current_stock'] ?? 0), 1) ?> kilos available
-                            <?php if ((float)($product['current_stock'] ?? 0) <= 0): ?>
-                                <span class="badge bg-danger ms-2">Out of Stock</span>
-                            <?php elseif ((float)($product['current_stock'] ?? 0) <= 10): ?>
-                                <span class="badge bg-warning ms-2">Low Stock</span>
-                            <?php endif; ?>
+                            <span id="stock-display">Stock: <?= number_format((float)($product['current_stock'] ?? 0), 1) ?> kilos available</span>
+                            <span id="stock-badge">
+                                <?php if ((float)($product['current_stock'] ?? 0) <= 0): ?>
+                                    <span class="badge bg-danger ms-2">Out of Stock</span>
+                                <?php elseif ((float)($product['current_stock'] ?? 0) <= 10): ?>
+                                    <span class="badge bg-warning ms-2">Low Stock</span>
+                                <?php endif; ?>
+                            </span>
                         </div>
                         
                         <div class="mb-3">
@@ -705,6 +1104,12 @@ if ($product_id <= 0) {
     <script>
         // Global variables for cart management
         let isAddingToCart = false;
+        let selectedBrandId = null;
+        let selectedBatchId = null;
+        
+        // Image carousel variables
+        let currentImageIndex = 0;
+        let productImages = <?= json_encode($product['all_images'] ?? []) ?>;
 
         // Wait for page to fully load
         document.addEventListener('DOMContentLoaded', function() {
@@ -713,6 +1118,9 @@ if ($product_id <= 0) {
             // Initialize cart functionality
             updateCartBadge();
             initializeCartRefresh();
+            
+            // Initialize brand selection
+            initializeBrandSelection();
             
             // Quantity validation
             const quantityInput = document.getElementById('quantity');
@@ -823,6 +1231,131 @@ if ($product_id <= 0) {
                 });
         }
 
+        // Initialize brand selection functionality
+        function initializeBrandSelection() {
+            const brandOptions = document.querySelectorAll('.brand-option');
+            
+            console.log('Initializing brand selection. Found', brandOptions.length, 'brand options');
+            
+            brandOptions.forEach((option, index) => {
+                console.log(`Brand option ${index}:`, {
+                    brandId: option.dataset.brandId,
+                    batchId: option.dataset.batchId,
+                    price: option.dataset.price,
+                    stock: option.dataset.stock
+                });
+                
+                option.addEventListener('click', function() {
+                    // Remove selected class from all options
+                    brandOptions.forEach(opt => opt.classList.remove('selected'));
+                    
+                    // Add selected class to clicked option
+                    this.classList.add('selected');
+                    
+                    // Update global variables
+                    selectedBrandId = this.dataset.brandId;
+                    selectedBatchId = this.dataset.batchId;
+                    
+                    // Update stock display and quantity input
+                    updateStockDisplay(this.dataset.stock);
+                    updateQuantityInput(this.dataset.stock);
+                    
+                    // Update main price display
+                    updateMainPrice(this.dataset.price);
+                    
+                    console.log('Brand selected:', {
+                        brandId: selectedBrandId,
+                        batchId: selectedBatchId,
+                        stock: this.dataset.stock,
+                        price: this.dataset.price
+                    });
+                });
+            });
+            
+            // Set default selection if brands exist
+            if (brandOptions.length > 0) {
+                const firstOption = brandOptions[0];
+                selectedBrandId = firstOption.dataset.brandId;
+                selectedBatchId = firstOption.dataset.batchId;
+                
+                console.log('Default brand set:', {
+                    brandId: selectedBrandId,
+                    batchId: selectedBatchId
+                });
+                
+                // Update stock and price displays with default values
+                updateStockDisplay(firstOption.dataset.stock);
+                updateQuantityInput(firstOption.dataset.stock);
+                updateMainPrice(firstOption.dataset.price);
+            } else {
+                console.warn('No brand options found! This will cause brand_id and batch_id to be null.');
+            }
+        }
+
+        // Update stock display based on selected brand
+        function updateStockDisplay(stock) {
+            const stockDisplay = document.getElementById('stock-display');
+            const stockBadge = document.getElementById('stock-badge');
+            
+            if (stockDisplay) {
+                stockDisplay.textContent = `Stock: ${parseFloat(stock).toFixed(1)} kilos available`;
+            }
+            
+            if (stockBadge) {
+                stockBadge.innerHTML = '';
+                if (parseFloat(stock) <= 0) {
+                    stockBadge.innerHTML = '<span class="badge bg-danger ms-2">Out of Stock</span>';
+                } else if (parseFloat(stock) <= 10) {
+                    stockBadge.innerHTML = '<span class="badge bg-warning ms-2">Low Stock</span>';
+                }
+            }
+        }
+
+        // Update quantity input max value
+        function updateQuantityInput(stock) {
+            const quantityInput = document.getElementById('quantity');
+            const addButton = document.querySelector('.btn-add-cart');
+            
+            if (quantityInput) {
+                quantityInput.setAttribute('max', stock);
+                
+                // If current value exceeds new max, adjust it
+                if (parseFloat(quantityInput.value) > parseFloat(stock)) {
+                    quantityInput.value = Math.min(parseFloat(stock), 1);
+                }
+            }
+            
+            if (addButton) {
+                if (parseFloat(stock) <= 0) {
+                    addButton.disabled = true;
+                    addButton.innerHTML = '<i class="fas fa-cart-plus me-2"></i>Out of Stock';
+                } else {
+                    addButton.disabled = false;
+                    addButton.innerHTML = '<i class="fas fa-cart-plus me-2"></i>Add to Cart';
+                }
+            }
+        }
+
+        function updateMainPrice(newPrice) {
+            const mainPriceElement = document.getElementById('main-price');
+            if (!mainPriceElement) return;
+            
+            const formattedPrice = '₱' + parseFloat(newPrice).toFixed(2);
+            
+            // Add updating animation
+            mainPriceElement.classList.add('updating');
+            
+            // Update the price with a slight delay for smooth transition
+            setTimeout(() => {
+                mainPriceElement.textContent = formattedPrice;
+                
+                // Remove updating animation after a short delay
+                setTimeout(() => {
+                    mainPriceElement.classList.remove('updating');
+                }, 300);
+            }, 150);
+        }
+
         // Initialize cart refresh functionality
         function initializeCartRefresh() {
             // Override the toggleCart function to refresh content when opened
@@ -883,6 +1416,10 @@ if ($product_id <= 0) {
             const addButton = document.querySelector('.btn-add-cart');
             
             console.log('Add to cart clicked. Product ID:', <?= $product ? $product['product_id'] : 0 ?>, 'Quantity:', quantity);
+            console.log('Current brand selection:', {
+                selectedBrandId: selectedBrandId,
+                selectedBatchId: selectedBatchId
+            });
             
             if (!addButton) {
                 Swal.fire({
@@ -953,21 +1490,57 @@ if ($product_id <= 0) {
                 }
             });
             
-            // Enhanced form data
+            // Enhanced form data with brand and batch information
             const formData = new FormData();
             formData.append('product_id', <?= $product ? $product['product_id'] : 0 ?>);
             formData.append('action', 'add');
             formData.append('quantity', quantity);
             formData.append('unit', 'kilo');
-            formData.append('unit_price', <?= $product ? $product['total_price'] : 0 ?>);
+            
+            // Use selected brand price if available, otherwise use main product price
+            let unitPrice = <?= $product ? $product['total_price'] : 0 ?>;
+            if (selectedBrandId) {
+                const selectedBrand = document.querySelector('.brand-option.selected');
+                if (selectedBrand) {
+                    unitPrice = parseFloat(selectedBrand.dataset.price);
+                }
+            }
+            formData.append('unit_price', unitPrice);
             formData.append('csrf_token', '<?= $_SESSION['csrf_token'] ?? '' ?>');
+            
+            // Add brand and batch information if available
+            if (selectedBrandId) {
+                formData.append('brand_id', selectedBrandId);
+            } else {
+                // Fallback: try to get brand from the first available brand option
+                const firstBrandOption = document.querySelector('.brand-option');
+                if (firstBrandOption) {
+                    const fallbackBrandId = firstBrandOption.dataset.brandId;
+                    const fallbackBatchId = firstBrandOption.dataset.batchId;
+                    if (fallbackBrandId) {
+                        formData.append('brand_id', fallbackBrandId);
+                        console.log('Using fallback brand_id:', fallbackBrandId);
+                    }
+                    if (fallbackBatchId) {
+                        formData.append('batch_id', fallbackBatchId);
+                        console.log('Using fallback batch_id:', fallbackBatchId);
+                    }
+                } else {
+                    console.warn('No brand options found and no fallback available!');
+                }
+            }
+            if (selectedBatchId) {
+                formData.append('batch_id', selectedBatchId);
+            }
             
             console.log('Sending data to cart.php:', {
                 product_id: <?= $product ? $product['product_id'] : 0 ?>,
                 action: 'add',
                 quantity: quantity,
                 unit: 'kilo',
-                unit_price: <?= $product ? ($product['markup_price'] ?? 0) : 0 ?>
+                unit_price: unitPrice,
+                brand_id: selectedBrandId,
+                batch_id: selectedBatchId
             });
             
             fetch('cart.php', {
@@ -1005,8 +1578,8 @@ if ($product_id <= 0) {
                         updateCartFooter();
                     }
                     
-                    // Reset quantity to 0.1
-                    document.getElementById('quantity').value = 0.1;
+                    // Reset quantity to 1
+                    document.getElementById('quantity').value = 1;
                 } else {
                     const errorMessage = data.error || data.message || 'Failed to add product to cart';
                     Swal.fire({
@@ -1058,6 +1631,97 @@ if ($product_id <= 0) {
                 addButton.innerHTML = originalButtonContent;
             });
         }
+
+        // Image Carousel Functions
+        function changeImage(direction) {
+            if (productImages.length <= 1) return;
+            
+            currentImageIndex += direction;
+            
+            // Loop around if at boundaries
+            if (currentImageIndex >= productImages.length) {
+                currentImageIndex = 0;
+            } else if (currentImageIndex < 0) {
+                currentImageIndex = productImages.length - 1;
+            }
+            
+            updateMainImage();
+            updateThumbnails();
+        }
+
+        function setActiveImage(index) {
+            if (index < 0 || index >= productImages.length) return;
+            
+            currentImageIndex = index;
+            updateMainImage();
+            updateThumbnails();
+        }
+
+        function updateMainImage() {
+            const mainImage = document.getElementById('main-image');
+            if (mainImage && productImages[currentImageIndex]) {
+                mainImage.src = 'admin/' + productImages[currentImageIndex];
+                mainImage.alt = '<?= htmlspecialchars($product['product_name']) ?> - Image ' + (currentImageIndex + 1);
+            }
+        }
+
+        function updateThumbnails() {
+            const thumbnails = document.querySelectorAll('.thumbnail');
+            thumbnails.forEach((thumb, index) => {
+                if (index === currentImageIndex) {
+                    thumb.classList.add('active');
+                } else {
+                    thumb.classList.remove('active');
+                }
+            });
+        }
+
+        // Keyboard navigation for image carousel
+        document.addEventListener('keydown', function(e) {
+            if (productImages.length <= 1) return;
+            
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                changeImage(-1);
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                changeImage(1);
+            }
+        });
+
+        // Touch/swipe support for mobile
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const swipeDistance = touchEndX - touchStartX;
+            
+            if (Math.abs(swipeDistance) > swipeThreshold) {
+                if (swipeDistance < 0) {
+                    // Swipe left - next image
+                    changeImage(1);
+                } else {
+                    // Swipe right - previous image
+                    changeImage(-1);
+                }
+            }
+        }
+
+        // Add touch event listeners to main image container
+        document.addEventListener('DOMContentLoaded', function() {
+            const mainImageContainer = document.querySelector('.main-image-container');
+            if (mainImageContainer && productImages.length > 1) {
+                mainImageContainer.addEventListener('touchstart', function(e) {
+                    touchStartX = e.changedTouches[0].screenX;
+                });
+
+                mainImageContainer.addEventListener('touchend', function(e) {
+                    touchEndX = e.changedTouches[0].screenX;
+                    handleSwipe();
+                });
+            }
+        });
     </script>
 </body>
 </html>

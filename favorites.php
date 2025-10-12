@@ -252,23 +252,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
             display: flex;
             gap: 0.5rem;
             align-items: center;
-        }
-
-        .btn-add-cart {
-            background: var(--bs-secondary);
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            flex: 1;
-        }
-
-        .btn-add-cart:hover {
-            background: #6b1429;
-            color: white;
-            transform: translateY(-2px);
+            justify-content: center;
         }
 
         .btn-remove-favorite {
@@ -464,21 +448,6 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                             <!-- Product Actions -->
                             <div class="product-actions">
-                                <?php if ($product['stock'] > 0): ?>
-                                    <form class="add-to-cart-form flex-fill" method="POST" action="cart.php">
-                                        <input type="hidden" name="product_id" value="<?= $product['id'] ?>">
-                                        <input type="hidden" name="action" value="add">
-                                        <input type="hidden" name="quantity" value="1">
-                                        <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
-                                        <button type="submit" class="btn-add-cart w-100">
-                                            <i class="fas fa-cart-plus me-2"></i>
-                                            Add to Cart
-                                        </button>
-                                    </form>
-                                <?php else: ?>
-                                    <button class="btn btn-secondary w-100" disabled>Out of Stock</button>
-                                <?php endif; ?>
-                                
                                 <button type="button" class="btn-remove-favorite" data-product-id="<?= $product['id'] ?>" title="Remove from Favorites">
                                     <i class="fas fa-heart-broken"></i>
                                 </button>

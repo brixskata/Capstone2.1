@@ -26,52 +26,6 @@ function getUsertypeId(PDO $pdo, string $role): ?int {
     return $id !== false ? (int)$id : null;
 }
 
-// Handle role update
-if (isset($_POST['update_role'])) {
-    // Check if user has permission to update user roles
-    if (!hasPermission($pdo, 'user_update')) {
-        $_SESSION['error'] = "You don't have permission to update user roles.";
-        header("Location: manage_users.php");
-        exit;
-    }
-
-    $user_id = (int)$_POST['user_id'];
-    $new_role = $_POST['role'];
-    $admin_password = $_POST['admin_password'];
-
-    // Super Admin can assign any role, Admin can only assign customer role
-    if (!isSuperAdmin($pdo) && $new_role === 'super_admin') {
-        $_SESSION['error'] = "Only Super Admin can assign Super Admin role.";
-        header("Location: manage_users.php");
-        exit;
-    }
-
-    $adminHash = getAdminHash($pdo, $_SESSION['username']);
-    $passwordOk = false;
-    if ($adminHash) {
-        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
-        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
-    }
-
-    if ($passwordOk) {
-        try {
-            $usertypeId = getUsertypeId($pdo, $new_role);
-            if ($usertypeId === null) {
-                $_SESSION['error'] = "Invalid role specified.";
-            } else {
-                $stmt = $pdo->prepare("UPDATE users SET usertype_id = ? WHERE user_id = ? AND username != ?");
-                $stmt->execute([$usertypeId, $user_id, $_SESSION['username']]);
-                $_SESSION['success'] = "User role updated successfully";
-            }
-        } catch (PDOException $e) {
-            $_SESSION['error'] = "Error updating role";
-        }
-    } else {
-        $_SESSION['error'] = "Invalid admin password";
-    }
-    header("Location: manage_users.php");
-    exit;
-}
 
 // Handle user creation
 if (isset($_POST['create_user'])) {
@@ -88,20 +42,11 @@ if (isset($_POST['create_user'])) {
     $new_role = $_POST['new_role'];
     $admin_password = $_POST['admin_password_create'];
 
-    // Super Admin can create any role, Admin can only create customer role
-    if (!isSuperAdmin($pdo) && in_array($new_role, ['super_admin', 'admin'])) {
-        $_SESSION['error'] = "Only Super Admin can create Admin or Super Admin users.";
+    // Only Super Admin can create Super Admin users
+    if (!isSuperAdmin($pdo) && $new_role === 'super_admin') {
+        $_SESSION['error'] = "Only Super Admin can create Super Admin users.";
         header("Location: manage_users.php");
         exit;
-    }
-    
-    // Require Super Admin password for creating admin users
-    if (in_array($new_role, ['super_admin', 'admin'])) {
-        if (!isSuperAdmin($pdo)) {
-            $_SESSION['error'] = "Only Super Admin can create Admin or Super Admin users.";
-            header("Location: manage_users.php");
-            exit;
-        }
     }
 
     $adminHash = getAdminHash($pdo, $_SESSION['username']);
@@ -577,33 +522,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
               
               <div class="d-flex flex-wrap gap-2">
                 <?php if (($user['role'] ?? '') !== 'super_admin' && empty($user['deactivated'])): ?>
-                  <select class="form-select form-select-sm" onchange="showPasswordModal(this.value, <?php echo $user['id']; ?>)">
-                    <?php
-                    // Fetch all roles from database for role assignment
-                    $roles_query = "SELECT usertype_id, role FROM user_type ORDER BY role";
-                    $roles_stmt = $pdo->query($roles_query);
-                    $all_roles = $roles_stmt->fetchAll(PDO::FETCH_ASSOC);
-                    
-                    foreach ($all_roles as $role): 
-                      // Super Admin can assign any role, Admin can only assign customer role
-                      $canAssign = false;
-                      if (isSuperAdmin($pdo)) {
-                        $canAssign = true;
-                      } elseif (isAdmin($pdo) && $role['role'] === 'customer') {
-                        $canAssign = true;
-                      }
-                      
-                      if ($canAssign):
-                    ?>
-                      <option value="<?php echo htmlspecialchars($role['role']); ?>" 
-                              <?php echo ($user['role'] ?? '') === $role['role'] ? 'selected' : ''; ?>>
-                        <?php echo ucfirst(str_replace('_', ' ', $role['role'])); ?>
-                      </option>
-                    <?php 
-                      endif;
-                    endforeach; 
-                    ?>
-                  </select>
                   <?php if (hasPermission($pdo, 'user_deactivate')): ?>
                     <button type="button" onclick="showDeactivateModal(<?php echo $user['id']; ?>)" class="btn btn-sm" style="background-color: #ffb3ba; color: #8b0000; border: none; border-radius: 8px;">
                       <i class="fa fa-trash me-1"></i> Deactivate
@@ -627,32 +545,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
   </main>
 
   <!-- Modals -->
-  <!-- Password Verification Modal -->
-  <div class="modal fade" id="passwordModal" tabindex="-1">
-    <div class="modal-dialog">
-      <form action="manage_users.php" method="POST">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Verify Admin Password</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <input type="hidden" name="user_id" id="modalUserId">
-            <input type="hidden" name="role" id="modalRole">
-            <input type="hidden" name="update_role" value="1">
-            <div class="mb-3">
-              <label class="form-label">Enter your admin password to confirm role change</label>
-              <input type="password" class="form-control" name="admin_password" required>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">Confirm Change</button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
 
   <!-- Create User Modal -->
   <div class="modal fade" id="createUserModal" tabindex="-1">
@@ -674,7 +566,12 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             <div class="mb-3">
               <label class="form-label">Password</label>
-              <input type="password" class="form-control" name="new_password" required>
+              <div class="position-relative">
+                <input type="password" class="form-control pe-4" name="new_password" id="new_password" required>
+                <span class="position-absolute top-50 end-0 translate-middle-y me-3 cursor-pointer text-gray-500 hover:text-gray-700" id="toggleNewPassword">
+                  <i class="fas fa-eye"></i>
+                </span>
+              </div>
             </div>
             <div class="mb-3">
               <label class="form-label">Role</label>
@@ -686,11 +583,11 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $all_roles = $roles_stmt->fetchAll(PDO::FETCH_ASSOC);
                 
                 foreach ($all_roles as $role): 
-                  // Super Admin can assign any role, Admin can only assign customer role
+                  // Super Admin can assign any role, other admins can assign any role except super_admin
                   $canAssign = false;
                   if (isSuperAdmin($pdo)) {
                     $canAssign = true;
-                  } elseif (isAdmin($pdo) && $role['role'] === 'customer') {
+                  } elseif ($role['role'] !== 'super_admin') {
                     $canAssign = true;
                   }
                   
@@ -707,7 +604,12 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             <div class="mb-3">
               <label class="form-label" id="adminPasswordLabel">Admin Password (to confirm)</label>
-              <input type="password" class="form-control" name="admin_password_create" required>
+              <div class="position-relative">
+                <input type="password" class="form-control pe-4" name="admin_password_create" id="admin_password_create" required>
+                <span class="position-absolute top-50 end-0 translate-middle-y me-3 cursor-pointer text-gray-500 hover:text-gray-700" id="toggleAdminPassword">
+                  <i class="fas fa-eye"></i>
+                </span>
+              </div>
               <small class="text-muted" id="adminPasswordHelp">Enter your admin password to confirm user creation</small>
             </div>
           </div>
@@ -779,12 +681,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <?php include 'includes/admin_scripts.php'; ?>
   <script>
-    function showPasswordModal(role, userId) {
-      document.getElementById('modalUserId').value = userId;
-      document.getElementById('modalRole').value = role;
-      new bootstrap.Modal(document.getElementById('passwordModal')).show();
-    }
-    
     function showDeactivateModal(userId) {
       document.getElementById('deactivateUserId').value = userId;
       new bootstrap.Modal(document.getElementById('deactivateUserModal')).show();
@@ -793,6 +689,23 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     function showReactivateModal(userId) {
       document.getElementById('reactivateUserId').value = userId;
       new bootstrap.Modal(document.getElementById('reactivateUserModal')).show();
+    }
+    
+    // Password visibility toggles
+    function togglePasswordVisibility(inputId, toggleId) {
+      const input = document.getElementById(inputId);
+      const toggle = document.getElementById(toggleId);
+      const icon = toggle.querySelector('i');
+      
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+      } else {
+        input.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+      }
     }
     
     // Update password label based on role selection
@@ -812,6 +725,22 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             passwordHelp.textContent = 'Enter your admin password to confirm user creation';
             passwordHelp.className = 'text-muted';
           }
+        });
+      }
+      
+      // Add click event listeners for password toggles
+      const toggleNewPassword = document.getElementById('toggleNewPassword');
+      const toggleAdminPassword = document.getElementById('toggleAdminPassword');
+      
+      if (toggleNewPassword) {
+        toggleNewPassword.addEventListener('click', function() {
+          togglePasswordVisibility('new_password', 'toggleNewPassword');
+        });
+      }
+      
+      if (toggleAdminPassword) {
+        toggleAdminPassword.addEventListener('click', function() {
+          togglePasswordVisibility('admin_password_create', 'toggleAdminPassword');
         });
       }
     });

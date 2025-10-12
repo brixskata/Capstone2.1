@@ -4,6 +4,46 @@ include '../includes/log_history.php';
 include '../includes/permissions.php';
 session_start();
 
+// Define sidebar sections and their required permissions (must be defined early)
+$sidebar_sections = [
+    'overview' => [
+        'title' => 'Overview',
+        'icon' => 'chart-pie',
+        'description' => 'Dashboard, Inventory Overview',
+        'permissions' => [11] // inventory_view
+    ],
+    'sales' => [
+        'title' => 'Sales',
+        'icon' => 'shopping-cart',
+        'description' => 'Transaction Logs',
+        'permissions' => [15] // order_view
+    ],
+    'inventory' => [
+        'title' => 'Inventory Management',
+        'icon' => 'boxes',
+        'description' => 'Restocking, Stock Adjustment, Stock Levels, Stock Movements, Batch Management',
+        'permissions' => [11, 12, 13, 88] // inventory_view, inventory_restock, inventory_adjust, inventory_adjustment
+    ],
+    'products' => [
+        'title' => 'Product Management',
+        'icon' => 'shopping-bag',
+        'description' => 'All Products, Add Product, Categories, Brands, Units, Archived, Discounts, Suppliers',
+        'permissions' => [6, 7, 8, 9, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 89] // product permissions + category + brand + uom + archive + suppliers
+    ],
+    'maintenance' => [
+        'title' => 'Maintenance',
+        'icon' => 'cogs',
+        'description' => 'User Accounts, ID Verification, Promo Messages',
+        'permissions' => [1, 2, 3, 4, 5] // user permissions only (Promo Messages is always visible)
+    ],
+    'analytics' => [
+        'title' => 'Analytics',
+        'icon' => 'chart-line',
+        'description' => 'Reports, Activity Log',
+        'permissions' => [35, 36, 37, 42, 43] // reports + history permissions
+    ]
+];
+
 // Ensure user is logged in and has admin access
 requireAdmin($pdo);
 
@@ -95,7 +135,7 @@ if (isset($_POST['delete_role'])) {
 // Handle permission updates
 if (isset($_POST['update_permissions'])) {
     $user_id = (int)$_POST['user_id'];
-    $selected_permissions = $_POST['permissions'] ?? [];
+    $selected_sections = $_POST['sections'] ?? [];
     $admin_password = $_POST['admin_password'];
     
     // Verify admin password
@@ -110,30 +150,51 @@ if (isset($_POST['update_permissions'])) {
         try {
             $pdo->beginTransaction();
             
+            // Debug logging
+            error_log("Permission Update Debug - User ID: $user_id");
+            error_log("Permission Update Debug - Selected Sections: " . print_r($selected_sections, true));
+            error_log("Permission Update Debug - Sidebar Sections Available: " . print_r(array_keys($sidebar_sections), true));
+            
             // Remove all existing permissions for this user
             $stmt = $pdo->prepare("DELETE FROM user_permissions WHERE user_id = ?");
             $stmt->execute([$user_id]);
+            $deleted_count = $stmt->rowCount();
+            error_log("Permission Update Debug - Deleted $deleted_count existing permissions");
             
-            // Add selected permissions
-            if (!empty($selected_permissions)) {
+            // Add permissions based on selected sections
+            $inserted_count = 0;
+            if (!empty($selected_sections)) {
                 $stmt = $pdo->prepare("INSERT INTO user_permissions (user_id, permission_id) VALUES (?, ?)");
-                foreach ($selected_permissions as $permission_id) {
-                    $stmt->execute([$user_id, $permission_id]);
+                foreach ($selected_sections as $section_key) {
+                    if (isset($sidebar_sections[$section_key])) {
+                        error_log("Permission Update Debug - Processing section: $section_key");
+                        foreach ($sidebar_sections[$section_key]['permissions'] as $permission_id) {
+                            $stmt->execute([$user_id, $permission_id]);
+                            $inserted_count++;
+                        }
+                    } else {
+                        error_log("Permission Update Debug - Section not found: $section_key");
+                    }
                 }
             }
+            error_log("Permission Update Debug - Inserted $inserted_count new permissions");
             
             $pdo->commit();
-            $_SESSION['success'] = "User permissions updated successfully";
+            $_SESSION['success'] = "User access updated successfully (Deleted: $deleted_count, Added: $inserted_count)";
             
             // Log the action
             $stmt = $pdo->prepare("SELECT username FROM users WHERE user_id = ?");
             $stmt->execute([$user_id]);
             $target_user = $stmt->fetch();
-            logHistory($pdo, 'User Permissions Updated', "Updated permissions for user: {$target_user['username']}", $_SESSION['username']);
+            $sections_assigned = implode(', ', array_map(function($key) use ($sidebar_sections) {
+                return $sidebar_sections[$key]['title'];
+            }, $selected_sections));
+            logHistory($pdo, 'User Access Updated', "Updated access for user: {$target_user['username']} - Sections: {$sections_assigned}", $_SESSION['username']);
             
         } catch (Exception $e) {
             $pdo->rollBack();
-            $_SESSION['error'] = "Error updating permissions: " . $e->getMessage();
+            error_log("Permission Update Error: " . $e->getMessage());
+            $_SESSION['error'] = "Error updating access: " . $e->getMessage();
         }
     } else {
         $_SESSION['error'] = "Invalid admin password";
@@ -177,6 +238,7 @@ $permissions_by_module = [];
 foreach ($all_permissions as $perm) {
     $permissions_by_module[$perm['module']][] = $perm;
 }
+
 
 // Helper function to get admin password hash
 function getAdminHash(PDO $pdo, string $username): ?string {
@@ -405,7 +467,7 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h2><i class="fas fa-user-shield me-2"></i>User Permissions & Roles</h2>
-                        <p class="mb-0 opacity-75">Manage user roles and individual permissions</p>
+                        <p class="mb-0 opacity-75">Manage user roles and sidebar section access</p>
                     </div>
                     <button class="btn text-white fw-bold px-4" 
                             style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);" 
@@ -459,8 +521,8 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                             <i class="fas fa-layer-group"></i>
                         </div>
                         <div class="card-content">
-                            <h3 class="card-number"><?php echo count($permissions_by_module); ?></h3>
-                            <p class="card-label">Permission Modules</p>
+                            <h3 class="card-number"><?php echo count($sidebar_sections); ?></h3>
+                            <p class="card-label">Sidebar Sections</p>
                         </div>
                     </div>
                 </div>
@@ -513,25 +575,39 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                             </div>
                             
                             <div class="mb-3">
-                                <h6 class="text-muted mb-2">Current Permissions:</h6>
-                                <?php if (!empty($user['user_permissions'])): ?>
-                                    <?php 
-                                    $user_perms = explode(',', $user['user_permissions']);
-                                    foreach ($user_perms as $perm): 
-                                        if (trim($perm)):
-                                    ?>
-                                        <span class="permission-badge"><?php echo htmlspecialchars(trim($perm)); ?></span>
-                                    <?php 
-                                        endif;
-                                    endforeach; 
-                                    ?>
+                                <h6 class="text-muted mb-2">Current Access:</h6>
+                                <?php
+                                // Get user's current permissions
+                                $user_perms_stmt = $pdo->prepare("SELECT permission_id FROM user_permissions WHERE user_id = ?");
+                                $user_perms_stmt->execute([$user['user_id']]);
+                                $user_permission_ids = $user_perms_stmt->fetchAll(PDO::FETCH_COLUMN);
+                                
+                                // Check which sections user has access to
+                                $user_sections = [];
+                                foreach ($sidebar_sections as $section_key => $section) {
+                                    $has_section = true;
+                                    foreach ($section['permissions'] as $required_perm_id) {
+                                        if (!in_array($required_perm_id, $user_permission_ids)) {
+                                            $has_section = false;
+                                            break;
+                                        }
+                                    }
+                                    if ($has_section) {
+                                        $user_sections[] = $section['title'];
+                                    }
+                                }
+                                
+                                if (!empty($user_sections)): ?>
+                                    <?php foreach ($user_sections as $section_title): ?>
+                                        <span class="permission-badge"><?php echo htmlspecialchars($section_title); ?></span>
+                                    <?php endforeach; ?>
                                 <?php else: ?>
-                                    <span class="text-muted">No specific permissions assigned</span>
+                                    <span class="text-muted">Dashboard only</span>
                                 <?php endif; ?>
                             </div>
                             
                             <button class="btn btn-sm w-100" data-bs-toggle="modal" data-bs-target="#permissionModal<?php echo $user['user_id']; ?>" style="background-color: #7F1734; color: white; border: none;">
-                                <i class="fa fa-edit me-1"></i> Manage Permissions
+                                <i class="fa fa-edit me-1"></i> Manage Access
                             </button>
                         </div>
                     </div>
@@ -547,7 +623,7 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                 <form action="user_permissions.php" method="POST">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title">Manage Permissions for <?php echo htmlspecialchars($user['username']); ?></h5>
+                            <h5 class="modal-title">Manage Access for <?php echo htmlspecialchars($user['username']); ?></h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
@@ -558,34 +634,46 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                             $current_perms_stmt = $pdo->prepare("SELECT permission_id FROM user_permissions WHERE user_id = ?");
                             $current_perms_stmt->execute([$user['user_id']]);
                             $current_permissions = $current_perms_stmt->fetchAll(PDO::FETCH_COLUMN);
+                            
+                            // Check which sections user currently has access to
+                            $current_sections = [];
+                            foreach ($sidebar_sections as $section_key => $section) {
+                                $has_section = true;
+                                foreach ($section['permissions'] as $required_perm_id) {
+                                    if (!in_array($required_perm_id, $current_permissions)) {
+                                        $has_section = false;
+                                        break;
+                                    }
+                                }
+                                if ($has_section) {
+                                    $current_sections[] = $section_key;
+                                }
+                            }
                             ?>
                             
-                            <?php foreach ($permissions_by_module as $module => $permissions): ?>
+                            <div class="alert alert-info">
+                                <i class="fa fa-info-circle me-2"></i>
+                                <strong>Dashboard is always visible</strong> for all users. Select sidebar sections to grant access to specific areas.
+                            </div>
+                            
+                            <?php foreach ($sidebar_sections as $section_key => $section): ?>
                                 <div class="permission-card">
                                     <div class="module-header">
-                                        <h6 class="mb-0">
-                                            <i class="fa fa-<?php echo getModuleIcon($module); ?> me-2"></i>
-                                            <?php echo ucfirst($module); ?> Module
-                                        </h6>
-                                    </div>
-                                    
-                                    <?php foreach ($permissions as $permission): ?>
-                                        <div class="permission-item">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" 
-                                                       name="permissions[]" 
-                                                       value="<?php echo $permission['permission_id']; ?>"
-                                                       id="perm_<?php echo $user['user_id']; ?>_<?php echo $permission['permission_id']; ?>"
-                                                       <?php echo in_array($permission['permission_id'], $current_permissions) ? 'checked' : ''; ?>>
-                                                <label class="form-check-label" for="perm_<?php echo $user['user_id']; ?>_<?php echo $permission['permission_id']; ?>">
-                                                    <strong><?php echo htmlspecialchars($permission['permission_name']); ?></strong>
-                                                    <?php if (!empty($permission['description'])): ?>
-                                                        <br><small class="text-muted"><?php echo htmlspecialchars($permission['description']); ?></small>
-                                                    <?php endif; ?>
-                                                </label>
-                                            </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="sections[]" 
+                                                   value="<?php echo $section_key; ?>"
+                                                   id="section_<?php echo $user['user_id']; ?>_<?php echo $section_key; ?>"
+                                                   <?php echo in_array($section_key, $current_sections) ? 'checked' : ''; ?>>
+                                            <label class="form-check-label w-100" for="section_<?php echo $user['user_id']; ?>_<?php echo $section_key; ?>">
+                                                <h6 class="mb-1">
+                                                    <i class="fa fa-<?php echo $section['icon']; ?> me-2"></i>
+                                                    <?php echo htmlspecialchars($section['title']); ?>
+                                                </h6>
+                                                <small class="text-light opacity-75"><?php echo htmlspecialchars($section['description']); ?></small>
+                                            </label>
                                         </div>
-                                    <?php endforeach; ?>
+                                    </div>
                                 </div>
                             <?php endforeach; ?>
                             
@@ -596,7 +684,7 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" name="update_permissions" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">Update Permissions</button>
+                            <button type="submit" name="update_permissions" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">Update Access</button>
                         </div>
                     </div>
                 </form>

@@ -12,8 +12,10 @@ try {
     die("Connection failed: " . $e->getMessage());
 }
 
-function log_history($pdo, $action, $details, $performed_by) {
-    $stmt = $pdo->prepare("INSERT INTO history_logs (action, details, performed_by) VALUES (?, ?, ?)");
-    $stmt->execute([$action, $details, $performed_by]);
+if (!function_exists('log_history')) {
+    function log_history($pdo, $action, $details, $performed_by) {
+        $stmt = $pdo->prepare("INSERT INTO history_logs (action, details, performed_by) VALUES (?, ?, ?)");
+        $stmt->execute([$action, $details, $performed_by]);
+    }
 }
 ?>

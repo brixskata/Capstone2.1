@@ -3,8 +3,8 @@
 include '../includes/db.php';
 session_start();
 
-// Ensure user is logged in and has admin access (Super Admin or Admin)
-if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+// Ensure user is logged in and has admin access (any non-customer role)
+if (!isset($_SESSION['username']) || $_SESSION['role'] === 'customer') {
 	header("Location: login_admin.php");
 	exit; 
 }

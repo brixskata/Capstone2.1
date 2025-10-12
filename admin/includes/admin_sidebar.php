@@ -3,6 +3,19 @@
 // Include permissions for module access checks
 include_once '../includes/permissions.php';
 
+// Check if user has any module permissions (if not, only show Dashboard)
+function hasAnyModulePermissions($pdo) {
+    $modules = ['inventory', 'products', 'suppliers', 'users', 'transactions', 'reports', 'system'];
+    foreach ($modules as $module) {
+        if (hasModuleAccess($pdo, $module)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+$userHasModulePermissions = hasAnyModulePermissions($pdo);
+
 // Fetch dynamic counts for sidebar badges
 $sidebar_counts = [
     'products' => 0,
@@ -98,6 +111,7 @@ try {
           <div class="nav-indicator"></div>
           <div class="nav-badge">Live</div>
         </a>
+        <?php if ($userHasModulePermissions && hasModuleAccess($pdo, 'inventory')): ?>
         <a href="inventory.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'inventory.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
             <i class="fas fa-warehouse"></i>
@@ -105,22 +119,37 @@ try {
           <span>Inventory Overview</span>
           <div class="nav-indicator"></div>
         </a>
-        <?php if (hasModuleAccess($pdo, 'transactions')): ?>
+        <?php endif; ?>
+      </div>
+    </div>
+
+    <!-- Sales Section -->
+    <?php if ($userHasModulePermissions && hasModuleAccess($pdo, 'transactions')): ?>
+    <div class="nav-section">
+      <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#salesDropdown" role="button">
+        <div class="section-icon">
+          <i class="fas fa-shopping-cart"></i>
+        </div>
+        <span>Sales</span>
+        <i class="fas fa-chevron-down dropdown-arrow"></i>
+      </div>
+      <div class="nav-dropdown collapse show" id="salesDropdown">
         <a href="transaction_logs.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'transaction_logs.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
-            <i class="fas fa-shopping-cart"></i>
+            <i class="fas fa-receipt"></i>
           </div>
-          <span>Transactions</span>
+          <span>Transaction Logs</span>
           <div class="nav-indicator"></div>
           <?php if ($sidebar_counts['transactions'] > 0): ?>
           <div class="nav-badge"><?= $sidebar_counts['transactions'] ?></div>
           <?php endif; ?>
         </a>
-        <?php endif; ?>
       </div>
     </div>
+    <?php endif; ?>
 
     <!-- Inventory Management Section -->
+    <?php if ($userHasModulePermissions && hasModuleAccess($pdo, 'inventory')): ?>
     <div class="nav-section">
       <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#inventoryDropdown" role="button">
         <div class="section-icon">
@@ -130,7 +159,6 @@ try {
         <i class="fas fa-chevron-down dropdown-arrow"></i>
       </div>
       <div class="nav-dropdown collapse show" id="inventoryDropdown">
-        <?php if (hasModuleAccess($pdo, 'inventory')): ?>
         <a href="restocking.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'restocking.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
             <i class="fas fa-plus-circle"></i>
@@ -169,11 +197,12 @@ try {
           <span>Batch Management</span>
           <div class="nav-indicator"></div>
         </a>
-        <?php endif; ?>
       </div>
     </div>
+    <?php endif; ?>
 
     <!-- Product Management Section -->
+    <?php if ($userHasModulePermissions && hasModuleAccess($pdo, 'products')): ?>
     <div class="nav-section">
       <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#productsDropdown" role="button">
         <div class="section-icon">
@@ -183,7 +212,6 @@ try {
         <i class="fas fa-chevron-down dropdown-arrow"></i>
       </div>
       <div class="nav-dropdown collapse show" id="productsDropdown">
-        <?php if (hasModuleAccess($pdo, 'products')): ?>
         <a href="products.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'products.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
             <i class="fas fa-box"></i>
@@ -248,21 +276,6 @@ try {
           <div class="nav-badge"><?= $sidebar_counts['discounts'] ?></div>
           <?php endif; ?>
         </a>
-        <?php endif; ?>
-      </div>
-    </div>
-
-    <!-- Business Partners Section -->
-    <div class="nav-section">
-      <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#partnersDropdown" role="button">
-        <div class="section-icon">
-          <i class="fas fa-cogs"></i>
-        </div>
-        <span>Maintenance</span>
-        <i class="fas fa-chevron-down dropdown-arrow"></i>
-      </div>
-      <div class="nav-dropdown collapse show" id="partnersDropdown">
-        <?php if (hasModuleAccess($pdo, 'suppliers')): ?>
         <a href="manage_suppliers.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'manage_suppliers.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
             <i class="fas fa-truck"></i>
@@ -273,7 +286,21 @@ try {
           <div class="nav-badge"><?= $sidebar_counts['suppliers'] ?></div>
           <?php endif; ?>
         </a>
-        <?php endif; ?>
+      </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- Business Partners Section -->
+    <?php if ($userHasModulePermissions && (hasModuleAccess($pdo, 'users') || isSuperAdmin($pdo))): ?>
+    <div class="nav-section">
+      <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#partnersDropdown" role="button">
+        <div class="section-icon">
+          <i class="fas fa-cogs"></i>
+        </div>
+        <span>Maintenance</span>
+        <i class="fas fa-chevron-down dropdown-arrow"></i>
+      </div>
+      <div class="nav-dropdown collapse show" id="partnersDropdown">
         <?php if (hasModuleAccess($pdo, 'users')): ?>
         <a href="manage_users.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'manage_users.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
@@ -296,6 +323,13 @@ try {
           <div class="nav-badge urgent"><?= $sidebar_counts['pending_verifications'] ?></div>
           <?php endif; ?>
         </a>
+        <a href="manage_promo_messages.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'manage_promo_messages.php' ? 'active' : ''; ?>">
+          <div class="nav-icon">
+            <i class="fas fa-bullhorn"></i>
+          </div>
+          <span>Promo Messages</span>
+          <div class="nav-indicator"></div>
+        </a>
         <?php if (isSuperAdmin($pdo)): ?>
         <a href="user_permissions.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'user_permissions.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
@@ -307,8 +341,10 @@ try {
         <?php endif; ?>
       </div>
     </div>
+    <?php endif; ?>
 
     <!-- Analytics Section -->
+    <?php if ($userHasModulePermissions && (hasModuleAccess($pdo, 'reports') || hasModuleAccess($pdo, 'system'))): ?>
     <div class="nav-section">
       <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#analyticsDropdown" role="button">
         <div class="section-icon">
@@ -334,15 +370,9 @@ try {
           <span>Activity Log</span>
           <div class="nav-indicator"></div>
         </a>
-        <a href="manage_promo_messages.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'manage_promo_messages.php' ? 'active' : ''; ?>">
-          <div class="nav-icon">
-            <i class="fas fa-bullhorn"></i>
-          </div>
-          <span>Promo Messages</span>
-          <div class="nav-indicator"></div>
-        </a>
       </div>
     </div>
+    <?php endif; ?>
     
     <!-- Bottom Section -->
     <div class="nav-section nav-section-bottom">

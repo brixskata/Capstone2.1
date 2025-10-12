@@ -70,11 +70,13 @@ $stmt = $pdo->prepare("
         pb.*,
         p.product_name,
         s.name as supplier_name,
+        b.name as brand_name,
         u.name as uom_name,
         DATEDIFF(pb.expiration_date, CURDATE()) as days_until_expiry
     FROM product_batches pb
     JOIN products p ON pb.product_id = p.product_id
     LEFT JOIN suppliers s ON pb.supplier_id = s.supplier_id
+    LEFT JOIN brands b ON pb.brand_id = b.id
     LEFT JOIN uom u ON p.uom_id = u.uom_id
     {$where_clause}
     ORDER BY pb.received_date DESC, pb.batch_id DESC
@@ -386,6 +388,9 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                             
                             <div class="mb-3">
                                 <h6 class="fw-bold mb-1"><?= htmlspecialchars($batch['product_name']) ?></h6>
+                                <?php if ($batch['brand_name']): ?>
+                                    <small class="text-muted">Brand: <?= htmlspecialchars($batch['brand_name']) ?></small><br>
+                                <?php endif; ?>
                                 <?php if ($batch['supplier_name']): ?>
                                     <small class="text-muted">Supplier: <?= htmlspecialchars($batch['supplier_name']) ?></small>
                                 <?php endif; ?>

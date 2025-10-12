@@ -1,43 +1,10 @@
 <?php
-session_start();
-include 'includes/db.php';
-
-// Helper function to get product data efficiently
-function getProductData($pdo, $product_ids) {
-    if (empty($product_ids)) return [];
-    
-    try {
-        $placeholders = str_repeat('?,', count($product_ids) - 1) . '?';
-        $sql = "SELECT 
-                    p.product_id,
-                    p.product_name,
-                    p.product_description,
-                    COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) AS price,
-                    COALESCE(ps.current_stock, 0) AS stock,
-                    (SELECT pi.image_url FROM product_images pi 
-                     WHERE pi.product_id = p.product_id AND pi.is_primary = 1 
-                     ORDER BY pi.product_image_id DESC LIMIT 1) AS image1
-                FROM products p
-                LEFT JOIN product_pricing pp ON pp.product_id = p.product_id
-                LEFT JOIN product_stock ps ON ps.product_id = p.product_id
-                WHERE p.product_id IN ($placeholders) AND p.is_archive = 0
-                ORDER BY pp.productpricing_id DESC";
-        
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($product_ids);
-        
-        $products = [];
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            if ($row && isset($row['product_id'])) {
-                $products[$row['product_id']] = $row;
-            }
-        }
-        return $products;
-    } catch (Exception $e) {
-        error_log("Error in getProductData: " . $e->getMessage());
-        return [];
-    }
+// Session already started in cart.php, so we don't need to start it again
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
+include 'includes/db.php';
+include_once 'includes/cart_manager.php';
 
 // Initialize cart if not set
 if (!isset($_SESSION['cart'])) {
@@ -47,55 +14,173 @@ if (!isset($_SESSION['cart'])) {
 $cart_items = [];
 $cart_total = 0;
 
-if (!empty($_SESSION['cart'])) {
-    foreach ($_SESSION['cart'] as $cart_key => $cart_item) {
+if (!empty($_SESSION['cart']) && isset($_SESSION['user_id'])) {
+    // Use CartManager to load cart data from database
+    $cartManager = new CartManager($pdo);
+    $cart_data = $cartManager->loadCartFromDatabase($_SESSION['user_id']);
+    
+    foreach ($cart_data as $cart_key => $cart_item) {
         // Handle both simple product_id keys and composite keys (product_id_unit_boxid)
         $product_id = $cart_item['product_id'] ?? $cart_key;
         if (is_string($product_id) && strpos($product_id, '_') !== false) {
             $product_id = intval(explode('_', $product_id)[0]);
         }
         
-        $product_data = getProductData($pdo, [$product_id]);
-        if (!empty($product_data[$product_id])) {
-            $product = $product_data[$product_id];
-            $qty = $cart_item['quantity'] ?? 1;
-            $unit_price = $product['price']; // Always use current database price
-            $unit = $cart_item['unit'] ?? 'kilo';
-            $box_id = $cart_item['box_id'] ?? null;
-            $weight = $cart_item['weight'] ?? null;
+        $brand_id = $cart_item['brand_id'] ?? null;
+        // Ensure brand_id is integer for SQL queries
+        if ($brand_id !== null) {
+            $brand_id = intval($brand_id);
+        }
+        $qty = $cart_item['quantity'] ?? 1;
+        $unit = $cart_item['unit'] ?? 'kilo';
+        $weight = $cart_item['weight'] ?? null;
+        
+        // Get product basic info
+        $product_sql = "SELECT p.product_name, p.product_description,
+                        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 ORDER BY pi.product_image_id DESC LIMIT 1) AS image1
+                       FROM products p 
+                       WHERE p.product_id = ? AND p.is_archive = 0";
+        $product_stmt = $pdo->prepare($product_sql);
+        $product_stmt->execute([$product_id]);
+        $product = $product_stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$product) continue;
+        
+        // Get brand-specific pricing and stock if brand_id is provided
+            if ($brand_id) {
+            $brand_sql = "SELECT 
+                            b.name as brand_name,
+                            pb.unit_cost,
+                            pb.quantity_remaining,
+                            u.name as unit_name,
+                            COALESCE(pp.markup_price, 0) as markup_price,
+                            (COALESCE(pb.unit_cost, 0) + COALESCE(pp.markup_price, 0)) as final_price
+                         FROM product_batches pb
+                         JOIN brands b ON pb.brand_id = b.id
+                         JOIN products p ON pb.product_id = p.product_id
+                         JOIN uom u ON p.uom_id = u.uom_id
+                         LEFT JOIN product_pricing pp ON pb.product_id = pp.product_id
+                         WHERE pb.product_id = ? 
+                         AND pb.brand_id = ?
+                         AND pb.quantity_remaining > 0 
+                         AND pb.is_active = 1
+                         ORDER BY pb.expiration_date ASC
+                         LIMIT 1";
             
-            $item_total = $unit_price * $qty;
+            $brand_stmt = $pdo->prepare($brand_sql);
+            $brand_stmt->execute([$product_id, $brand_id]);
+            $brand_data = $brand_stmt->fetch(PDO::FETCH_ASSOC);
             
+            if ($brand_data) {
+                $unit_price = $brand_data['unit_cost'];
+                $markup_price = $brand_data['markup_price'];
+                $final_price = $brand_data['final_price'];
+                $stock = $brand_data['quantity_remaining'];
+                $brand_name = $brand_data['brand_name'];
+                $unit_name = $brand_data['unit_name'];
+            } else {
+                // Fallback to general pricing if brand-specific not found
+                $general_sql = "SELECT 
+                                  COALESCE(pp.markup_price, 0) + COALESCE((
+                                      SELECT pb.unit_cost 
+                                      FROM product_batches pb 
+                                      WHERE pb.product_id = p.product_id 
+                                      AND pb.quantity_remaining > 0 
+                                      AND pb.is_active = 1
+                                      ORDER BY pb.expiration_date ASC 
+                                      LIMIT 1
+                                  ), 0) AS final_price,
+                                  COALESCE(ps.current_stock, 0) AS stock,
+                                  u.name as unit_name
+                               FROM products p
+                               LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+                               LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+                               LEFT JOIN uom u ON p.uom_id = u.uom_id
+                               WHERE p.product_id = ? AND p.is_archive = 0";
+                
+                $general_stmt = $pdo->prepare($general_sql);
+                $general_stmt->execute([$product_id]);
+                $general_data = $general_stmt->fetch(PDO::FETCH_ASSOC);
+                
+                $unit_price = 0;
+                $markup_price = $general_data['final_price'] ?? 0;
+                $final_price = $general_data['final_price'] ?? 0;
+                $stock = $general_data['stock'] ?? 0;
+                $brand_name = 'General';
+                $unit_name = 'kilo';
+            }
+        } else {
+            // Use general pricing
+            $general_sql = "SELECT 
+                              COALESCE(pp.markup_price, 0) + COALESCE((
+                                  SELECT pb.unit_cost 
+                                  FROM product_batches pb 
+                                  WHERE pb.product_id = p.product_id 
+                                  AND pb.quantity_remaining > 0 
+                                  AND pb.is_active = 1
+                                  ORDER BY pb.expiration_date ASC 
+                                  LIMIT 1
+                              ), 0) AS final_price,
+                              COALESCE(ps.current_stock, 0) AS stock,
+                              u.name as unit_name
+                           FROM products p
+                           LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+                           LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+                           LEFT JOIN uom u ON p.uom_id = u.uom_id
+                           WHERE p.product_id = ? AND p.is_archive = 0";
+            
+            $general_stmt = $pdo->prepare($general_sql);
+            $general_stmt->execute([$product_id]);
+            $general_data = $general_stmt->fetch(PDO::FETCH_ASSOC);
+            
+            $unit_price = 0;
+            $markup_price = $general_data['final_price'] ?? 0;
+            $final_price = $general_data['final_price'] ?? 0;
+            $stock = $general_data['stock'] ?? 0;
+            $brand_name = 'General';
+            $unit_name = 'kilo';
+        }
+        
+        // Calculate item total using final_price (unit_cost + markup_price)
+        $item_total = $final_price * $qty;
             $cart_total += $item_total;
             
-            // Create display name with unit info
-            $display_name = $product['product_name'] ?? 'Unknown Product';
+        // Create display name with brand info
+        $display_name = $product['product_name'];
+        if ($brand_name && $brand_name !== 'General') {
+            $display_name .= " - " . $brand_name;
+        }
+        
+        // Add unit info
             if ($unit === 'piece') {
-                $display_name .= ' (per piece)';
+            $display_name .= " (per piece)";
             } else if ($unit === 'box' && $weight) {
-                $display_name .= ' (Box - ' . number_format($weight, 2) . 'kg)';
+            $display_name .= " (Box - " . number_format($weight, 2) . "kg)";
             } else {
-                $display_name .= ' (per kilo)';
+            $display_name .= " (per " . $unit_name . ")";
             }
             
             $cart_items[] = [
                 'product' => [
-                    'id' => $product['product_id'] ?? 0,
+                'id' => $product_id,
                     'name' => $display_name,
-                    'price' => (float)$unit_price,
-                    'image1' => $product['image1'] ?? '',
-                    'stock' => (float)($product['stock'] ?? 0)
+                'price' => (float)$final_price, // This is unit_cost + markup_price
+                'image1' => $product['image1'] ?? '',
+                    'stock' => (float)$stock
                 ],
                 'quantity' => $qty,
                 'total' => $item_total,
-                'unit' => $unit,
-                'box_id' => $box_id,
+            'unit' => $unit_name,
                 'weight' => $weight,
-                'cart_key' => $cart_key  // Include cart key for proper identification
+                'brand_id' => $brand_id,
+                'brand_name' => $brand_name ?? null,
+            'cart_key' => $cart_key
             ];
         }
     }
-}
+
+// Store cart total in session
+$_SESSION['cart_total'] = $cart_total;
 ?>
 
 <?php if (empty($cart_items)): ?>
@@ -120,6 +205,12 @@ if (!empty($_SESSION['cart'])) {
                 
                 <div class="item-details">
                     <div class="item-name"><?= htmlspecialchars($item['product']['name']) ?></div>
+                    <?php if ($item['brand_id'] && isset($item['brand_name'])): ?>
+                        <div class="item-brand text-primary small">
+                            <i class="fas fa-tag me-1"></i>
+                            Brand: <?= htmlspecialchars($item['brand_name']) ?>
+                        </div>
+                    <?php endif; ?>
                     <div class="item-price">₱<?= number_format($item['product']['price'], 2) ?> each</div>
                     <div class="item-stock text-muted small">
                         <i class="fas fa-box me-1"></i>
@@ -130,10 +221,10 @@ if (!empty($_SESSION['cart'])) {
                 <div class="item-controls">
                     <div class="quantity-controls">
                         <button class="quantity-btn decrease-cart" data-product-id="<?= $item['product']['id'] ?>" data-cart-key="<?= htmlspecialchars($item['cart_key']) ?>"
-                                <?= (float)$item['quantity'] <= 1 ? 'disabled' : '' ?>>
+                                <?= (float)$item['quantity'] <= 0.1 ? 'disabled' : '' ?>>
                             <i class="fas fa-minus"></i>
                         </button>
-                        <input type="number" class="quantity-display quantity-input" value="<?= number_format((float)$item['quantity'], 1, '.', '') ?>" step="0.1" min="1" max="<?= (float)$item['product']['stock'] ?>" data-product-id="<?= $item['product']['id'] ?>" data-cart-key="<?= htmlspecialchars($item['cart_key']) ?>" inputmode="decimal" aria-label="Quantity" />
+                        <input type="number" class="quantity-display quantity-input" value="<?= number_format((float)$item['quantity'], 1, '.', '') ?>" step="0.1" min="0.1" max="<?= (float)$item['product']['stock'] ?>" data-product-id="<?= $item['product']['id'] ?>" data-cart-key="<?= htmlspecialchars($item['cart_key']) ?>" inputmode="decimal" aria-label="Quantity" />
                         <button class="quantity-btn increase-cart" data-product-id="<?= $item['product']['id'] ?>" data-cart-key="<?= htmlspecialchars($item['cart_key']) ?>"
                                 <?= (float)$item['quantity'] >= (float)$item['product']['stock'] ? 'disabled' : '' ?>>
                             <i class="fas fa-plus"></i>

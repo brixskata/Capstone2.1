@@ -32,8 +32,11 @@ $cart_total = 0;
 $selected_items_total = 0; // Initialize for selected items total
 
 if (!empty($_SESSION['cart'])) {
-    foreach ($_SESSION['cart'] as $nav_product_id => $nav_cart_item) {
+    foreach ($_SESSION['cart'] as $nav_cart_key => $nav_cart_item) {
         try {
+            // Extract product_id from cart key (format: product_id_unit_brand_X_batch_Y)
+            $nav_product_id = intval(explode('_', $nav_cart_key)[0]);
+            
             $sql = "SELECT 
                         p.product_id,
                         p.product_name,
@@ -45,10 +48,13 @@ if (!empty($_SESSION['cart'])) {
                             LIMIT 1
                         ), 0) AS stock,
                         COALESCE((
-                            SELECT pp.markup_price + pp.cost_price
-                            FROM product_pricing pp
-                            WHERE pp.product_id = p.product_id
-                            ORDER BY pp.productpricing_id DESC
+                            SELECT (COALESCE(pb.unit_cost, 0) + COALESCE(pp.markup_price, 0)) as final_price
+                            FROM product_batches pb
+                            LEFT JOIN product_pricing pp ON pb.product_id = pp.product_id
+                            WHERE pb.product_id = p.product_id 
+                            AND pb.quantity_remaining > 0 
+                            AND pb.is_active = 1
+                            ORDER BY pb.expiration_date ASC
                             LIMIT 1
                         ), 0) AS price,
                         (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 ORDER BY pi.product_image_id DESC LIMIT 1) AS image1
@@ -263,6 +269,8 @@ if (!empty($_SESSION['cart'])) {
 
     if (cart.classList.contains('active')) {
       document.body.style.overflow = 'hidden';
+      // Load cart content only when opening
+      loadCartContent();
     } else {
       document.body.style.overflow = 'auto';
     }
@@ -383,8 +391,7 @@ if (!empty($_SESSION['cart'])) {
                 }
               });
               
-              // Reload cart content
-              loadCartContent();
+              // Update cart badge and footer only
               updateCartBadge();
               updateCartFooter();
             } else {
@@ -467,16 +474,47 @@ if (!empty($_SESSION['cart'])) {
     .then(response => response.json())
     .then(data => {
       if (data.success) {
-        // Reload the entire cart content to reflect changes
-        loadCartContent();
-        updateCartBadge(); // Update badge count after any quantity change
-        updateCartFooter(); // Update footer totals
+        // Check if we're on the cart page
+        if (window.location.pathname.includes('cart.php')) {
+          // Refresh the page to show updated cart content
+          location.reload();
+        } else {
+          // Update cart badge and footer for other pages
+          updateCartBadge(); // Update badge count after any quantity change
+          updateCartFooter(); // Update footer totals
+          
+          // Also refresh sliding cart content if it's open
+          const slidingCart = document.getElementById('slidingCart');
+          if (slidingCart && slidingCart.classList.contains('active')) {
+            loadCartContent();
+          }
+        }
       } else {
         console.error('Cart update failed:', data.error || 'Unknown error');
+        // Show error message if on cart page
+        if (window.location.pathname.includes('cart.php')) {
+          Swal.fire({
+            title: 'Error',
+            text: data.message || 'Failed to update cart',
+            icon: 'error',
+            confirmButtonColor: '#dc3545',
+            confirmButtonText: 'OK'
+          });
+        }
       }
     })
     .catch(error => {
       console.error('Error:', error);
+      // Show error message if on cart page
+      if (window.location.pathname.includes('cart.php')) {
+        Swal.fire({
+          title: 'Connection Error',
+          text: 'Unable to update cart. Please check your connection and try again.',
+          icon: 'error',
+          confirmButtonColor: '#dc3545',
+          confirmButtonText: 'OK'
+        });
+      }
     });
   }
 
@@ -498,15 +536,47 @@ if (!empty($_SESSION['cart'])) {
     .then(response => response.json())
     .then(data => {
       if (data.success) {
-        loadCartContent();
-        updateCartBadge();
-        updateCartFooter();
+        // Check if we're on the cart page
+        if (window.location.pathname.includes('cart.php')) {
+          // Refresh the page to show updated cart content
+          location.reload();
+        } else {
+          // Update cart badge and footer for other pages
+          updateCartBadge();
+          updateCartFooter();
+          
+          // Also refresh sliding cart content if it's open
+          const slidingCart = document.getElementById('slidingCart');
+          if (slidingCart && slidingCart.classList.contains('active')) {
+            loadCartContent();
+          }
+        }
       } else {
         console.error('Cart update failed:', data.error || data.message || 'Unknown error');
+        // Show error message if on cart page
+        if (window.location.pathname.includes('cart.php')) {
+          Swal.fire({
+            title: 'Error',
+            text: data.message || 'Failed to update cart',
+            icon: 'error',
+            confirmButtonColor: '#dc3545',
+            confirmButtonText: 'OK'
+          });
+        }
       }
     })
     .catch(error => {
       console.error('Error:', error);
+      // Show error message if on cart page
+      if (window.location.pathname.includes('cart.php')) {
+        Swal.fire({
+          title: 'Connection Error',
+          text: 'Unable to update cart. Please check your connection and try again.',
+          icon: 'error',
+          confirmButtonColor: '#dc3545',
+          confirmButtonText: 'OK'
+        });
+      }
     });
   }
 
@@ -526,18 +596,29 @@ if (!empty($_SESSION['cart'])) {
     }
   });
 
+  // Debounce mechanism for cart content loading
+  let cartContentTimeout;
+  
   // Function to load cart content from cart_content.php
   function loadCartContent() {
-      fetch('cart_content.php')
-          .then(response => response.text())
-          .then(html => {
-              document.getElementById('cartContent').innerHTML = html;
-              updateCartBadge(); // Update badge after loading content
-              updateCartFooter(); // Update footer with totals
-          })
-          .catch(error => {
-              console.error('Error loading cart content:', error);
-          });
+      // Clear any pending load
+      if (cartContentTimeout) {
+          clearTimeout(cartContentTimeout);
+      }
+      
+      // Debounce the loading
+      cartContentTimeout = setTimeout(() => {
+          fetch('cart_content.php')
+              .then(response => response.text())
+              .then(html => {
+                  document.getElementById('cartContent').innerHTML = html;
+                  // Only update footer - badge is updated separately
+                  updateCartFooter();
+              })
+              .catch(error => {
+                  console.error('Error loading cart content:', error);
+              });
+      }, 100); // 100ms debounce
   }
 
   // Function to update cart footer with totals
@@ -564,8 +645,8 @@ if (!empty($_SESSION['cart'])) {
 
   // Initial setup when the page loads
   document.addEventListener('DOMContentLoaded', () => {
-      loadCartContent(); // Load cart content on page load
-      updateCartBadge(); // Ensure badge is correct on load
+      // Only update badge on load - content loads when cart is opened
+      updateCartBadge();
   });
 </script>
 

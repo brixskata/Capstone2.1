@@ -9,9 +9,9 @@ if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'sup
     exit;
 }
 
-// Fetch categories, brands, suppliers, and UOM for dropdowns
+// Fetch categories, suppliers, and UOM for dropdowns
+// Note: Brands are set during restocking, not during product editing
 $categories = $pdo->query("SELECT category_id as id, category_name as name FROM categories")->fetchAll(PDO::FETCH_ASSOC);
-$brands = $pdo->query("SELECT id, name FROM brands WHERE is_archived = 0")->fetchAll(PDO::FETCH_ASSOC);
 $suppliers = $pdo->query("SELECT supplier_id as id, name FROM suppliers WHERE is_archive = 0")->fetchAll(PDO::FETCH_ASSOC);
 $uoms = $pdo->query("SELECT uom_id as id, name FROM uom WHERE is_archive = 0")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $markup_price = $cost_price * ($markup_percentage / 100); // Calculate markup amount from percentage
     $stock = $_POST['stock'];
     $category_id = $_POST['category_id'];
-    $brand_id = $_POST['brand_id'];
+    // Note: brand_id is not editable here, brands are managed through restocking
     $supplier_id = $_POST['supplier_id'];
     $uom_id = $_POST['uom_id'];
     $expiration_date = $_POST['expiration_date'];
@@ -48,9 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             // Update main product table
             $stmt = $pdo->prepare("UPDATE products 
-                SET product_name = ?, product_description = ?, category_id = ?, brand_id = ?, supplier_id = ?, uom_id = ?
+                SET product_name = ?, product_description = ?, category_id = ?, supplier_id = ?, uom_id = ?
                 WHERE product_id = ?");
-            $stmt->execute([$name, $description, $category_id, $brand_id, $supplier_id, $uom_id, $id]);
+            $stmt->execute([$name, $description, $category_id, $supplier_id, $uom_id, $id]);
             
             // Update pricing table
             $stmt = $pdo->prepare("UPDATE product_pricing 
@@ -81,9 +81,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             // Update main product table
             $stmt = $pdo->prepare("UPDATE products 
-                SET product_name = ?, product_description = ?, category_id = ?, brand_id = ?, supplier_id = ?, uom_id = ?
+                SET product_name = ?, product_description = ?, category_id = ?, supplier_id = ?, uom_id = ?
                 WHERE product_id = ?");
-            $stmt->execute([$name, $description, $category_id, $brand_id, $supplier_id, $uom_id, $id]);
+            $stmt->execute([$name, $description, $category_id, $supplier_id, $uom_id, $id]);
             
             // Update pricing table
             $stmt = $pdo->prepare("UPDATE product_pricing 
@@ -336,7 +336,7 @@ if (isset($_GET['id'])) {
                                    class="form-control">
                         </div>
 
-                        <!-- Category and Brand -->
+                        <!-- Category -->
                         <div class="col-md-6">
                             <label for="category_id" class="form-label">Category</label>
                             <select name="category_id" id="category_id" class="form-select" required>
@@ -347,16 +347,13 @@ if (isset($_GET['id'])) {
                                 <?php endforeach; ?>
                             </select>
                         </div>
-
+                        
+                        <!-- Note: Brand is managed through restocking, not here -->
                         <div class="col-md-6">
-                            <label for="brand_id" class="form-label">Brand</label>
-                            <select name="brand_id" id="brand_id" class="form-select" required>
-                                <?php foreach ($brands as $brand): ?>
-                                    <option value="<?= $brand['id'] ?>" <?= ($product['brand_id'] == $brand['id']) ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($brand['name']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                            <div class="alert alert-info mb-0">
+                                <i class="fa fa-info-circle me-2"></i>
+                                <small>Brand is set during restocking process</small>
+                            </div>
                         </div>
 
                         <!-- Supplier and UOM -->

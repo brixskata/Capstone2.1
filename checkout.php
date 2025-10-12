@@ -2,6 +2,8 @@
 <?php
 session_start();
 include 'includes/db.php';
+include 'includes/cart_manager.php';
+include 'includes/batch_manager.php';
 
 // Prevent caching
 header("Cache-Control: no-cache, no-store, must-revalidate");
@@ -55,58 +57,119 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 // Default address already fetched above for validation
 
 // Fetch the products in the cart with stock validation
-$cart_items = [];
+$checkout_cart_items = [];
 $total_price = 0;
 $stock_errors = [];
 
-foreach ($_SESSION['cart'] as $cart_key => $cart_item) {
-    // Handle both simple product_id keys and composite keys (product_id_unit_boxid)
+// Use CartManager to load cart data from database (same as cart_total.php)
+$cartManager = new CartManager($pdo);
+$batchManager = new BatchManager($pdo);
+$cart_data = $cartManager->loadCartFromDatabase($_SESSION['user_id']);
+
+foreach ($cart_data as $cart_key => $cart_item) {
+    // Extract product_id and brand_id from cart item
     $product_id = $cart_item['product_id'] ?? $cart_key;
     if (is_string($product_id) && strpos($product_id, '_') !== false) {
         $product_id = intval(explode('_', $product_id)[0]);
     }
     
-    // Use normalized structure to get product with pricing, UOM, and stock
-    $sql = "SELECT p.product_id, p.product_name AS name, p.product_description, 
-                   COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) as price,
-                   uom.name AS uom_name,
-                   COALESCE(ps.current_stock, 0) AS current_stock,
-                   (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) as image1
-            FROM products p 
-            LEFT JOIN product_pricing pp ON p.product_id = pp.product_id 
-            LEFT JOIN uom uom ON p.uom_id = uom.uom_id
-            LEFT JOIN product_stock ps ON p.product_id = ps.product_id
-            WHERE p.product_id = :product_id AND p.is_archive = 0";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':product_id', $product_id);
-    $stmt->execute();
-    $product = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($product) {
-        // Get quantity and unit information from cart item
-        $quantity = floatval($cart_item['quantity'] ?? 1);
-        $unit = $cart_item['unit'] ?? 'kilo';
-        $unit_price = floatval($product['price']); // Always use fresh database price
-        $box_id = $cart_item['box_id'] ?? null;
-        $weight = $cart_item['weight'] ?? null;
-        $current_stock = floatval($product['current_stock']);
+    $brand_id = $cart_item['brand_id'] ?? null;
+    if ($brand_id !== null) {
+        $brand_id = intval($brand_id);
+    }
+    
+    $quantity = floatval($cart_item['quantity'] ?? 1);
+    $unit = $cart_item['unit'] ?? 'kilo';
+    $batch_id = $cart_item['batch_id'] ?? null;
+    
+    // Use BatchManager to get proper stock availability
+    $available_stock = $batchManager->getCombinedStock($product_id, $brand_id);
+    
+    // Simple pricing query: unit_cost + markup_price = final_price
+    // First try brand-specific, then fallback to general pricing
+    $price_sql = "SELECT 
+        (COALESCE(pb.unit_cost, 0) + COALESCE(pp.markup_price, 0)) as final_price,
+        pb.batch_id,
+        pb.brand_id,
+        pb.quantity_remaining as brand_stock,
+        b.name as brand_name,
+        p.product_id,
+        p.product_name,
+        uom.name as uom_name,
+        (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) as image1
+    FROM products p
+    LEFT JOIN product_batches pb ON p.product_id = pb.product_id 
+        AND pb.brand_id = ?
+        AND pb.quantity_remaining > 0 
+        AND pb.is_active = 1
+    LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+    LEFT JOIN brands b ON pb.brand_id = b.id
+    LEFT JOIN uom ON p.uom_id = uom.uom_id
+    WHERE p.product_id = ? AND p.is_archive = 0
+    ORDER BY pb.expiration_date ASC
+    LIMIT 1";
+    
+    $stmt = $pdo->prepare($price_sql);
+    $stmt->execute([$brand_id, $product_id]);
+    $product_data = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    // If no brand-specific batch found, try general pricing
+    if (!$product_data || !$product_data['final_price'] || $product_data['final_price'] <= 0) {
+        $general_sql = "SELECT 
+            (COALESCE(pb.unit_cost, 0) + COALESCE(pp.markup_price, 0)) as final_price,
+            pb.batch_id,
+            pb.brand_id,
+            pb.quantity_remaining as brand_stock,
+            b.name as brand_name,
+            p.product_id,
+            p.product_name,
+            uom.name as uom_name,
+            (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) as image1
+        FROM products p
+        LEFT JOIN product_batches pb ON p.product_id = pb.product_id 
+            AND pb.quantity_remaining > 0 
+            AND pb.is_active = 1
+        LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        LEFT JOIN brands b ON pb.brand_id = b.id
+        LEFT JOIN uom ON p.uom_id = uom.uom_id
+        WHERE p.product_id = ? AND p.is_archive = 0
+        ORDER BY pb.expiration_date ASC
+        LIMIT 1";
         
-        // Check stock availability
-        if ($current_stock < $quantity) {
-            $stock_errors[] = "Insufficient stock for {$product['name']}. Available: {$current_stock}, Requested: {$quantity}";
+        $stmt = $pdo->prepare($general_sql);
+        $stmt->execute([$product_id]);
+        $product_data = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    
+    
+    if ($product_data && $product_data['final_price'] > 0) {
+        $final_price = floatval($product_data['final_price']);
+        $current_stock = floatval($product_data['brand_stock']);
+        
+        // Check stock availability using BatchManager
+        if ($available_stock < $quantity) {
+            $stock_errors[] = "Insufficient stock for {$product_data['product_name']}. Available: {$available_stock}, Requested: {$quantity}";
         }
         
-        $cart_items[] = [
-            'product' => $product,
+        // Build cart item with all necessary data
+        $checkout_cart_items[] = [
+            'product' => [
+                'product_id' => $product_data['product_id'],
+                'name' => $product_data['product_name'],
+                'price' => $final_price,
+                'uom_name' => $product_data['uom_name'],
+                'current_stock' => $available_stock, // Use the proper available stock
+                'image1' => $product_data['image1']
+            ],
             'quantity' => $quantity,
             'unit' => $unit,
-            'unit_price' => $unit_price,
-            'box_id' => $box_id,
-            'weight' => $weight,
-            'cart_key' => $cart_key,
-            'current_stock' => $current_stock
+            'brand_id' => intval($product_data['brand_id']),
+            'brand_name' => $product_data['brand_name'],
+            'batch_id' => intval($product_data['batch_id']),
+            'cart_key' => $cart_key
         ];
-        $total_price += $unit_price * $quantity;
+        
+        $total_price += $final_price * $quantity;
     }
 }
 
@@ -643,7 +706,7 @@ if (empty($_SESSION['selected_address_id']) && !empty($all_addresses)) {
             </div>
         <?php endif; ?>
 
-        <?php if (empty($cart_items)): ?>
+        <?php if (empty($checkout_cart_items)): ?>
             <div class="checkout-container">
                 <div class="empty-cart">
                     <i class="fas fa-shopping-cart"></i>
@@ -679,12 +742,15 @@ if (empty($_SESSION['selected_address_id']) && !empty($all_addresses)) {
                                 <div>Subtotal</div>
                             </div>
 
-                            <?php foreach ($cart_items as $item): ?>
+                            <?php foreach ($checkout_cart_items as $item): ?>
                                 <?php 
-                                    // Debug: Check what's in the item array
-                                    // echo "<!-- DEBUG: " . print_r($item, true) . " -->";
-                                    
                                     $displayName = $item['product']['name'] ?? 'Item';
+                                    
+                                    // Add brand name to display if available
+                                    if (!empty($item['brand_name'])) {
+                                        $displayName .= ' - ' . $item['brand_name'];
+                                    }
+                                    
                                     $unitPrice = $item['product']['price'] ?? 0; // Always use fresh database price
                                     $qty = $item['quantity'] ?? 0;
                                     $unit = $item['unit'] ?? 'kilo';
@@ -692,6 +758,7 @@ if (empty($_SESSION['selected_address_id']) && !empty($all_addresses)) {
                                     $boxId = $item['box_id'] ?? null;
                                     $weight = $item['weight'] ?? null;
                                     $lineSubtotal = $unitPrice * $qty;
+                                    
                                     
                                     // Debug: Check image field
                                     $imageField = $item['product']['image1'] ?? '';
@@ -961,7 +1028,7 @@ if (empty($_SESSION['selected_address_id']) && !empty($all_addresses)) {
                                 <input type="hidden" name="payment_proof_hidden" id="payment_proof_hidden" value="">
                             </div>
 
-                            <button type="submit" class="btn place-order-btn w-100" onclick="return debugFormSubmission()">
+                            <button type="button" class="btn place-order-btn w-100" onclick="confirmPlaceOrder(event)">
                                 <i class="fas fa-lock me-2"></i>Place Order Securely
                             </button>
                         </form>
@@ -995,9 +1062,15 @@ if (empty($_SESSION['selected_address_id']) && !empty($all_addresses)) {
                             <!-- Items Breakdown -->
                             <div class="mb-3">
                                 <div class="small fw-bold text-muted mb-2">Items</div>
-                                <?php foreach ($cart_items as $item): ?>
+                                <?php foreach ($checkout_cart_items as $item): ?>
                                     <?php 
                                         $displayName = $item['product']['name'] ?? 'Item';
+                                        
+                                        // Add brand name to display if available
+                                        if (!empty($item['brand_name'])) {
+                                            $displayName .= ' - ' . $item['brand_name'];
+                                        }
+                                        
                                         $unitPrice = $item['product']['price'] ?? 0; // Always use fresh database price
                                         $qty = $item['quantity'] ?? 0;
                                         $unit = $item['unit'] ?? 'kilo';
@@ -1005,6 +1078,7 @@ if (empty($_SESSION['selected_address_id']) && !empty($all_addresses)) {
                                         $boxId = $item['box_id'] ?? null;
                                         $weight = $item['weight'] ?? null;
                                         $lineSubtotal = $unitPrice * $qty;
+                                        
                                         
                                         // Format display name with unit info
                                         if ($unit === 'piece') {
@@ -1482,6 +1556,144 @@ if (empty($_SESSION['selected_address_id']) && !empty($all_addresses)) {
             }
         }
         
+        // Confirm order placement with SweetAlert2
+        function confirmPlaceOrder(event) {
+            if (event) event.preventDefault();
+            
+            const form = document.querySelector('form[action="place_order.php"]');
+            
+            // Validate required fields before showing confirmation
+            const paymentMethod = document.querySelector('input[name="payment_method"]:checked');
+            const deliveryOption = document.querySelector('input[name="delivery_option"]:checked');
+            
+            if (!deliveryOption) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Missing Information',
+                    text: 'Please select a delivery option (Pickup or Delivery)',
+                    confirmButtonColor: '#7F1734'
+                });
+                return;
+            }
+            
+            if (!paymentMethod) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Missing Information',
+                    text: 'Please select a payment method',
+                    confirmButtonColor: '#7F1734'
+                });
+                return;
+            }
+            
+            // If delivery is selected, check if address is selected
+            if (deliveryOption.value === 'delivery') {
+                const addressOption = document.querySelector('input[name="address_option"]:checked');
+                if (!addressOption) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Missing Information',
+                        text: 'Please select or enter a delivery address',
+                        confirmButtonColor: '#7F1734'
+                    });
+                    return;
+                }
+                
+                // If new address selected, validate the fields
+                if (addressOption.value === 'new') {
+                    const deliveryAddress = document.querySelector('input[name="delivery_address"]');
+                    const deliveryCity = document.querySelector('input[name="delivery_city"]');
+                    const deliveryPostal = document.querySelector('input[name="delivery_postal_code"]');
+                    
+                    if (!deliveryAddress.value || !deliveryCity.value || !deliveryPostal.value) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Missing Information',
+                            text: 'Please fill in all required address fields',
+                            confirmButtonColor: '#7F1734'
+                        });
+                        return;
+                    }
+                }
+            }
+            
+            // If GCash is selected, validate payment proof
+            if (paymentMethod.value === 'GCash') {
+                const paymentProofField = document.querySelector('input[name="payment_proof"]');
+                const transactionIdField = document.querySelector('input[name="gcash_transaction_id"]');
+                
+                if (!paymentProofField.files || paymentProofField.files.length === 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Missing Information',
+                        text: 'Please upload payment proof for GCash transactions',
+                        confirmButtonColor: '#7F1734'
+                    });
+                    return;
+                }
+                
+                if (!transactionIdField.value || transactionIdField.value.length !== 13) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Missing Information',
+                        text: 'Please enter a valid 13-digit GCash transaction ID',
+                        confirmButtonColor: '#7F1734'
+                    });
+                    return;
+                }
+            }
+            
+            // Get the actual total from the hidden input
+            const totalPrice = document.getElementById('final-total').value;
+            const paymentMethodText = paymentMethod.value;
+            const deliveryOptionText = deliveryOption.value;
+            
+            // Show confirmation dialog
+            Swal.fire({
+                title: 'Confirm Order Placement',
+                html: `
+                    <div class="text-start">
+                        <p><strong>Payment Method:</strong> ${paymentMethodText}</p>
+                        <p><strong>Delivery:</strong> ${deliveryOptionText === 'delivery' ? 'Delivery' : 'Pickup'}</p>
+                        <p><strong>Total Amount:</strong> ₱${parseFloat(totalPrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                        <hr>
+                        <p class="text-muted">Are you sure you want to place this order?</p>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#7F1734',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fas fa-check me-2"></i>Yes, Place Order',
+                cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+                customClass: {
+                    popup: 'swal2-popup',
+                    title: 'swal2-title',
+                    htmlContainer: 'swal2-html-container',
+                    confirmButton: 'swal2-confirm',
+                    cancelButton: 'swal2-cancel'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Show loading state
+                    Swal.fire({
+                        title: 'Processing Order...',
+                        text: 'Please wait while we process your order.',
+                        icon: 'info',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        showConfirmButton: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    // Submit the form
+                    form.submit();
+                }
+            });
+        }
+
         // Debug function to check form data before submission
         function debugFormSubmission() {
             // Copy values from visible fields to hidden fields before submission

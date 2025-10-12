@@ -283,12 +283,29 @@ if ($payment_method && $payment_method !== 'COD') {
     }
 }
 
+// Initialize batch manager
+$batchManager = new BatchManager($pdo);
+
+// Load cart data from database using CartManager (same as checkout.php)
+include_once 'includes/cart_manager.php';
+$cartManager = new CartManager($pdo);
+$cart_data = $cartManager->loadCartFromDatabase($_SESSION['user_id']);
+
+// Debug: Log cart data
+error_log("Cart data loaded: " . json_encode($cart_data));
+error_log("Cart data count: " . count($cart_data));
+
+// Debug: Log each cart item structure
+foreach ($cart_data as $cart_key => $cart_item) {
+    error_log("Cart item $cart_key: " . json_encode($cart_item));
+}
+
 // Start transaction for atomic stock management
 $pdo->beginTransaction();
 
 try {
     // Validate stock availability with row locking to prevent race conditions
-    foreach ($_SESSION['cart'] as $cart_key => $cart_item) {
+    foreach ($cart_data as $cart_key => $cart_item) {
         // Handle both simple product_id keys and composite keys (product_id_unit_boxid)
         $product_id = $cart_item['product_id'] ?? $cart_key;
         if (is_string($product_id) && strpos($product_id, '_') !== false) {
@@ -296,15 +313,36 @@ try {
         }
         
         $quantity = floatval($cart_item['quantity'] ?? 1);
+        $brand_id = $cart_item['brand_id'] ?? null;
+        if ($brand_id !== null) {
+            $brand_id = intval($brand_id);
+        }
         
-        // Check current stock availability with row locking
-        $sql = "SELECT current_stock FROM product_stock WHERE product_id = :product_id FOR UPDATE";
-        $stmt = $pdo->prepare($sql);
-        $stmt->bindParam(':product_id', $product_id);
-        $stmt->execute();
-        $stock_data = $stmt->fetch(PDO::FETCH_ASSOC);
+        error_log("STOCK VALIDATION - Product: $product_id, Brand: $brand_id, Quantity: $quantity");
         
-        if (!$stock_data || floatval($stock_data['current_stock']) < $quantity) {
+        // Check current stock availability with brand-specific logic
+        if ($brand_id) {
+            // Check brand-specific stock
+            $sql = "SELECT COALESCE(SUM(quantity_remaining), 0) as stock FROM product_batches WHERE product_id = :product_id AND brand_id = :brand_id AND is_active = 1 FOR UPDATE";
+            $stmt = $pdo->prepare($sql);
+            $stmt->bindParam(':product_id', $product_id);
+            $stmt->bindParam(':brand_id', $brand_id);
+            $stmt->execute();
+            $stock_data = $stmt->fetch(PDO::FETCH_ASSOC);
+            $available_stock = floatval($stock_data['stock'] ?? 0);
+            error_log("Brand-specific stock check - Available: $available_stock");
+        } else {
+            // Check general product stock
+            $sql = "SELECT current_stock FROM product_stock WHERE product_id = :product_id FOR UPDATE";
+            $stmt = $pdo->prepare($sql);
+            $stmt->bindParam(':product_id', $product_id);
+            $stmt->execute();
+            $stock_data = $stmt->fetch(PDO::FETCH_ASSOC);
+            $available_stock = floatval($stock_data['current_stock'] ?? 0);
+            error_log("General stock check - Available: $available_stock");
+        }
+        
+        if ($available_stock < $quantity) {
             $pdo->rollBack();
             $_SESSION['error'] = "Insufficient stock for one or more products. Please update your cart and try again.";
             header('Location: checkout.php');
@@ -312,11 +350,8 @@ try {
         }
     }
 
-// Initialize batch manager
-$batchManager = new BatchManager($pdo);
-
     // Insert order items into the order_items table and consume from batches
-    foreach ($_SESSION['cart'] as $cart_key => $cart_item) {
+    foreach ($cart_data as $cart_key => $cart_item) {
         // Handle both simple product_id keys and composite keys (product_id_unit_boxid)
         $product_id = $cart_item['product_id'] ?? $cart_key;
         if (is_string($product_id) && strpos($product_id, '_') !== false) {
@@ -325,33 +360,85 @@ $batchManager = new BatchManager($pdo);
         
         $quantity = floatval($cart_item['quantity'] ?? 1);
         $unit_price = floatval($cart_item['unit_price'] ?? 0);
+        $brand_id = $cart_item['brand_id'] ?? null;
+        $batch_id = $cart_item['batch_id'] ?? null;
 
-        // Step 1: Check if the product exists and get its price
+        error_log("ORDER PROCESSING - Product: $product_id, Brand: $brand_id, Batch: $batch_id, Quantity: $quantity, Unit Price: $unit_price");
+
+        // Step 1: Calculate price using the same logic as checkout.php
         if ($unit_price == 0) {
-            $stmt = $pdo->prepare("SELECT p.product_id, COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) as price FROM products p 
-                                   LEFT JOIN product_pricing pp ON p.product_id = pp.product_id 
-                                   WHERE p.product_id = :product_id AND p.is_archive = 0");
-            $stmt->bindParam(':product_id', $product_id);
-            $stmt->execute();
-            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            // First try brand-specific pricing
+            if ($brand_id) {
+                $price_sql = "SELECT 
+                    (COALESCE(pb.unit_cost, 0) + COALESCE(pp.markup_price, 0)) as final_price
+                FROM products p
+                LEFT JOIN product_batches pb ON p.product_id = pb.product_id 
+                    AND pb.brand_id = ?
+                    AND pb.quantity_remaining > 0 
+                    AND pb.is_active = 1
+                LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+                WHERE p.product_id = ? AND p.is_archive = 0
+                ORDER BY pb.expiration_date ASC
+                LIMIT 1";
+                
+                $stmt = $pdo->prepare($price_sql);
+                $stmt->execute([$brand_id, $product_id]);
+                $product_data = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($product_data && $product_data['final_price'] > 0) {
+                    $unit_price = floatval($product_data['final_price']);
+                }
+            }
             
-            if ($product) {
-                $unit_price = floatval($product['price']);
+            // If no brand-specific price found, try general pricing
+            if ($unit_price == 0) {
+                $general_sql = "SELECT 
+                    (COALESCE(pb.unit_cost, 0) + COALESCE(pp.markup_price, 0)) as final_price
+                FROM products p
+                LEFT JOIN product_batches pb ON p.product_id = pb.product_id 
+                    AND pb.quantity_remaining > 0 
+                    AND pb.is_active = 1
+                LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+                WHERE p.product_id = ? AND p.is_archive = 0
+                ORDER BY pb.expiration_date ASC
+                LIMIT 1";
+                
+                $stmt = $pdo->prepare($general_sql);
+                $stmt->execute([$product_id]);
+                $product_data = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($product_data && $product_data['final_price'] > 0) {
+                    $unit_price = floatval($product_data['final_price']);
+                }
             }
         }
 
         // Step 2: If the product exists, insert it into the order_items table
+        error_log("ORDER ITEM INSERTION - Product: $product_id, Unit Price: $unit_price, Brand ID: $brand_id, Batch ID: $batch_id, Quantity: $quantity");
+        
         if ($unit_price > 0) {
-            // Insert order items with price
-            $sql = "INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (:order_id, :product_id, :quantity, :price)";
+            // Extract brand_id and batch_id (ensure they're integers)
+            if ($brand_id !== null) {
+                $brand_id = intval($brand_id);
+            }
+            if ($batch_id !== null) {
+                $batch_id = intval($batch_id);
+            }
+            
+            // Insert order items with price, brand, and batch information
+            $sql = "INSERT INTO order_items (order_id, product_id, brand_id, batch_id, quantity, price) VALUES (:order_id, :product_id, :brand_id, :batch_id, :quantity, :price)";
             $stmt = $pdo->prepare($sql);
             $stmt->bindParam(':order_id', $order_id);
             $stmt->bindParam(':product_id', $product_id);
+            $stmt->bindParam(':brand_id', $brand_id);
+            $stmt->bindParam(':batch_id', $batch_id);
             $stmt->bindParam(':quantity', $quantity);
             $stmt->bindParam(':price', $unit_price);
             $stmt->execute();
+            error_log("ORDER ITEM INSERTED SUCCESSFULLY - Product: $product_id, Order: $order_id");
 
-            // Consume stock from batches using FIFO
+            // Consume stock from batches using FIFO with brand-specific logic
+            error_log("Calling consumeStock with: product_id=$product_id, quantity=$quantity, brand_id=$brand_id");
             $batches_used = $batchManager->consumeStock(
                 $product_id, 
                 $quantity, 
@@ -359,8 +446,21 @@ $batchManager = new BatchManager($pdo);
                 'order', 
                 $order_id, 
                 $_SESSION['user_id'], 
-                "Order #{$order_id} - Customer purchase"
+                "Order #{$order_id} - Customer purchase",
+                null,      // $supplier_id parameter (position 8)
+                $brand_id  // $brand_id parameter (position 9)
             );
+            
+            // Debug: Log batch consumption
+            error_log("Stock consumption - Product: $product_id, Brand: $brand_id, Quantity: $quantity");
+            error_log("Batches used: " . json_encode($batches_used));
+            
+            // Debug: Check if batches were actually consumed
+            if (empty($batches_used)) {
+                error_log("WARNING: No batches were consumed for product $product_id with brand $brand_id");
+            } else {
+                error_log("SUCCESS: " . count($batches_used) . " batches consumed for product $product_id");
+            }
             
             // Update product stock in normalized structure
             $sql = "UPDATE product_stock SET current_stock = current_stock - :quantity WHERE product_id = :product_id";
@@ -396,10 +496,18 @@ $batchManager = new BatchManager($pdo);
     
     // Commit the transaction
     $pdo->commit();
+    error_log("Order processing completed successfully. Order ID: $order_id");
+    
+    // Clear cart from database using CartManager (after transaction is committed)
+    $cartManager->clearCartFromDatabase($_SESSION['user_id']);
     
 } catch (Exception $e) {
-    // Rollback transaction on any error
-    $pdo->rollBack();
+    // Rollback transaction on any error (only if transaction is active)
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log("Order processing error: " . $e->getMessage());
+    error_log("Order processing error trace: " . $e->getTraceAsString());
     $_SESSION['error'] = "Order failed: " . $e->getMessage();
     header('Location: checkout.php');
     exit;

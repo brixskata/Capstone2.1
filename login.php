@@ -40,6 +40,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                         $_SESSION['role'] = $roleData ? $roleData['role'] : 'customer';
                     }
 
+                    // Load and merge cart from database for customers
+                    if ($_SESSION['role'] === 'customer') {
+                        include_once 'includes/cart_manager.php';
+                        $cartManager = new CartManager($pdo);
+                        
+                        // Get current session cart (guest cart)
+                        $session_cart = $_SESSION['cart'] ?? [];
+                        
+                        // Load cart from database and merge
+                        $merged_cart = $cartManager->mergeCarts($_SESSION['user_id'], $session_cart);
+                        
+                        // Update session with merged cart
+                        $_SESSION['cart'] = $merged_cart;
+                        
+                        // Save merged cart to database
+                        $cartManager->saveCartToDatabase($_SESSION['user_id'], $merged_cart);
+                    }
+
                     // Redirect based on role
                     if (in_array($_SESSION['role'], ['admin', 'super_admin'])) {
                         header('Location: admin/admin_dashboard2.php');
