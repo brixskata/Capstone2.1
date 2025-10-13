@@ -330,6 +330,15 @@ try {
           <span>Promo Messages</span>
           <div class="nav-indicator"></div>
         </a>
+        <?php if (hasModuleAccess($pdo, 'users')): ?>
+        <a href="gcash_settings.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'gcash_settings.php' ? 'active' : ''; ?>">
+          <div class="nav-icon">
+            <i class="fas fa-mobile-alt"></i>
+          </div>
+          <span>GCash Settings</span>
+          <div class="nav-indicator"></div>
+        </a>
+        <?php endif; ?>
         <?php if (isSuperAdmin($pdo)): ?>
         <a href="user_permissions.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'user_permissions.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
@@ -343,17 +352,17 @@ try {
     </div>
     <?php endif; ?>
 
-    <!-- Analytics Section -->
+    <!-- Monitoring Section -->
     <?php if ($userHasModulePermissions && (hasModuleAccess($pdo, 'reports') || hasModuleAccess($pdo, 'system'))): ?>
     <div class="nav-section">
-      <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#analyticsDropdown" role="button">
+      <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#monitoringDropdown" role="button">
         <div class="section-icon">
           <i class="fas fa-chart-line"></i>
         </div>
-        <span>Analytics</span>
+        <span>Monitoring</span>
         <i class="fas fa-chevron-down dropdown-arrow"></i>
       </div>
-      <div class="nav-dropdown collapse show" id="analyticsDropdown">
+      <div class="nav-dropdown collapse show" id="monitoringDropdown">
         <?php if (hasModuleAccess($pdo, 'reports')): ?>
         <a href="reports.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>">
           <div class="nav-icon">

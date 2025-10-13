@@ -1,9 +1,17 @@
 <?php
 session_start();
 include '../includes/db.php';
+include_once '../includes/permissions.php';
 
-// Ensure user is logged in and has admin role
-if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+// Ensure user is logged in and not a customer
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login_admin.php");
+    exit;
+}
+
+// Check if user is not a customer
+if (isCustomer($pdo)) {
+    $_SESSION['error'] = "You don't have permission to access this page.";
     header("Location: login_admin.php");
     exit;
 }
@@ -36,6 +44,11 @@ function getDateRange($type) {
 $reportType = $_GET['type'] ?? 'sales';
 $period = $_GET['period'] ?? 'daily';
 
+// Check for custom date range
+$customFrom = $_GET['custom_from'] ?? null;
+$customTo = $_GET['custom_to'] ?? null;
+$isCustomRange = $customFrom && $customTo;
+
 // Validate report type
 $validTypes = ['sales', 'inventory', 'orders', 'returns'];
 if (!in_array($reportType, $validTypes)) {
@@ -50,15 +63,53 @@ if (!in_array($period, $validPeriods)) {
 
 // Get basic stats for overview with error handling
 try {
-    $totalSales = $pdo->query("
+    // Determine date range for analytics
+    if ($isCustomRange) {
+        $analyticsStart = $customFrom . ' 00:00:00';
+        $analyticsEnd = $customTo . ' 23:59:59';
+    } else {
+        list($analyticsStart, $analyticsEnd) = getDateRange($period);
+    }
+    
+    // Calculate filtered analytics based on date range
+    $totalSales = $pdo->prepare("
         SELECT COALESCE(SUM(o.total_price), 0) 
         FROM orders o
         INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
-        WHERE os.status_name = 'Completed'
-    ")->fetchColumn();
+        WHERE os.status_name = 'Completed' AND o.created_at BETWEEN ? AND ?
+    ");
+    $totalSales->execute([$analyticsStart, $analyticsEnd]);
+    $totalSales = $totalSales->fetchColumn();
     
-    $totalOrders = $pdo->query("SELECT COUNT(*) FROM orders")->fetchColumn();
+    $totalOrders = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM orders o 
+        WHERE o.created_at BETWEEN ? AND ?
+    ");
+    $totalOrders->execute([$analyticsStart, $analyticsEnd]);
+    $totalOrders = $totalOrders->fetchColumn();
     
+    // Get pending orders count for the date range
+    $pendingOrders = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM orders o
+        INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+        WHERE os.status_name = 'Pending' AND o.created_at BETWEEN ? AND ?
+    ");
+    $pendingOrders->execute([$analyticsStart, $analyticsEnd]);
+    $pendingOrders = $pendingOrders->fetchColumn();
+    
+    // Get completed orders count for the date range
+    $completedOrders = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM orders o
+        INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+        WHERE os.status_name = 'Completed' AND o.created_at BETWEEN ? AND ?
+    ");
+    $completedOrders->execute([$analyticsStart, $analyticsEnd]);
+    $completedOrders = $completedOrders->fetchColumn();
+    
+    // These don't change with date range, so keep them as all-time totals
     $totalCustomers = $pdo->query("
         SELECT COUNT(*) 
         FROM users u
@@ -71,6 +122,8 @@ try {
 } catch (Exception $e) {
     $totalSales = 0;
     $totalOrders = 0;
+    $pendingOrders = 0;
+    $completedOrders = 0;
     $totalCustomers = 0;
     $totalProducts = 0;
     $error_message = "Error loading statistics: " . $e->getMessage();
@@ -83,7 +136,12 @@ $returnData = [];
 $ordersData = [];
 
 if ($reportType === 'sales') {
-    list($start, $end) = getDateRange($period);
+    if ($isCustomRange) {
+        $start = $customFrom . ' 00:00:00';
+        $end = $customTo . ' 23:59:59';
+    } else {
+        list($start, $end) = getDateRange($period);
+    }
     $stmt = $pdo->prepare("
         SELECT o.orders_id as id, u.username as customer, o.total_price, o.created_at as delivered_at
         FROM orders o
@@ -113,7 +171,12 @@ if ($reportType === 'sales') {
     // Returns functionality - create empty array since returns table doesn't exist yet
     $returnData = [];
 } elseif ($reportType === 'orders') {
-    list($start, $end) = getDateRange($period);
+    if ($isCustomRange) {
+        $start = $customFrom . ' 00:00:00';
+        $end = $customTo . ' 23:59:59';
+    } else {
+        list($start, $end) = getDateRange($period);
+    }
     $stmt = $pdo->prepare("
         SELECT o.orders_id as id, u.username as customer, o.total_price, os.status_name as status, o.created_at
         FROM orders o
@@ -384,7 +447,7 @@ if ($reportType === 'sales') {
             </div>
             <div class="card-content">
               <h3 class="card-number">₱<?php echo number_format($totalSales, 2); ?></h3>
-              <p class="card-label">Total Sales</p>
+              <p class="card-label"><?= $isCustomRange ? 'Sales (Custom Range)' : 'Sales (' . ucfirst($period) . ')' ?></p>
             </div>
           </div>
         </div>
@@ -396,7 +459,7 @@ if ($reportType === 'sales') {
             </div>
             <div class="card-content">
               <h3 class="card-number"><?php echo $totalOrders; ?></h3>
-              <p class="card-label">Total Orders</p>
+              <p class="card-label"><?= $isCustomRange ? 'Orders (Custom Range)' : 'Orders (' . ucfirst($period) . ')' ?></p>
             </div>
           </div>
         </div>
@@ -404,11 +467,11 @@ if ($reportType === 'sales') {
         <div class="col-lg-3 col-md-6">
           <div class="analytics-card">
             <div class="card-icon">
-              <i class="fa fa-users"></i>
+              <i class="fa fa-clock"></i>
             </div>
             <div class="card-content">
-              <h3 class="card-number"><?php echo $totalCustomers; ?></h3>
-              <p class="card-label">Total Customers</p>
+              <h3 class="card-number"><?php echo $pendingOrders; ?></h3>
+              <p class="card-label"><?= $isCustomRange ? 'Pending (Custom Range)' : 'Pending (' . ucfirst($period) . ')' ?></p>
             </div>
           </div>
         </div>
@@ -416,11 +479,11 @@ if ($reportType === 'sales') {
         <div class="col-lg-3 col-md-6">
           <div class="analytics-card">
             <div class="card-icon">
-              <i class="fa fa-box"></i>
+              <i class="fa fa-check-circle"></i>
             </div>
             <div class="card-content">
-              <h3 class="card-number"><?php echo $totalProducts; ?></h3>
-              <p class="card-label">Total Products</p>
+              <h3 class="card-number"><?php echo $completedOrders; ?></h3>
+              <p class="card-label"><?= $isCustomRange ? 'Completed (Custom Range)' : 'Completed (' . ucfirst($period) . ')' ?></p>
             </div>
           </div>
         </div>
@@ -468,10 +531,23 @@ if ($reportType === 'sales') {
                 <div class="col-md-8">
                   <div class="row g-2">
                     <?php if (in_array($reportType, ['sales', 'orders', 'returns'])): ?>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
+                      <select id="datePreset" class="form-select form-select-sm">
+                        <option value="">Quick Filter</option>
+                        <option value="today">Today</option>
+                        <option value="yesterday">Yesterday</option>
+                        <option value="thisweek">This Week</option>
+                        <option value="lastweek">Last Week</option>
+                        <option value="thismonth">This Month</option>
+                        <option value="lastmonth">Last Month</option>
+                        <option value="thisyear">This Year</option>
+                        <option value="custom">Custom Range</option>
+                      </select>
+                    </div>
+                    <div class="col-md-2">
                       <input type="date" id="dateFrom" class="form-control form-control-sm" placeholder="From Date">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                       <input type="date" id="dateTo" class="form-control form-control-sm" placeholder="To Date">
                     </div>
                     <?php endif; ?>
@@ -529,7 +605,7 @@ if ($reportType === 'sales') {
             <div class="d-flex justify-content-between align-items-center">
               <h5 class="fw-bold mb-0 text-dark">
                 <i class="fa fa-chart-line me-2"></i>
-                Sales Report (<?= ucfirst($period) ?>)
+                Sales Report (<?= $isCustomRange ? 'Custom Range: ' . $customFrom . ' to ' . $customTo : ucfirst($period) ?>)
               </h5>
               <a href="generate_report_pdf.php?type=sales&period=<?= $period ?>" class="btn btn-danger">
                 <i class="fa fa-file-pdf me-1"></i>Generate PDF
@@ -615,7 +691,7 @@ if ($reportType === 'sales') {
             <div class="d-flex justify-content-between align-items-center">
               <h5 class="fw-bold mb-0 text-dark">
                 <i class="fa fa-shopping-bag me-2"></i>
-                Orders Report (<?= ucfirst($period) ?>)
+                Orders Report (<?= $isCustomRange ? 'Custom Range: ' . $customFrom . ' to ' . $customTo : ucfirst($period) ?>)
               </h5>
               <a href="generate_report_pdf.php?type=orders&period=<?= $period ?>" class="btn btn-danger">
                 <i class="fa fa-file-pdf me-1"></i>Generate PDF
@@ -853,7 +929,53 @@ if ($reportType === 'sales') {
       const searchInput = document.getElementById('searchFilter');
       const dateFromInput = document.getElementById('dateFrom');
       const dateToInput = document.getElementById('dateTo');
+      const datePresetSelect = document.getElementById('datePreset');
       const reportType = '<?= $reportType ?>';
+      
+      // Initialize date inputs based on current period or custom range
+      function initializeDateInputs() {
+        const today = new Date();
+        const currentPeriod = '<?= $period ?>';
+        const customFrom = '<?= $customFrom ?? '' ?>';
+        const customTo = '<?= $customTo ?? '' ?>';
+        
+        // If we have custom dates, use them
+        if (customFrom && customTo) {
+          if (dateFromInput) dateFromInput.value = customFrom;
+          if (dateToInput) dateToInput.value = customTo;
+          return;
+        }
+        
+        // Otherwise use period-based dates
+        if (currentPeriod === 'daily') {
+          const todayStr = today.toISOString().split('T')[0];
+          if (dateFromInput) dateFromInput.value = todayStr;
+          if (dateToInput) dateToInput.value = todayStr;
+        } else if (currentPeriod === 'weekly') {
+          const startOfWeek = new Date(today);
+          startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+          const endOfWeek = new Date(startOfWeek);
+          endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+          
+          if (dateFromInput) dateFromInput.value = startOfWeek.toISOString().split('T')[0];
+          if (dateToInput) dateToInput.value = endOfWeek.toISOString().split('T')[0];
+        } else if (currentPeriod === 'monthly') {
+          const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+          const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          
+          if (dateFromInput) dateFromInput.value = startOfMonth.toISOString().split('T')[0];
+          if (dateToInput) dateToInput.value = endOfMonth.toISOString().split('T')[0];
+        } else if (currentPeriod === 'yearly') {
+          const startOfYear = new Date(today.getFullYear(), 0, 1);
+          const endOfYear = new Date(today.getFullYear(), 11, 31);
+          
+          if (dateFromInput) dateFromInput.value = startOfYear.toISOString().split('T')[0];
+          if (dateToInput) dateToInput.value = endOfYear.toISOString().split('T')[0];
+        }
+      }
+      
+      // Initialize date inputs
+      initializeDateInputs();
       
       // Get all table rows (excluding header and footer)
       function getTableRows() {
@@ -869,7 +991,7 @@ if ($reportType === 'sales') {
         // Format: "Dec 15, 2023 14:30" or "Dec 15, 2023"
         const cleanDate = dateString.trim();
         
-        // Try to parse the date
+        // Try to parse the date directly first
         let date = new Date(cleanDate);
         
         // If parsing failed, try alternative formats
@@ -877,6 +999,25 @@ if ($reportType === 'sales') {
           // Try format: "M d, Y H:i" -> "M d, Y"
           const dateOnly = cleanDate.split(' ').slice(0, 3).join(' ');
           date = new Date(dateOnly);
+        }
+        
+        // If still failed, try manual parsing for "Dec 15, 2023" format
+        if (isNaN(date.getTime())) {
+          const monthNames = {
+            'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+            'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+          };
+          
+          const parts = cleanDate.split(' ');
+          if (parts.length >= 3) {
+            const month = monthNames[parts[0]];
+            const day = parseInt(parts[1].replace(',', ''));
+            const year = parseInt(parts[2]);
+            
+            if (month !== undefined && !isNaN(day) && !isNaN(year)) {
+              date = new Date(year, month, day);
+            }
+          }
         }
         
         // If still failed, return epoch time
@@ -997,7 +1138,16 @@ if ($reportType === 'sales') {
           
           // Date range filter (only for reports with dates)
           if (shouldShow && (dateFrom || dateTo) && in_array(reportType, ['sales', 'orders', 'returns'])) {
-            const dateColumnIndex = reportType === 'sales' ? 3 : (reportType === 'orders' ? 4 : 4);
+            // Determine the correct date column index based on report type
+            let dateColumnIndex;
+            if (reportType === 'sales') {
+              dateColumnIndex = 3; // Date column for sales report
+            } else if (reportType === 'orders') {
+              dateColumnIndex = 4; // Date column for orders report
+            } else if (reportType === 'returns') {
+              dateColumnIndex = 4; // Date column for returns report
+            }
+            
             const dateCell = row.cells[dateColumnIndex];
             
             if (dateCell) {
@@ -1025,12 +1175,85 @@ if ($reportType === 'sales') {
         return haystack.indexOf(needle) !== -1;
       }
       
+      // Set preset date ranges
+      function setPresetDates(preset) {
+        const today = new Date();
+        let fromDate, toDate;
+        
+        switch (preset) {
+          case 'today':
+            fromDate = toDate = today.toISOString().split('T')[0];
+            break;
+          case 'yesterday':
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
+            fromDate = toDate = yesterday.toISOString().split('T')[0];
+            break;
+          case 'thisweek':
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(today.getDate() - today.getDay() + 1);
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 6);
+            fromDate = startOfWeek.toISOString().split('T')[0];
+            toDate = endOfWeek.toISOString().split('T')[0];
+            break;
+          case 'lastweek':
+            const lastWeekStart = new Date(today);
+            lastWeekStart.setDate(today.getDate() - today.getDay() - 6);
+            const lastWeekEnd = new Date(lastWeekStart);
+            lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+            fromDate = lastWeekStart.toISOString().split('T')[0];
+            toDate = lastWeekEnd.toISOString().split('T')[0];
+            break;
+          case 'thismonth':
+            fromDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+            toDate = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+            break;
+          case 'lastmonth':
+            fromDate = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0];
+            toDate = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
+            break;
+          case 'thisyear':
+            fromDate = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
+            toDate = new Date(today.getFullYear(), 11, 31).toISOString().split('T')[0];
+            break;
+          case 'custom':
+            // Clear the inputs for custom range
+            if (dateFromInput) dateFromInput.value = '';
+            if (dateToInput) dateToInput.value = '';
+            return;
+        }
+        
+        if (dateFromInput) dateFromInput.value = fromDate;
+        if (dateToInput) dateToInput.value = toDate;
+        
+        // Instead of client-side filtering, reload the page with custom date range
+        reloadWithCustomDateRange(fromDate, toDate);
+      }
+      
+      // Function to reload page with custom date range
+      function reloadWithCustomDateRange(fromDate, toDate) {
+        const url = new URL(window.location);
+        url.searchParams.set('custom_from', fromDate);
+        url.searchParams.set('custom_to', toDate);
+        url.searchParams.delete('period'); // Remove period since we're using custom dates
+        window.location.href = url.toString();
+      }
+      
       // Event listeners
       sortSelect.addEventListener('change', function() {
         if (this.value) {
           sortTable(this.value);
         }
       });
+      
+      if (datePresetSelect) {
+        datePresetSelect.addEventListener('change', function() {
+          if (this.value) {
+            setPresetDates(this.value);
+          }
+        });
+      }
       
       searchInput.addEventListener('input', function() {
         const dateFrom = dateFromInput ? dateFromInput.value : '';

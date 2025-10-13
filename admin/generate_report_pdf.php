@@ -1,12 +1,21 @@
 <?php
 require '../vendor/autoload.php';
 require '../includes/db.php';
+include_once '../includes/permissions.php';
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
 session_start();
-if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+
+// Ensure user is logged in and not a customer
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login_admin.php");
+    exit;
+}
+
+// Check if user is not a customer
+if (isCustomer($pdo)) {
     header("Location: login_admin.php");
     exit;
 }

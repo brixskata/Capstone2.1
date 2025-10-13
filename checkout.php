@@ -228,6 +228,24 @@ if (empty($_SESSION['selected_address_id']) && !empty($all_addresses)) {
     error_log("Checkout: Auto-selected first available address_id: " . $all_addresses[0]['address_id']);
 }
 
+// Fetch GCash settings from database
+$gcash_settings_stmt = $pdo->prepare("SELECT setting_key, setting_value FROM system_settings WHERE setting_key LIKE 'gcash_%'");
+$gcash_settings_stmt->execute();
+$gcash_settings = $gcash_settings_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+// Set default values if not set
+$gcash_defaults = [
+    'gcash_qr_code' => 'assets/gcashqr/gcash_qr.jpg',
+    'gcash_instructions' => 'Scan the QR code above and complete your payment',
+    'gcash_enabled' => '1'
+];
+
+foreach ($gcash_defaults as $key => $default_value) {
+    if (!isset($gcash_settings[$key])) {
+        $gcash_settings[$key] = $default_value;
+    }
+}
+
 // Address processing is now handled in place_order.php
 ?>
 <!DOCTYPE html>
@@ -995,8 +1013,15 @@ if (empty($_SESSION['selected_address_id']) && !empty($all_addresses)) {
                                     <h5 class="text-primary mb-3">
                                         <i class="fas fa-mobile-alt me-2"></i>Scan to Pay via GCash
                                     </h5>
-                                    <img src="assets/gcashqr/gcash_qr.jpg" alt="GCash QR Code" class="img-fluid gcash-qr">
-                                    <p class="text-muted mb-3">Scan the QR code above and complete your payment</p>
+                                    <?php if (file_exists($gcash_settings['gcash_qr_code'])): ?>
+                                        <img src="<?= htmlspecialchars($gcash_settings['gcash_qr_code']) ?>" alt="GCash QR Code" class="img-fluid gcash-qr">
+                                    <?php else: ?>
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            GCash QR code not found. Please contact the administrator.
+                                        </div>
+                                    <?php endif; ?>
+                                    <p class="text-muted mb-3"><?= htmlspecialchars($gcash_settings['gcash_instructions']) ?></p>
                                     
                                     <div class="row g-3">
                                         <div class="col-12">

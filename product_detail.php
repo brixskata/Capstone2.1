@@ -951,11 +951,14 @@ if ($product_id <= 0) {
                 $r = $ratingStmt->fetch(PDO::FETCH_ASSOC);
                 if ($r) { $avg_rating = (float)($r['avg_rating'] ?? 0); $rating_count = (int)($r['rating_count'] ?? 0); }
 
-                // Total sold based on order_items quantities (all orders regardless of status)
+                // Total sold based on order_items quantities (only from completed/delivered orders)
                 $soldStmt = $pdo->prepare("
                     SELECT COALESCE(SUM(oi.quantity),0) AS total_sold
                     FROM order_items oi
-                    WHERE oi.product_id = ?
+                    INNER JOIN orders o ON oi.order_id = o.orders_id
+                    INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+                    WHERE oi.product_id = ? 
+                    AND os.status_name IN ('Delivered','Completed','Finished')
                 ");
                 $soldStmt->execute([$product_id]);
                 $s = $soldStmt->fetch(PDO::FETCH_ASSOC);

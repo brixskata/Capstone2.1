@@ -1,10 +1,21 @@
 <?php
 include '../includes/db.php';
 include_once '../includes/batch_manager.php';
+include_once '../includes/permissions.php';
 session_start();
 
-// Ensure user is logged in and has admin access
-requireAdmin($pdo);
+// Ensure user is logged in and not a customer
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login_admin.php");
+    exit;
+}
+
+// Check if user is not a customer
+if (isCustomer($pdo)) {
+    $_SESSION['error'] = "You don't have permission to access this page.";
+    header("Location: login_admin.php");
+    exit;
+}
 
 // Initialize batch manager
 $batchManager = new BatchManager($pdo);

@@ -2,8 +2,15 @@
 session_start();
 include '../includes/db.php';
 include '../includes/permissions.php';
-// Ensure user is logged in and has admin role
-if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+// Ensure user is logged in and not a customer
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login_admin.php");
+    exit;
+}
+
+// Check if user is not a customer
+if (isCustomer($pdo)) {
+    $_SESSION['error'] = "You don't have permission to access this page.";
     header("Location: login_admin.php");
     exit;
 }

@@ -47,10 +47,14 @@ try {
                         (SELECT SUM(pb.quantity_remaining) FROM product_batches pb 
                          WHERE pb.product_id = p.product_id AND pb.brand_id = b.id AND pb.is_active = 1)
                     ), 0) AS stock,
-                    -- Products sold (from order_items)
+                    -- Products sold (only from completed/delivered orders)
                     COALESCE((
-                        SELECT SUM(oi.quantity) FROM order_items oi 
-                        WHERE oi.product_id = p.product_id
+                        SELECT SUM(oi.quantity) 
+                        FROM order_items oi
+                        INNER JOIN orders o ON oi.order_id = o.orders_id
+                        INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+                        WHERE oi.product_id = p.product_id 
+                        AND os.status_name IN ('Delivered','Completed','Finished')
                     ), 0) AS products_sold,
                         -- Average rating (from order_ratings via order_items)
                         COALESCE((
@@ -103,10 +107,14 @@ try {
                             (SELECT SUM(pb.quantity_remaining) FROM product_batches pb 
                              WHERE pb.product_id = p.product_id AND pb.brand_id = b.id AND pb.is_active = 1)
                         ), 0) AS stock,
-                        -- Products sold (from order_items)
+                        -- Products sold (only from completed/delivered orders)
                         COALESCE((
-                            SELECT SUM(oi.quantity) FROM order_items oi 
-                            WHERE oi.product_id = p.product_id
+                            SELECT SUM(oi.quantity) 
+                            FROM order_items oi
+                            INNER JOIN orders o ON oi.order_id = o.orders_id
+                            INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+                            WHERE oi.product_id = p.product_id 
+                            AND os.status_name IN ('Delivered','Completed','Finished')
                         ), 0) AS products_sold,
                         -- Average rating (from order_ratings via order_items)
                         COALESCE((
@@ -157,10 +165,14 @@ try {
                     (SELECT SUM(pb.quantity_remaining) FROM product_batches pb 
                      WHERE pb.product_id = p.product_id AND pb.brand_id = b.id AND pb.is_active = 1)
                 ), 0) AS stock,
-                -- Products sold (from order_items)
+                -- Products sold (only from completed/delivered orders)
                 COALESCE((
-                    SELECT SUM(oi.quantity) FROM order_items oi 
-                    WHERE oi.product_id = p.product_id
+                    SELECT SUM(oi.quantity) 
+                    FROM order_items oi
+                    INNER JOIN orders o ON oi.order_id = o.orders_id
+                    INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+                    WHERE oi.product_id = p.product_id 
+                    AND os.status_name IN ('Delivered','Completed','Finished')
                 ), 0) AS products_sold,
                         -- Average rating (from order_ratings via order_items)
                         COALESCE((

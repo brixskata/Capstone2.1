@@ -5,8 +5,18 @@ include '../includes/log_history.php';
 include '../includes/permissions.php';
 session_start();
 
-// Ensure user is logged in and has admin access (Super Admin or Admin)
-requireAdmin($pdo);
+// Ensure user is logged in and not a customer
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login_admin.php");
+    exit;
+}
+
+// Check if user is not a customer
+if (isCustomer($pdo)) {
+    $_SESSION['error'] = "You don't have permission to access this page.";
+    header("Location: login_admin.php");
+    exit;
+}
 
 // Helper: fetch admin password hash for current admin
 function getAdminHash(PDO $pdo, string $username): ?string {

@@ -4,8 +4,15 @@ include_once '../includes/log_history.php';
 include_once '../includes/permissions.php';
 session_start();
 
-// Ensure user is logged in and has admin role
-if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+// Ensure user is logged in and not a customer
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit;
+}
+
+// Check if user is not a customer
+if (isCustomer($pdo)) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit;

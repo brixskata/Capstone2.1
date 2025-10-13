@@ -50,7 +50,57 @@ $stmt = $pdo->prepare("
         b.name AS brand_name,
         uom.name AS uom_name,
         COALESCE(ps.current_stock, 0) AS stock,
-        COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) AS price,
+        -- Calculate total price: markup_price + (best available cost from batches or general cost_price)
+        COALESCE(pp.markup_price, 0) + COALESCE((
+            SELECT COALESCE(
+                (SELECT pb.unit_cost 
+                 FROM product_batches pb 
+                 WHERE pb.product_id = p.product_id 
+                 AND pb.quantity_remaining > 0 
+                 AND pb.is_active = 1
+                 ORDER BY pb.expiration_date ASC 
+                 LIMIT 1),
+                pp.cost_price, 
+                0
+            )
+        ), 0) AS price,
+        -- Get lowest price among all brands for this product
+        MIN(COALESCE(pp.markup_price, 0) + COALESCE(
+            (SELECT pb.unit_cost 
+             FROM product_batches pb 
+             WHERE pb.product_id = p.product_id 
+             AND pb.quantity_remaining > 0 
+             AND pb.is_active = 1
+             ORDER BY pb.expiration_date ASC 
+             LIMIT 1),
+            pp.cost_price, 
+            0
+        )) AS lowest_price,
+        -- Count products sold (only from completed/delivered orders)
+        COALESCE((
+            SELECT SUM(oi.quantity) 
+            FROM order_items oi
+            INNER JOIN orders o ON oi.order_id = o.orders_id
+            INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+            WHERE oi.product_id = p.product_id 
+            AND os.status_name IN ('Delivered','Completed','Finished')
+        ), 0) AS products_sold,
+        -- Average rating (from order_ratings via order_items)
+        COALESCE((
+            SELECT AVG(ord_rat.rating) 
+            FROM order_ratings ord_rat
+            JOIN orders o ON ord_rat.order_id = o.orders_id
+            JOIN order_items oi ON o.orders_id = oi.order_id
+            WHERE oi.product_id = p.product_id
+        ), 0) AS avg_rating,
+        -- Rating count
+        COALESCE((
+            SELECT COUNT(ord_rat.rating_id) 
+            FROM order_ratings ord_rat
+            JOIN orders o ON ord_rat.order_id = o.orders_id
+            JOIN order_items oi ON o.orders_id = oi.order_id
+            WHERE oi.product_id = p.product_id
+        ), 0) AS rating_count,
         (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
     FROM favorites f
     INNER JOIN products p ON f.product_id = p.product_id
@@ -60,6 +110,7 @@ $stmt = $pdo->prepare("
     LEFT JOIN product_stock ps ON p.product_id = ps.product_id
     LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
     WHERE f.user_id = ? AND p.is_archive = 0
+    GROUP BY p.product_id, p.product_name, p.product_description, c.category_name, b.name, uom.name, ps.current_stock, pp.markup_price, pp.cost_price
     ORDER BY p.product_name ASC
 ");
 $stmt->execute([$userId]);
@@ -227,6 +278,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
             color: var(--bs-secondary);
             display: -webkit-box;
             -webkit-line-clamp: 2;
+            line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
@@ -237,6 +289,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
             margin-bottom: 1rem;
             display: -webkit-box;
             -webkit-line-clamp: 2;
+            line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
@@ -246,6 +299,46 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
             font-weight: 700;
             color: var(--bs-secondary);
             margin-bottom: 1rem;
+        }
+
+        .product-meta {
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+
+        .product-stock {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+        }
+
+        .product-sold {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+        }
+
+        .product-stock i,
+        .product-sold i {
+            color: var(--bs-secondary);
+            font-size: 0.75rem;
+        }
+
+        .product-rating {
+            margin-bottom: 1rem;
+        }
+
+        .product-rating .text-warning {
+            color: #ffc107 !important;
+        }
+
+        .product-rating .text-muted {
+            color: #6c757d !important;
+        }
+
+        .product-rating small {
+            font-size: 0.8rem;
         }
 
         .product-actions {
@@ -386,6 +479,19 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 width: 100%;
             }
 
+            /* Mobile: Stack stock and sold vertically on small screens */
+            .product-meta {
+                flex-direction: column;
+                gap: 0.5rem;
+                align-items: flex-start !important;
+            }
+
+            .product-stock,
+            .product-sold {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
             body {
                 padding-bottom: 120px; /* More padding on mobile */
             }
@@ -442,8 +548,44 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <h3 class="product-title"><?= htmlspecialchars($product['name']) ?></h3>
                             <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
 
+                            <!-- Product Rating -->
+                            <div class="product-rating mb-2">
+                                <?php if ($product['avg_rating'] > 0): ?>
+                                    <div class="d-flex align-items-center">
+                                        <div class="text-warning me-2">
+                                            <?php 
+                                            $rounded_rating = max(0, min(5, round($product['avg_rating']))); 
+                                            for ($i = 1; $i <= 5; $i++): ?>
+                                                <i class="fas fa-star <?= $i <= $rounded_rating ? 'text-warning' : 'text-muted' ?>" style="font-size: 0.9rem;"></i>
+                                            <?php endfor; ?>
+                                        </div>
+                                        <small class="text-muted">
+                                            <span class="fw-semibold"><?= number_format($product['avg_rating'], 1) ?></span>
+                                            <span class="ms-1">(<?= $product['rating_count'] ?>)</span>
+                                        </small>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="text-muted">
+                                        <i class="fas fa-star text-muted" style="font-size: 0.9rem;"></i>
+                                        <small class="ms-1">No rating yet</small>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+
                             <div class="product-price">
-                                ₱<?= number_format($product['price'], 2) ?>
+                                From ₱<?= number_format($product['lowest_price'], 2) ?>
+                            </div>
+
+                            <!-- Stock and Sold Info - Aligned horizontally -->
+                            <div class="product-meta d-flex justify-content-between align-items-center mb-3">
+                                <div class="product-stock">
+                                    <i class="fas fa-boxes me-1"></i>
+                                    Stock: <?= number_format((float)$product['stock'], 1) ?> <?= htmlspecialchars($product['uom_name'] ?? '') ?>
+                                </div>
+                                <div class="product-sold">
+                                    <i class="fas fa-shopping-bag me-1"></i>
+                                    <?= number_format($product['products_sold']) ?> sold
+                                </div>
                             </div>
 
                             <!-- Product Actions -->

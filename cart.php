@@ -556,7 +556,7 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
                     <h3>Your cart is empty</h3>
                     <p class="mb-4">Add some products to your cart before checking out.</p>
                     <a href="product.php" class="continue-shopping">
-                        <i class="fas fa-shopping-bag me-2"></i>Continue Shopping
+                        <i class="fas me-2"></i>Continue Shopping
                     </a>
             </div>
         <?php else: ?>

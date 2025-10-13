@@ -55,6 +55,22 @@ try {
                 WHERE oi.product_id = p.product_id 
                 AND os.status_name IN ('Delivered','Completed','Finished')
             ), 0) AS products_sold,
+            -- Average rating (from order_ratings via order_items)
+            COALESCE((
+                SELECT AVG(ord_rat.rating) 
+                FROM order_ratings ord_rat
+                JOIN orders o ON ord_rat.order_id = o.orders_id
+                JOIN order_items oi ON o.orders_id = oi.order_id
+                WHERE oi.product_id = p.product_id
+            ), 0) AS avg_rating,
+            -- Rating count
+            COALESCE((
+                SELECT COUNT(ord_rat.rating_id) 
+                FROM order_ratings ord_rat
+                JOIN orders o ON ord_rat.order_id = o.orders_id
+                JOIN order_items oi ON o.orders_id = oi.order_id
+                WHERE oi.product_id = p.product_id
+            ), 0) AS rating_count,
             (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1,
             p.created_at
         FROM products p
@@ -785,11 +801,44 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             margin-bottom: 1rem;
         }
 
-        .product-sold {
+        .product-meta {
+            margin-bottom: 1rem;
             font-size: 0.8rem;
             color: #6c757d;
-            margin-bottom: 1rem;
+        }
+
+        .product-stock {
             font-weight: 500;
+            display: flex;
+            align-items: center;
+        }
+
+        .product-sold {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+        }
+
+        .product-stock i,
+        .product-sold i {
+            color: var(--bs-secondary);
+            font-size: 0.75rem;
+        }
+
+        .product-rating {
+            margin-bottom: 1rem;
+        }
+
+        .product-rating .text-warning {
+            color: #ffc107 !important;
+        }
+
+        .product-rating .text-muted {
+            color: #6c757d !important;
+        }
+
+        .product-rating small {
+            font-size: 0.8rem;
         }
 
         .btn-add-cart {
@@ -1035,6 +1084,19 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             .section-title {
                 font-size: 2rem;
             }
+
+            /* Mobile: Stack stock and sold vertically on small screens */
+            .product-meta {
+                flex-direction: column;
+                gap: 0.5rem;
+                align-items: flex-start !important;
+            }
+
+            .product-stock,
+            .product-sold {
+                width: 100%;
+                justify-content: flex-start;
+            }
         }
 
         /* SweetAlert2 Custom Styles */
@@ -1231,9 +1293,43 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                                 <h3 class="product-title"><?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?></h3>
                                 <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
 
+                                <!-- Product Rating -->
+                                <div class="product-rating mb-2">
+                                    <?php if ($product['avg_rating'] > 0): ?>
+                                        <div class="d-flex align-items-center">
+                                            <div class="text-warning me-2">
+                                                <?php 
+                                                $rounded_rating = max(0, min(5, round($product['avg_rating']))); 
+                                                for ($i = 1; $i <= 5; $i++): ?>
+                                                    <i class="fas fa-star <?= $i <= $rounded_rating ? 'text-warning' : 'text-muted' ?>" style="font-size: 0.9rem;"></i>
+                                                <?php endfor; ?>
+                                            </div>
+                                            <small class="text-muted">
+                                                <span class="fw-semibold"><?= number_format($product['avg_rating'], 1) ?></span>
+                                                <span class="ms-1">(<?= $product['rating_count'] ?>)</span>
+                                            </small>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="text-muted">
+                                            <i class="fas fa-star text-muted" style="font-size: 0.9rem;"></i>
+                                            <small class="ms-1">No rating yet</small>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
                                 <div class="product-price">From ₱<?= number_format($product['lowest_price'], 2) ?></div>
-                                <div class="product-stock">Stock: <?= number_format((float)$product['stock'], 1) ?> <?= htmlspecialchars($product['uom_name'] ?? '') ?> available</div>
-                                <div class="product-sold"><?= number_format($product['products_sold']) ?> sold</div>
+                                
+                                <!-- Stock and Sold Info - Aligned horizontally -->
+                                <div class="product-meta d-flex justify-content-between align-items-center">
+                                    <div class="product-stock">
+                                        <i class="fas fa-boxes me-1"></i>
+                                        Stock: <?= number_format((float)$product['stock'], 1) ?> <?= htmlspecialchars($product['uom_name'] ?? '') ?>
+                                    </div>
+                                    <div class="product-sold">
+                                        <i class="fas fa-shopping-bag me-1"></i>
+                                        <?= number_format($product['products_sold']) ?> sold
+                                    </div>
+                                </div>
                             </a>
                         </div>
                     <?php endforeach; ?>
