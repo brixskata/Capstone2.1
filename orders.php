@@ -1175,9 +1175,15 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
         .star-rating label:hover,
+
         .star-rating label:hover ~ label,
+
+        .star-rating input[type="radio"]:checked + label,
+
         .star-rating input[type="radio"]:checked ~ label {
+
             color: #ffc107;
+
         }
 
         .rating-section {
@@ -1465,6 +1471,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <!-- Order Tabs -->
                         <div class="order-tabs">
                             <button class="tab-btn active" data-tab="current">Current Orders</button>
+                            <button class="tab-btn" data-tab="to-rate">To Rate</button>
                             <button class="tab-btn" data-tab="completed">Order History</button>
                         </div>
 
@@ -1532,11 +1539,11 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                 <div class="rating-section mt-3" id="rating-section-<?= $order['id'] ?>">
                                                     <?php
                                                     // Check if user has already rated this order
-                                                    $rating_stmt = $pdo->prepare("SELECT rating, review FROM order_ratings WHERE order_id = ? AND user_id = ?");
+                                                    $rating_stmt = $pdo->prepare("SELECT rating, review, image FROM order_ratings WHERE order_id = ? AND user_id = ?");
                                                     $rating_stmt->execute([$order['id'], $user_id]);
                                                     $existing_rating = $rating_stmt->fetch(PDO::FETCH_ASSOC);
                                                     ?>
-                                                    
+
                                                     <?php if ($existing_rating): ?>
                                                         <!-- Show existing rating -->
                                                         <div class="existing-rating">
@@ -1554,9 +1561,56 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                                     <p class="mb-0"><?= htmlspecialchars($existing_rating['review']) ?></p>
                                                                 </div>
                                                             <?php endif; ?>
+                                                            <?php if (!empty($existing_rating['image'])): ?>
+                                                                <div class="rating-image mt-2">
+                                                                    <small class="text-muted">Your Image:</small>
+                                                                    <div class="mt-1">
+                                                                        <img src="<?= htmlspecialchars($existing_rating['image']) ?>" alt="Rating image" class="img-fluid rounded" style="max-width: 200px; max-height: 200px;">
+                                                                    </div>
+                                                                </div>
+                                                            <?php endif; ?>
                                                             <button class="btn btn-sm btn-outline-primary mt-2" onclick="editRating(<?= $order['id'] ?>)">
                                                                 <i class="fas fa-edit me-1"></i>Edit Rating
                                                             </button>
+                                                        </div>
+                                                        <!-- Show rating form hidden initially -->
+                                                        <div class="rating-form" style="display:none;">
+                                                            <h6 class="mb-2">Rate this order:</h6>
+                                                            <form class="rating-form-inline" onsubmit="submitRating(event, <?= $order['id'] ?>)">
+                                                                <div class="rating-input mb-2">
+                                                                <div class="star-rating">
+                                                                        <input type="radio" name="rating-<?= $order['id'] ?>" value="5" id="star5-<?= $order['id'] ?>" <?= $existing_rating['rating'] == 5 ? 'checked' : '' ?>>
+                                                                        <label for="star5-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                        <input type="radio" name="rating-<?= $order['id'] ?>" value="4" id="star4-<?= $order['id'] ?>" <?= $existing_rating['rating'] == 4 ? 'checked' : '' ?>>
+                                                                        <label for="star4-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                        <input type="radio" name="rating-<?= $order['id'] ?>" value="3" id="star3-<?= $order['id'] ?>" <?= $existing_rating['rating'] == 3 ? 'checked' : '' ?>>
+                                                                        <label for="star3-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                        <input type="radio" name="rating-<?= $order['id'] ?>" value="2" id="star2-<?= $order['id'] ?>" <?= $existing_rating['rating'] == 2 ? 'checked' : '' ?>>
+                                                                        <label for="star2-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                        <input type="radio" name="rating-<?= $order['id'] ?>" value="1" id="star1-<?= $order['id'] ?>" <?= $existing_rating['rating'] == 1 ? 'checked' : '' ?>>
+                                                                        <label for="star1-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="mb-2">
+                                                                    <textarea class="form-control form-control-sm" name="review-<?= $order['id'] ?>" placeholder="Write a review (optional)" rows="2" maxlength="500"><?= htmlspecialchars($existing_rating['review'] ?? '') ?></textarea>
+                                                                </div>
+                                                                <div class="mb-2">
+                                                                    <label for="image-<?= $order['id'] ?>" class="form-label">Upload Image (optional)</label>
+                                                                    <input type="file" class="form-control form-control-sm" name="image-<?= $order['id'] ?>" id="image-<?= $order['id'] ?>" accept="image/*">
+                                                                    <?php if (!empty($existing_rating['image'])): ?>
+                                                                        <div class="current-image-preview mt-2">
+                                                                            <small class="text-muted">Current Image:</small>
+                                                                            <div class="mt-1">
+                                                                                <img src="<?= htmlspecialchars($existing_rating['image']) ?>" alt="Current rating image" class="img-fluid rounded" style="max-width: 200px; max-height: 200px;">
+                                                                                <p class="text-muted small mt-1">Upload a new image to replace the current one (optional)</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    <?php endif; ?>
+                                                                </div>
+                                                                <button type="submit" class="btn btn-sm btn-primary">
+                                                                    <i class="fas fa-star me-1"></i>Submit Rating
+                                                                </button>
+                                                            </form>
                                                         </div>
                                                     <?php else: ?>
                                                         <!-- Show rating form -->
@@ -1580,6 +1634,10 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                                 <div class="mb-2">
                                                                     <textarea class="form-control form-control-sm" name="review-<?= $order['id'] ?>" placeholder="Write a review (optional)" rows="2" maxlength="500"></textarea>
                                                                 </div>
+                                                                <div class="mb-2">
+                                                                    <label for="image-<?= $order['id'] ?>" class="form-label">Upload Image (optional)</label>
+                                                                    <input type="file" class="form-control form-control-sm" name="image-<?= $order['id'] ?>" id="image-<?= $order['id'] ?>" accept="image/*">
+                                                                </div>
                                                                 <button type="submit" class="btn btn-sm btn-primary">
                                                                     <i class="fas fa-star me-1"></i>Submit Rating
                                                                 </button>
@@ -1589,6 +1647,94 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                 </div>
                                             </div>
                                         <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- To Rate Tab -->
+                        <div id="to-rate-orders" class="tab-content">
+                            <?php
+                            // Fetch all order IDs that have ratings for the user
+                            $ratedOrderIds = [];
+                            $ratingIdsStmt = $pdo->prepare("SELECT order_id FROM order_ratings WHERE user_id = ?");
+                            $ratingIdsStmt->execute([$user_id]);
+                            $ratedOrders = $ratingIdsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
+                            if ($ratedOrders) {
+                                $ratedOrderIds = $ratedOrders;
+                            }
+
+                            // Filter completed orders that haven't been rated
+                            $unratedOrders = array_filter($completedOrders, function($order) use ($ratedOrderIds) {
+                                if ($order['status'] !== 'Completed') return false;
+                                return !in_array($order['id'], $ratedOrderIds);
+                            });
+                            ?>
+
+                            <?php if (empty($unratedOrders)): ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-star"></i>
+                                    <h3>No Orders to Rate</h3>
+                                    <p>You've rated all your completed orders. Great job!</p>
+                                </div>
+                            <?php else: ?>
+                                <?php foreach ($unratedOrders as $order): ?>
+                                    <div class="order-card">
+                                        <div class="order-header">
+                                            <div>
+                                                <div class="order-number">Order #<?= $order['id'] ?></div>
+                                                <div class="order-date"><?= date('M d, Y', strtotime($order['created_at'])) ?></div>
+                                            </div>
+                                            <span class="order-status status-<?= strtolower($order['status']) ?>">
+                                                <?= $order['status'] ?>
+                                            </span>
+                                        </div>
+
+                                        <div class="order-items">
+                                            <?php foreach ($order['items'] as $item): ?>
+                                                <div class="order-item">
+                                                    <span class="item-name"><?= htmlspecialchars($item['product_name']) ?> × <?= $item['quantity'] ?></span>
+                                                    <span class="item-price">₱<?= number_format($item['price'] * $item['quantity'], 2) ?></span>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+
+                                        <div class="order-total">
+                                            Total: ₱<?= number_format($order['total_price'], 2) ?>
+                                        </div>
+
+                                        <!-- Rating Section -->
+                                        <div class="rating-section mt-3" id="rating-section-<?= $order['id'] ?>">
+                                            <div class="rating-form">
+                                                <h6 class="mb-2">Rate this order:</h6>
+                                                <form class="rating-form-inline" onsubmit="submitRating(event, <?= $order['id'] ?>)">
+                                                    <div class="rating-input mb-2">
+                                                        <div class="star-rating">
+                                                            <input type="radio" name="rating-<?= $order['id'] ?>" value="5" id="star5-<?= $order['id'] ?>">
+                                                            <label for="star5-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                            <input type="radio" name="rating-<?= $order['id'] ?>" value="4" id="star4-<?= $order['id'] ?>">
+                                                            <label for="star4-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                            <input type="radio" name="rating-<?= $order['id'] ?>" value="3" id="star3-<?= $order['id'] ?>">
+                                                            <label for="star3-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                            <input type="radio" name="rating-<?= $order['id'] ?>" value="2" id="star2-<?= $order['id'] ?>">
+                                                            <label for="star2-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                            <input type="radio" name="rating-<?= $order['id'] ?>" value="1" id="star1-<?= $order['id'] ?>">
+                                                            <label for="star1-<?= $order['id'] ?>"><i class="fas fa-star"></i></label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <textarea class="form-control form-control-sm" name="review-<?= $order['id'] ?>" placeholder="Write a review (optional)" rows="2" maxlength="500"></textarea>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <label for="image-<?= $order['id'] ?>" class="form-label">Upload Image (optional)</label>
+                                                        <input type="file" class="form-control form-control-sm" name="image-<?= $order['id'] ?>" id="image-<?= $order['id'] ?>" accept="image/*">
+                                                    </div>
+                                                    <button type="submit" class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-star me-1"></i>Submit Rating
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
                                     </div>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -1637,13 +1783,13 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                                         <!-- Rating Section for Completed Orders -->
                                         <?php if ($order['status'] === 'Completed'): ?>
-                                        <div class="rating-section mt-3" id="rating-section-<?= $order['id'] ?>">
-                                            <?php
-                                            // Check if user has already rated this order
-                                            $rating_stmt = $pdo->prepare("SELECT rating, review FROM order_ratings WHERE order_id = ? AND user_id = ?");
-                                            $rating_stmt->execute([$order['id'], $user_id]);
-                                            $existing_rating = $rating_stmt->fetch(PDO::FETCH_ASSOC);
-                                            ?>
+                                        <?php
+                                        // Check if user has already rated this order
+                                        $rating_stmt = $pdo->prepare("SELECT rating, review, image FROM order_ratings WHERE order_id = ? AND user_id = ?");
+                                        $rating_stmt->execute([$order['id'], $user_id]);
+                                        $existing_rating = $rating_stmt->fetch(PDO::FETCH_ASSOC);
+                                        ?>
+                                        <div class="rating-section mt-3" id="rating-section-<?= $order['id'] ?>" data-existing-rating='<?= json_encode($existing_rating) ?>'>
                                             
                                             <?php if ($existing_rating): ?>
                                                 <!-- Show existing rating -->
@@ -1660,6 +1806,14 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         <div class="rating-review mt-2">
                                                             <small class="text-muted">Your Review:</small>
                                                             <p class="mb-0"><?= htmlspecialchars($existing_rating['review']) ?></p>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($existing_rating['image'])): ?>
+                                                        <div class="rating-image mt-2">
+                                                            <small class="text-muted">Your Image:</small>
+                                                            <div class="mt-1">
+                                                                <img src="<?= htmlspecialchars($existing_rating['image']) ?>" alt="Rating image" class="img-fluid rounded" style="max-width: 200px; max-height: 200px;">
+                                                            </div>
                                                         </div>
                                                     <?php endif; ?>
                                                     <button class="btn btn-sm btn-outline-primary mt-2" onclick="editRating(<?= $order['id'] ?>)">
@@ -1687,6 +1841,10 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         </div>
                                                         <div class="mb-2">
                                                             <textarea class="form-control form-control-sm" name="review-<?= $order['id'] ?>" placeholder="Write a review (optional)" rows="2" maxlength="500"></textarea>
+                                                        </div>
+                                                        <div class="mb-2">
+                                                            <label for="image-<?= $order['id'] ?>" class="form-label">Upload Image (optional)</label>
+                                                            <input type="file" class="form-control form-control-sm" name="image-<?= $order['id'] ?>" id="image-<?= $order['id'] ?>" accept="image/*">
                                                         </div>
                                                         <button type="submit" class="btn btn-sm btn-primary">
                                                             <i class="fas fa-star me-1"></i>Submit Rating
@@ -2311,6 +2469,12 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             formData.append('order_id', orderId);
             formData.append('rating', rating);
             formData.append('review', review);
+
+            // Add image if selected
+            const imageInput = form.querySelector(`input[name="image-${orderId}"]`);
+            if (imageInput && imageInput.files[0]) {
+                formData.append('image', imageInput.files[0]);
+            }
             
             fetch('submit_rating.php', {
                 method: 'POST',
@@ -2343,10 +2507,44 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             const ratingSection = document.getElementById(`rating-section-${orderId}`);
             const existingRating = ratingSection.querySelector('.existing-rating');
             const ratingForm = ratingSection.querySelector('.rating-form');
-            
+
+            // Get existing rating data from data attribute
+            const existingRatingData = ratingSection.getAttribute('data-existing-rating');
+            let ratingData = null;
+            try {
+                ratingData = JSON.parse(existingRatingData);
+            } catch (e) {
+                console.error('Failed to parse existing rating data:', e);
+            }
+
             if (existingRating && ratingForm) {
                 existingRating.style.display = 'none';
                 ratingForm.style.display = 'block';
+
+                if (ratingData) {
+                    // Set the star rating radio buttons
+                    const ratingValue = ratingData.rating;
+                    if (ratingValue) {
+                        const starInput = ratingForm.querySelector(`input[name="rating-${orderId}"][value="${ratingValue}"]`);
+                        if (starInput) {
+                            starInput.checked = true;
+                            // Trigger change event to update star display
+                            starInput.dispatchEvent(new Event('change'));
+                        }
+                    }
+
+                    // Set the review textarea
+                    const reviewTextarea = ratingForm.querySelector(`textarea[name="review-${orderId}"]`);
+                    if (reviewTextarea) {
+                        reviewTextarea.value = ratingData.review || '';
+                    }
+
+                    // Handle image preview if needed
+                    const currentImagePreview = ratingForm.querySelector('.current-image-preview img');
+                    if (currentImagePreview && ratingData.image) {
+                        currentImagePreview.src = ratingData.image;
+                    }
+                }
             }
         }
         

@@ -73,6 +73,9 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
     <?php include 'includes/user_head.php'; ?>
     <title><?= htmlspecialchars($page_title) ?></title>
 
+    <!-- Google Fonts for enhanced typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
     <style>
         :root {
             --bs-primary: #ffffff;
@@ -83,6 +86,26 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             --bs-info: #016bf8;
             --bs-light: #f0f3f2;
             --bs-dark: #001e2b;
+
+            /* Modern enhancement variables */
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+            --gradient-primary: linear-gradient(135deg, #7F1734 0%, #a91d42 100%);
+            --gradient-light: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            --gradient-overlay: linear-gradient(transparent, rgba(0,0,0,0.7));
+
+            --border-radius-sm: 0.375rem;
+            --border-radius-md: 0.5rem;
+            --border-radius-lg: 1rem;
+            --border-radius-xl: 1.5rem;
+
+            --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-normal: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         * {
@@ -125,7 +148,6 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             user-select: none;
         }
 
-      
         .product-title, .product-desc {
             -webkit-user-select: text;
             -moz-user-select: text;
@@ -133,7 +155,6 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             user-select: text;
         }
 
-        
         /* Navigation */
         .navbar {
             background: rgba(255,255,255,0.95) !important;
@@ -159,12 +180,15 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             color: var(--bs-secondary) !important;
         }
 
-        /* Hero Section - FreshCart Style */
+        /* Hero Section - Modern Enhanced */
         .hero-section {
-            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-            padding: 5rem 0;
+            background: var(--gradient-light);
+            padding: 6rem 0 4rem;
             position: relative;
             overflow: hidden;
+            min-height: 80vh;
+            display: flex;
+            align-items: center;
         }
 
         .hero-pattern {
@@ -173,91 +197,259 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             left: 0;
             right: 0;
             bottom: 0;
-            background-image: 
-                radial-gradient(circle at 25% 25%, rgba(127,23,52,0.05) 0%, transparent 50%),
-                radial-gradient(circle at 75% 75%, rgba(219,48,48,0.03) 0%, transparent 50%);
+            background-image:
+                radial-gradient(circle at 25% 25%, rgba(127,23,52,0.08) 0%, transparent 50%),
+                radial-gradient(circle at 75% 75%, rgba(219,48,48,0.05) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(25,135,84,0.03) 0%, transparent 70%);
             z-index: 1;
+            animation: patternShift 20s ease-in-out infinite;
+        }
+
+        @keyframes patternShift {
+            0%, 100% { transform: translateX(0) translateY(0); }
+            25% { transform: translateX(-10px) translateY(10px); }
+            50% { transform: translateX(10px) translateY(-10px); }
+            75% { transform: translateX(-5px) translateY(5px); }
         }
 
         .hero-content {
             position: relative;
             z-index: 2;
+            animation: slideInLeft 1s ease-out;
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
 
         .hero-badge {
             display: inline-flex;
             align-items: center;
-            background: #e8f5e8;
+            background: linear-gradient(135deg, #e8f5e8 0%, #d1f2d1 100%);
             color: var(--bs-success);
-            padding: 0.5rem 1rem;
-            border-radius: 50px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            margin-bottom: 1.5rem;
+            padding: 0.75rem 1.25rem;
+            border-radius: var(--border-radius-xl);
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid rgba(25, 135, 84, 0.1);
+            animation: badgePulse 2s ease-in-out infinite;
+        }
+
+        @keyframes badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
 
         .hero-title {
-            font-size: 3.5rem;
+            font-family: 'Poppins', sans-serif;
+            font-size: clamp(2.5rem, 5.5vw, 4rem);
             font-weight: 800;
             line-height: 1.1;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.2rem;
             color: var(--bs-dark);
+            letter-spacing: -0.02em;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
+            background: linear-gradient(135deg, var(--bs-dark) 0%, #4a5568 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: titleFadeIn 1.2s ease-out 0.2s both;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .hero-title::before {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+            transition: width 0.4s ease;
+        }
+
+        .hero-title:hover {
+            transform: scale(1.02) translateY(-2px);
+            text-shadow: 0 4px 8px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1);
+            filter: brightness(1.1);
+        }
+
+        .hero-title:hover::before {
+            width: 100%;
+        }
+
+        .hero-title:active {
+            animation: titlePulse 0.6s ease-in-out;
+        }
+
+        @keyframes titlePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes titleFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .hero-title .text-highlight {
-            color: var(--bs-secondary);
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .hero-subtitle {
-            font-size: 1.2rem;
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.15rem;
             color: #6c757d;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
             line-height: 1.6;
+            font-weight: 400;
+            max-width: 480px;
+            animation: subtitleFadeIn 1.2s ease-out 0.4s both;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .hero-subtitle:hover {
+            color: var(--bs-secondary);
+            transform: translateX(5px);
+            text-shadow: 0 2px 4px rgba(127, 23, 52, 0.2);
+        }
+
+        .hero-subtitle:active {
+            animation: subtitleBounce 0.4s ease-in-out;
+        }
+
+        @keyframes subtitleBounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateX(0); }
+            40% { transform: translateX(8px); }
+            60% { transform: translateX(4px); }
+        }
+
+        @keyframes subtitleFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .hero-features {
             display: flex;
             flex-wrap: wrap;
-            gap: 2rem;
-            margin-bottom: 2.5rem;
+            gap: 2.5rem;
+            margin-bottom: 3rem;
         }
 
         .hero-feature {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            font-weight: 500;
+            gap: 0.75rem;
+            font-weight: 600;
             color: var(--bs-dark);
+            padding: 0.5rem 0;
+            transition: var(--transition-normal);
+            animation: featureSlideUp 0.8s ease-out 0.6s both;
+        }
+
+        .hero-feature:nth-child(1) { animation-delay: 0.6s; }
+        .hero-feature:nth-child(2) { animation-delay: 0.8s; }
+        .hero-feature:nth-child(3) { animation-delay: 1s; }
+
+        @keyframes featureSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hero-feature:hover {
+            transform: translateX(5px);
+            color: var(--bs-secondary);
         }
 
         .hero-feature i {
             color: var(--bs-secondary);
-            font-size: 1.1rem;
+            font-size: 1.25rem;
+            transition: var(--transition-normal);
+        }
+
+        .hero-feature:hover i {
+            transform: scale(1.1);
         }
 
         .btn-hero {
-            padding: 1rem 2rem;
-            font-weight: 600;
-            border-radius: 0.5rem;
+            padding: 1.25rem 2.5rem;
+            font-weight: 700;
+            border-radius: var(--border-radius-lg);
             border: none;
             font-size: 1.1rem;
-            transition: all 0.3s ease;
+            transition: var(--transition-normal);
             text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-hero:hover::before {
+            left: 100%;
         }
 
         .btn-hero-primary {
-            background: var(--bs-secondary);
+            background: var(--gradient-primary);
             color: white;
+            animation: buttonGlow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes buttonGlow {
+            from { box-shadow: var(--shadow-md); }
+            to { box-shadow: var(--shadow-lg), 0 0 20px rgba(127,23,52,0.3); }
         }
 
         .btn-hero-primary:hover {
-            background: #6b1429;
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-xl), 0 0 30px rgba(127,23,52,0.4);
             color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(127,23,52,0.3);
         }
 
         .btn-hero-outline {
@@ -267,20 +459,49 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         }
 
         .btn-hero-outline:hover {
-            background: var(--bs-secondary);
+            background: var(--gradient-primary);
             color: white;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
         }
 
         .hero-image-container {
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2.5rem 1rem;
             text-align: center;
+            animation: slideInRight 1s ease-out;
+            background: none;
+            border-radius: 2rem;
+            box-shadow: none;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
 
         .hero-main-image {
-            max-width: 100%;
+            max-width: 90%;
             height: auto;
-            border-radius: 1rem;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            border-radius: 2rem;
+            box-shadow: none;
+            transition: var(--transition-normal);
+            background: transparent;
+            opacity: 1;
+        }
+
+        .hero-main-image:hover {
+            transform: scale(1.02);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.15);
         }
 
         /* Floating Elements - Simplified */
@@ -303,7 +524,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         .floating-card.card-2 {
             top: 60%;
-            right: -15%;
+            right: 0%;
             animation-delay: 2s;
         }
 
@@ -344,15 +565,20 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             .floating-card {
                 display: none;
             }
-            
+
             .hero-section {
                 padding: 3rem 0;
+                min-height: auto;
             }
-            
+
+            .hero-content {
+                margin-bottom: 2rem;
+            }
+
             .product-card {
                 margin-bottom: 1rem;
             }
-            
+
             .product-image {
                 height: 150px;
             }
@@ -362,76 +588,138 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             .hero-section {
                 padding: 2rem 0;
             }
-            
+
             .product-card {
                 padding: 1rem;
             }
-            
+
             .product-image {
                 height: 120px;
             }
         }
 
-        /* Categories Section */
+        /* Categories Section - Modern Enhanced */
         .categories-section {
-            padding: 5rem 0;
-            background: #ffffff;
+            padding: 6rem 0;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .categories-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(248,249,250,0.5) 0%, rgba(255,255,255,0.8) 100%);
+            z-index: -1;
         }
 
         .section-header {
             text-align: center;
-            margin-bottom: 3rem;
+            margin-bottom: 4rem;
+            position: relative;
         }
 
         .section-title {
-            font-size: 2.5rem;
-            font-weight: 700;
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-weight: 900;
             color: var(--bs-dark);
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.02em;
+            position: relative;
+            display: inline-block;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 4px;
+            background: var(--gradient-primary);
+            border-radius: 2px;
         }
 
         .section-subtitle {
-            font-size: 1.1rem;
+            font-size: 1.2rem;
             color: #6c757d;
-            max-width: 600px;
+            max-width: 700px;
             margin: 0 auto;
+            line-height: 1.6;
+            font-weight: 400;
         }
 
         .category-card {
-            background: white;
-            border-radius: 1rem;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: var(--border-radius-xl);
             overflow: hidden;
-            transition: all 0.3s ease;
-            border: 1px solid #e9ecef;
-            height: 200px;
+            transition: var(--transition-normal);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            height: 240px;
             position: relative;
             display: flex;
             align-items: end;
+            box-shadow: var(--shadow-lg);
+            cursor: pointer;
+        }
+
+        .category-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(127,23,52,0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: var(--transition-normal);
+            z-index: 1;
+        }
+
+        .category-card:hover::before {
+            opacity: 1;
         }
 
         .category-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            transform: translateY(-10px) scale(1.03);
+            box-shadow: var(--shadow-2xl);
+            border-color: rgba(127, 23, 52, 0.2);
         }
 
         .category-card-content {
             position: relative;
             z-index: 2;
-            padding: 1.5rem;
+            padding: 2rem 1.5rem;
             color: white;
             width: 100%;
-            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            background: linear-gradient(transparent, rgba(0,0,0,0.8) 60%, rgba(0,0,0,0.9));
+            transition: var(--transition-normal);
+        }
+
+        .category-card:hover .category-card-content {
+            background: linear-gradient(transparent, rgba(127,23,52,0.8) 60%, rgba(127,23,52,0.9));
         }
 
         .category-card-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin-bottom: 0.75rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            letter-spacing: -0.01em;
         }
 
         .category-card-desc {
-            font-size: 0.9rem;
-            opacity: 0.9;
+            font-size: 1rem;
+            opacity: 0.95;
+            line-height: 1.5;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
         }
 
         /* Categories Carousel */
@@ -552,7 +840,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             }
         }
 
-        /* Featured Products Section */
+        /* Featured Products Section - Modern Enhanced */
         .featured-section {
             padding: 5rem 0;
             background: var(--bs-light);
@@ -680,114 +968,241 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             padding-top: 1rem;
         }
 
-        .btn-add-cart {
-            width: 100%;
-            background: var(--bs-secondary);
-            color: white;
-            border: none;
-            padding: 0.75rem;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-
-        .btn-add-cart:hover {
-            background: #6b1429;
-            color: white;
-            transform: translateY(-2px);
-        }
-
-        .btn-add-cart:active {
-            transform: translateY(0);
-        }
-
-        /* Features Section */
+        /* Features Section - Modern Enhanced */
         .features-section {
-            padding: 5rem 0;
-            background: white;
+            padding: 6rem 0;
+            background: var(--gradient-light);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .features-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                radial-gradient(circle at 30% 70%, rgba(127,23,52,0.05) 0%, transparent 50%),
+                radial-gradient(circle at 70% 30%, rgba(25,135,84,0.03) 0%, transparent 50%);
+            z-index: 0;
+        }
+
+        .features-section > * {
+            position: relative;
+            z-index: 1;
         }
 
         .feature-card {
             text-align: center;
-            padding: 2rem 1rem;
+            padding: 3rem 2rem;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: var(--border-radius-xl);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: var(--shadow-lg);
+            transition: var(--transition-normal);
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient-primary);
+            transform: scaleX(0);
+            transition: var(--transition-normal);
+        }
+
+        .feature-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-2xl);
+            border-color: rgba(127, 23, 52, 0.1);
         }
 
         .feature-icon {
-            width: 80px;
-            height: 80px;
-            background: var(--bs-secondary);
-            border-radius: 50%;
+            width: 100px;
+            height: 100px;
+            background: var(--gradient-primary);
+            border-radius: var(--border-radius-xl);
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 1.5rem;
+            margin: 0 auto 2rem;
             color: white;
-            font-size: 2rem;
+            font-size: 2.5rem;
+            transition: var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-icon::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.6s;
+        }
+
+        .feature-card:hover .feature-icon::before {
+            left: 100%;
+        }
+
+        .feature-card:hover .feature-icon {
+            transform: scale(1.1) rotate(5deg);
+            box-shadow: var(--shadow-xl);
         }
 
         .feature-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
             color: var(--bs-dark);
+            transition: var(--transition-fast);
+        }
+
+        .feature-card:hover .feature-title {
+            color: var(--bs-secondary);
         }
 
         .feature-desc {
             color: #6c757d;
-            line-height: 1.6;
+            line-height: 1.7;
+            font-size: 1rem;
         }
 
-        /* Testimonials Section */
+        /* Testimonials Section - Modern Enhanced */
         .testimonials-section {
-            padding: 5rem 0;
-            background: var(--bs-light);
+            padding: 6rem 0;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(15px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .testimonials-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(240,243,242,0.8) 0%, rgba(255,255,255,0.9) 100%);
+            z-index: -1;
         }
 
         .testimonial-card {
-            background: white;
-            border-radius: 1rem;
-            padding: 2rem;
-            border: 1px solid #e9ecef;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: var(--border-radius-xl);
+            padding: 2.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.4);
             height: 100%;
+            box-shadow: var(--shadow-lg);
+            transition: var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .testimonial-card::before {
+            content: '"';
+            position: absolute;
+            top: 1.5rem;
+            left: 2rem;
+            font-size: 4rem;
+            color: rgba(127, 23, 52, 0.1);
+            font-family: 'Georgia', serif;
+            line-height: 1;
+            z-index: 0;
+        }
+
+        .testimonial-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-2xl);
+            border-color: rgba(127, 23, 52, 0.2);
         }
 
         .testimonial-header {
             display: flex;
             align-items: center;
-            margin-bottom: 1.5rem;
+            margin-bottom: 2rem;
+            position: relative;
+            z-index: 1;
         }
 
         .testimonial-avatar {
-            width: 50px;
-            height: 50px;
-            background: var(--bs-secondary);
-            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            background: var(--gradient-primary);
+            border-radius: var(--border-radius-xl);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: 600;
-            margin-right: 1rem;
+            font-weight: 700;
+            margin-right: 1.5rem;
             flex-shrink: 0;
+            font-size: 1.2rem;
+            box-shadow: var(--shadow-md);
+            transition: var(--transition-normal);
+        }
+
+        .testimonial-card:hover .testimonial-avatar {
+            transform: scale(1.1);
+            box-shadow: var(--shadow-lg);
         }
 
         .testimonial-avatar img {
             width: 100%;
             height: 100%;
-            border-radius: 50%;
+            border-radius: var(--border-radius-xl);
             object-fit: cover;
         }
 
         .testimonial-rating {
             color: var(--bs-warning);
-            margin-top: 0.25rem;
+            margin-top: 0.5rem;
+            font-size: 1rem;
+        }
+
+        .testimonial-rating i {
+            transition: var(--transition-fast);
+        }
+
+        .testimonial-card:hover .testimonial-rating i {
+            transform: scale(1.1);
         }
 
         .testimonial-text {
             color: #6c757d;
             font-style: italic;
-            line-height: 1.6;
+            line-height: 1.7;
+            font-size: 1.05rem;
+            position: relative;
+            z-index: 1;
+            margin-bottom: 1rem;
+        }
+
+        .testimonial-author {
+            font-weight: 600;
+            color: var(--bs-dark);
+            font-size: 1rem;
+            margin-top: 1rem;
+            text-align: right;
+            font-style: normal;
         }
 
         /* Footer */
@@ -819,10 +1234,6 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                 font-size: 2.5rem;
             }
 
-            .floating-card {
-                display: none;
-            }
-
             .hero-features {
                 flex-direction: column;
                 gap: 1rem;
@@ -840,84 +1251,147 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 <!-- Promo Banner -->
     <?php include 'includes/user_promo.php'; ?>
     
-   
-
     <!-- Navigation -->
     <?php include 'includes/user_navbar.php'; ?>
 
-    <!-- Hero Section -->
+    <!-- Hero Section with Sliding Feature -->
     <section class="hero-section">
         <div class="hero-pattern"></div>
         <div class="container">
-            <div class="row align-items-center min-vh-75">
-                <div class="col-lg-6">
-                    <div class="hero-content">
-                        <div class="hero-badge">
-                            <i class="fas fa-leaf me-2"></i>
-                            100% Fresh & Organic
+            <div id="heroCarousel" class="carousel slide" data-bs-ride="carousel" data-bs-interval="5000">
+                <!-- Carousel indicators removed for clean look -->
+                <div class="carousel-inner">
+                    <div class="carousel-item active">
+                        <div class="row align-items-center min-vh-75">
+                            <div class="col-lg-5">
+                                <div class="hero-content">
+                                    <h1 class="hero-title">
+                                        Top Quality <span class="text-highlight">You Deserve</span>
+                                    </h1>
+                                    <p class="hero-subtitle">
+                                        Stock your kitchen with the best frozen meats and seafood. Freshly packed, quality guaranteed, delivery you can count on.
+                                    </p>
+                                    <div class="d-flex gap-3 flex-wrap">
+                                        <a href="product.php" class="btn-hero btn-hero-primary">
+                                            <i class="fas fa-shopping-cart"></i>
+                                            Start Shopping
+                                        </a>
+                                        <a href="#featured" class="btn-hero btn-hero-outline">
+                                            <i class="fas fa-play"></i>
+                                            See Offers
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-7">
+                                <div class="hero-image-container position-relative">
+                                    <div class="floating-card card-1">
+                                        <img src="images/beef1.jpg" alt="Premium Beef">
+                                        <h6>Premium Beef</h6>
+                                        <div class="price">₱599/kg</div>
+                                    </div>
+
+                                    <div class="floating-card card-2">
+                                        <img src="images/bangus.jpg" alt="Fresh Fish">
+                                        <h6>Fresh Bangus</h6>
+                                        <div class="price">₱299/kg</div>
+                                    </div>
+
+                                    <div class="floating-card card-3">
+                                        <img src="images/breast.jpg" alt="Chicken">
+                                        <h6>Chicken Breast</h6>
+                                        <div class="price">₱199/kg</div>
+                                    </div>
+
+                                    <img src="images/slide1.png" alt="Fresh Groceries" class="hero-main-image">
+                                </div>
+                            </div>
                         </div>
-
-                        <h1 class="hero-title">
-                            Groceries delivered in <span class="text-highlight">90 minutes</span>
-                        </h1>
-
-                        <p class="hero-subtitle">
-                            Get your healthy foods & snacks delivered at your doorsteps all day everyday. 
-                            Fresh meat, seafood, and quality products guaranteed.
-                        </p>
-
-                        <div class="hero-features">
-                            <div class="hero-feature">
-                                <i class="fas fa-shipping-fast"></i>
-                                <span>Free Delivery</span>
+                    </div>
+                    <div class="carousel-item">
+                        <div class="row align-items-center min-vh-75">
+                            <div class="col-lg-5">
+                                <div class="hero-content">
+                                    <h1 class="hero-title">
+                                        Premium Beef
+                                    </h1>
+                                    <p class="hero-subtitle">
+                                        High quality beef cuts delivered fresh to your door.
+                                    </p>
+                                    <div class="d-flex gap-3 flex-wrap">
+                                        <a href="product_detail.php?id=1" class="btn-hero btn-hero-primary">
+                                            <i class="fas fa-shopping-cart"></i>
+                                            Buy Now
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="hero-feature">
-                                <i class="fas fa-medal"></i>
-                                <span>Premium Quality</span>
-                            </div>
-                            <div class="hero-feature">
-                                <i class="fas fa-clock"></i>
-                                <span>90 Min Delivery</span>
+                            <div class="col-lg-7">
+                                <div class="hero-image-container">
+                                        <img src="images/slide2.png" alt="Premium Beef" class="hero-main-image">
+                                </div>
                             </div>
                         </div>
-
-                        <div class="d-flex gap-3 flex-wrap">
-                            <a href="product.php" class="btn-hero btn-hero-primary">
-                                <i class="fas fa-shopping-cart"></i>
-                                Start Shopping
-                            </a>
-                            <a href="#featured" class="btn-hero btn-hero-outline">
-                                <i class="fas fa-play"></i>
-                                See Offers
-                            </a>
+                    </div>
+                    <div class="carousel-item">
+                        <div class="row align-items-center min-vh-75">
+                            <div class="col-lg-5">
+                                <div class="hero-content">
+                                    <h1 class="hero-title">
+                                        Fresh Bangus
+                                    </h1>
+                                    <p class="hero-subtitle">
+                                        Freshly caught bangus fish, perfect for your meals.
+                                    </p>
+                                    <div class="d-flex gap-3 flex-wrap">
+                                        <a href="product_detail.php?id=2" class="btn-hero btn-hero-primary">
+                                            <i class="fas fa-shopping-cart"></i>
+                                            Buy Now
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-7">
+                                <div class="hero-image-container">
+                                        <img src="images/slide3.png" alt="Fresh Bangus" class="hero-main-image">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="carousel-item">
+                        <div class="row align-items-center min-vh-75">
+                            <div class="col-lg-5">
+                                <div class="hero-content">
+                                    <h1 class="hero-title">
+                                        Chicken Breast
+                                    </h1>
+                                    <p class="hero-subtitle">
+                                        Fresh chicken breast, lean and healthy.
+                                    </p>
+                                    <div class="d-flex gap-3 flex-wrap">
+                                        <a href="product_detail.php?id=3" class="btn-hero btn-hero-primary">
+                                            <i class="fas fa-shopping-cart"></i>
+                                            Buy Now
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-7">
+                                <div class="hero-image-container">
+                                        <img src="images/slide4.png" alt="Chicken Breast" class="hero-main-image">
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <div class="col-lg-6">
-                    <div class="hero-image-container">
-                        <!-- Floating Cards -->
-                        <div class="floating-card card-1">
-                            <img src="images/beef1.jpg" alt="Premium Beef">
-                            <h6>Premium Beef</h6>
-                            <div class="price">₱599/kg</div>
-                        </div>
-
-                        <div class="floating-card card-2">
-                            <img src="images/bangus.jpg" alt="Fresh Fish">
-                            <h6>Fresh Bangus</h6>
-                            <div class="price">₱299/kg</div>
-                        </div>
-
-                        <div class="floating-card card-3">
-                            <img src="images/breast.jpg" alt="Chicken">
-                            <h6>Chicken Breast</h6>
-                            <div class="price">₱199/kg</div>
-                        </div>
-
-                        <img src="images/beef2.jpg" alt="Fresh Groceries" class="hero-main-image">
-                    </div>
-                </div>
+                <button class="carousel-control-prev" type="button" data-bs-target="#heroCarousel" data-bs-slide="prev">
+                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Previous</span>
+                </button>
+                <button class="carousel-control-next" type="button" data-bs-target="#heroCarousel" data-bs-slide="next">
+                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Next</span>
+                </button>
             </div>
         </div>
     </section>
@@ -978,13 +1452,23 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                                     <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
 
                                     <div class="product-price">₱<?= number_format($product['price'], 2) ?></div>
-                                    <div class="product-stock">Stock: <?= (int)$product['stock'] ?> available</div>
+                                    <div class="product-stock">Stock: <?= number_format((float)$product['stock'], 1) ?> <?= htmlspecialchars($product['uom_name'] ?? '') ?> available</div>
 
-                                    <div class="mt-3">
-                                        <button type="button" class="btn-add-cart" data-product-id="<?= $product['id'] ?>">
-                                            <i class="fas fa-cart-plus me-2"></i>Add to Cart
+                                    <?php if ((float)$product['stock'] > 0): ?>
+                                        <div class="d-flex align-items-center gap-2 mb-2">
+                                            <input type="number" class="form-control quantity-input" value="1" step="0.1" min="1" max="<?= (float)$product['stock'] ?>" inputmode="decimal" aria-label="Quantity" />
+                                            <span class="text-muted" style="white-space: nowrap;"><?= htmlspecialchars($product['uom_name'] ?? '') ?></span>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <button type="button" class="btn-add-cart flex-grow-1" data-product-id="<?= $product['id'] ?>">
+                                                <i class="fas fa-cart-plus me-2"></i>Add to Cart
+                                            </button>
+                                        </div>
+                                    <?php else: ?>
+                                        <button class="btn-out-of-stock" disabled>
+                                            <i class="fas fa-times-circle me-2"></i>Out of Stock
                                         </button>
-                                    </div>
+                                    <?php endif; ?>
                                 </div>
                         </div>
                     <?php endforeach; ?>

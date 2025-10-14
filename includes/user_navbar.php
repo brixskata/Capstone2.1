@@ -142,19 +142,19 @@ if (!empty($_SESSION['cart'])) {
     <!-- Desktop Icons -->
     <div class="d-none d-lg-flex align-items-center gap-4">
       <a class="text-dark <?php if ($current == 'favorites.php') echo 'fw-bold'; ?>" href="favorites.php">
-        <i class="fas fa-heart fs-5"></i>
+        <i class="fas fa-heart me-2"></i>Favorites
       </a>
       <?php if (isset($_SESSION['user_id'])): ?>
         <a class="text-dark <?php if ($current == 'orders.php') echo 'fw-bold'; ?>" href="orders.php">
-          <i class="fas fa-user fs-5"></i>
+          <i class="fas fa-user me-2"></i>Profile
         </a>
       <?php else: ?>
         <a class="text-dark" href="login.php">
-          <i class="fas fa-user fs-5"></i>
+          <i class="fas fa-user me-2"></i>Login
         </a>
       <?php endif; ?>
       <button class="btn p-0 text-dark position-relative" onclick="toggleCart()">
-        <i class="fas fa-shopping-cart fs-5"></i>
+        <i class="fas fa-shopping-cart me-2"></i>Cart
         <?php if (!empty($_SESSION['cart'])): ?>
           <span class="cart-badge">
             <?php echo count($_SESSION['cart']); ?>
@@ -177,7 +177,7 @@ if (!empty($_SESSION['cart'])) {
     </a>
     <?php if (isset($_SESSION['user_id'])): ?>
       <a class="text-dark <?php if ($current == 'orders.php') echo 'fw-bold'; ?>" href="orders.php">
-        <i class="fas fa-user me-2"></i> Orders
+        <i class="fas fa-user me-2"></i> Profile
       </a>
     <?php else: ?>
       <a class="text-dark" href="login.php">
@@ -398,6 +398,54 @@ if (!empty($_SESSION['cart'])) {
   }
   .navbar-nav .nav-link.fw-bold, .navbar-nav .nav-link:hover {
     color: var(--bs-secondary) !important;
+  }
+
+  /* Enhanced Navbar Links */
+  .navbar a {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 1.1rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+  .navbar a:hover {
+    color: var(--bs-secondary) !important;
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+  .navbar button.btn {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 1.1rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+  }
+  .navbar button.btn:hover {
+    color: var(--bs-secondary) !important;
+    transform: translateY(-1px);
+  }
+
+  /* Offcanvas Links */
+  .offcanvas-body a {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 1.1rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+  .offcanvas-body a:hover {
+    color: var(--bs-secondary) !important;
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+  .offcanvas-body button.btn {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 1.1rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+  }
+  .offcanvas-body button.btn:hover {
+    color: var(--bs-secondary) !important;
+    transform: translateY(-1px);
   }
 
   /* Cart Badge */
