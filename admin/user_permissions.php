@@ -60,36 +60,83 @@ if (isCustomer($pdo)) {
 // Handle role creation
 if (isset($_POST['create_role'])) {
     $role_name = trim($_POST['role_name']);
-    $admin_password = $_POST['admin_password'];
     
-    // Verify admin password
-    $adminHash = getAdminHash($pdo, $_SESSION['username']);
-    $passwordOk = false;
-    if ($adminHash) {
-        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
-        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
+    try {
+        // Check if role already exists
+        $stmt = $pdo->prepare("SELECT 1 FROM user_type WHERE role = ?");
+        $stmt->execute([$role_name]);
+        if ($stmt->fetch()) {
+            $_SESSION['error'] = "Role '$role_name' already exists";
+        } else {
+            // Create new role
+            $stmt = $pdo->prepare("INSERT INTO user_type (role) VALUES (?)");
+            $stmt->execute([$role_name]);
+            $new_role_id = $pdo->lastInsertId();
+            
+            // Store new role ID in session for permission assignment
+            $_SESSION['new_role_id'] = $new_role_id;
+            $_SESSION['new_role_name'] = $role_name;
+            
+            $_SESSION['success'] = "Role '$role_name' created successfully. Please assign permissions.";
+            logHistory($pdo, 'Role Created', "Created new role: $role_name", $_SESSION['username']);
+        }
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Error creating role: " . $e->getMessage();
     }
     
-    if ($passwordOk) {
-        try {
-            // Check if role already exists
-            $stmt = $pdo->prepare("SELECT 1 FROM user_type WHERE role = ?");
-            $stmt->execute([$role_name]);
-            if ($stmt->fetch()) {
-                $_SESSION['error'] = "Role '$role_name' already exists";
-            } else {
-                // Create new role
-                $stmt = $pdo->prepare("INSERT INTO user_type (role) VALUES (?)");
-                $stmt->execute([$role_name]);
-                
-                $_SESSION['success'] = "Role '$role_name' created successfully";
-                logHistory($pdo, 'Role Created', "Created new role: $role_name", $_SESSION['username']);
+    header("Location: user_permissions.php");
+    exit;
+}
+
+// Handle role permission assignment
+if (isset($_POST['assign_role_permissions'])) {
+    $role_id = (int)$_POST['role_id'];
+    $selected_sections = $_POST['sections'] ?? [];
+    
+    try {
+        $pdo->beginTransaction();
+        
+        // Remove all existing permissions for this role
+        $stmt = $pdo->prepare("DELETE FROM role_permissions WHERE usertype_id = ?");
+        $stmt->execute([$role_id]);
+        $deleted_count = $stmt->rowCount();
+        
+        // Add permissions based on selected sections
+        $inserted_count = 0;
+        if (!empty($selected_sections)) {
+            $stmt = $pdo->prepare("INSERT INTO role_permissions (usertype_id, permission_id) VALUES (?, ?)");
+            foreach ($selected_sections as $section_key) {
+                if (isset($sidebar_sections[$section_key])) {
+                    foreach ($sidebar_sections[$section_key]['permissions'] as $permission_id) {
+                        $stmt->execute([$role_id, $permission_id]);
+                        $inserted_count++;
+                    }
+                }
             }
-        } catch (Exception $e) {
-            $_SESSION['error'] = "Error creating role: " . $e->getMessage();
         }
-    } else {
-        $_SESSION['error'] = "Invalid admin password";
+        
+        $pdo->commit();
+        
+        // Get role name for success message
+        $stmt = $pdo->prepare("SELECT role FROM user_type WHERE usertype_id = ?");
+        $stmt->execute([$role_id]);
+        $role = $stmt->fetch();
+        
+        $_SESSION['success'] = "Permissions assigned to role '{$role['role']}' successfully (Added: $inserted_count permissions)";
+        
+        // Log the action
+        $sections_assigned = implode(', ', array_map(function($key) use ($sidebar_sections) {
+            return $sidebar_sections[$key]['title'];
+        }, $selected_sections));
+        logHistory($pdo, 'Role Permissions Assigned', "Assigned permissions to role: {$role['role']} - Sections: {$sections_assigned}", $_SESSION['username']);
+        
+        // Clear session flags
+        unset($_SESSION['new_role_id']);
+        unset($_SESSION['new_role_name']);
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        $_SESSION['error'] = "Error assigning permissions: " . $e->getMessage();
     }
     
     header("Location: user_permissions.php");
@@ -99,140 +146,78 @@ if (isset($_POST['create_role'])) {
 // Handle role deletion
 if (isset($_POST['delete_role'])) {
     $role_id = (int)$_POST['role_id'];
-    $admin_password = $_POST['admin_password'];
     
-    // Verify admin password
-    $adminHash = getAdminHash($pdo, $_SESSION['username']);
-    $passwordOk = false;
-    if ($adminHash) {
-        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
-        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
-    }
-    
-    if ($passwordOk) {
-        try {
-            // Check if role is in use
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE usertype_id = ?");
+    try {
+        // Check if role is in use (only count active users)
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE usertype_id = ? AND is_active = 1");
+        $stmt->execute([$role_id]);
+        $userCount = $stmt->fetchColumn();
+        
+        if ($userCount > 0) {
+            $_SESSION['error'] = "Cannot delete role: $userCount active user(s) are currently using this role";
+        } else {
+            // Get role name for logging
+            $stmt = $pdo->prepare("SELECT role FROM user_type WHERE usertype_id = ?");
             $stmt->execute([$role_id]);
-            $userCount = $stmt->fetchColumn();
+            $role = $stmt->fetch();
             
-            if ($userCount > 0) {
-                $_SESSION['error'] = "Cannot delete role: $userCount user(s) are currently using this role";
-            } else {
-                // Get role name for logging
-                $stmt = $pdo->prepare("SELECT role FROM user_type WHERE usertype_id = ?");
+            try {
+                $pdo->beginTransaction();
+                
+                // First, reassign any deactivated users to a default role (customer or admin)
+                $default_role_stmt = $pdo->prepare("SELECT usertype_id FROM user_type WHERE role = 'customer' LIMIT 1");
+                $default_role_stmt->execute();
+                $default_role_id = $default_role_stmt->fetchColumn();
+                
+                if ($default_role_id) {
+                    // Reassign deactivated users to default role
+                    $reassign_stmt = $pdo->prepare("UPDATE users SET usertype_id = ? WHERE usertype_id = ? AND is_active = 0");
+                    $reassign_stmt->execute([$default_role_id, $role_id]);
+                    $reassigned_count = $reassign_stmt->rowCount();
+                }
+                
+                // Delete associated role permissions
+                $stmt = $pdo->prepare("DELETE FROM role_permissions WHERE usertype_id = ?");
                 $stmt->execute([$role_id]);
-                $role = $stmt->fetch();
                 
                 // Delete role
                 $stmt = $pdo->prepare("DELETE FROM user_type WHERE usertype_id = ?");
                 $stmt->execute([$role_id]);
                 
-                $_SESSION['success'] = "Role '{$role['role']}' deleted successfully";
-                logHistory($pdo, 'Role Deleted', "Deleted role: {$role['role']}", $_SESSION['username']);
-            }
-        } catch (Exception $e) {
-            $_SESSION['error'] = "Error deleting role: " . $e->getMessage();
-        }
-    } else {
-        $_SESSION['error'] = "Invalid admin password";
-    }
-    
-    header("Location: user_permissions.php");
-    exit;
-}
-
-// Handle permission updates
-if (isset($_POST['update_permissions'])) {
-    $user_id = (int)$_POST['user_id'];
-    $selected_sections = $_POST['sections'] ?? [];
-    $admin_password = $_POST['admin_password'];
-    
-    // Verify admin password
-    $adminHash = getAdminHash($pdo, $_SESSION['username']);
-    $passwordOk = false;
-    if ($adminHash) {
-        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
-        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
-    }
-    
-    if ($passwordOk) {
-        try {
-            $pdo->beginTransaction();
-            
-            // Debug logging
-            error_log("Permission Update Debug - User ID: $user_id");
-            error_log("Permission Update Debug - Selected Sections: " . print_r($selected_sections, true));
-            error_log("Permission Update Debug - Sidebar Sections Available: " . print_r(array_keys($sidebar_sections), true));
-            
-            // Remove all existing permissions for this user
-            $stmt = $pdo->prepare("DELETE FROM user_permissions WHERE user_id = ?");
-            $stmt->execute([$user_id]);
-            $deleted_count = $stmt->rowCount();
-            error_log("Permission Update Debug - Deleted $deleted_count existing permissions");
-            
-            // Add permissions based on selected sections
-            $inserted_count = 0;
-            if (!empty($selected_sections)) {
-                $stmt = $pdo->prepare("INSERT INTO user_permissions (user_id, permission_id) VALUES (?, ?)");
-                foreach ($selected_sections as $section_key) {
-                    if (isset($sidebar_sections[$section_key])) {
-                        error_log("Permission Update Debug - Processing section: $section_key");
-                        foreach ($sidebar_sections[$section_key]['permissions'] as $permission_id) {
-                            $stmt->execute([$user_id, $permission_id]);
-                            $inserted_count++;
-                        }
-                    } else {
-                        error_log("Permission Update Debug - Section not found: $section_key");
-                    }
+                $pdo->commit();
+                
+                $message = "Role '{$role['role']}' deleted successfully";
+                if (isset($reassigned_count) && $reassigned_count > 0) {
+                    $message .= " ($reassigned_count deactivated users reassigned to default role)";
                 }
+                
+                $_SESSION['success'] = $message;
+                logHistory($pdo, 'Role Deleted', "Deleted role: {$role['role']}", $_SESSION['username']);
+                
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                throw $e;
             }
-            error_log("Permission Update Debug - Inserted $inserted_count new permissions");
-            
-            $pdo->commit();
-            $_SESSION['success'] = "User access updated successfully (Deleted: $deleted_count, Added: $inserted_count)";
-            
-            // Log the action
-            $stmt = $pdo->prepare("SELECT username FROM users WHERE user_id = ?");
-            $stmt->execute([$user_id]);
-            $target_user = $stmt->fetch();
-            $sections_assigned = implode(', ', array_map(function($key) use ($sidebar_sections) {
-                return $sidebar_sections[$key]['title'];
-            }, $selected_sections));
-            logHistory($pdo, 'User Access Updated', "Updated access for user: {$target_user['username']} - Sections: {$sections_assigned}", $_SESSION['username']);
-            
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            error_log("Permission Update Error: " . $e->getMessage());
-            $_SESSION['error'] = "Error updating access: " . $e->getMessage();
         }
-    } else {
-        $_SESSION['error'] = "Invalid admin password";
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Error deleting role: " . $e->getMessage();
     }
     
     header("Location: user_permissions.php");
     exit;
 }
 
-// Get all users with their current permissions (excluding customers)
-$query = "SELECT u.user_id, u.username, ut.role, 
-                 GROUP_CONCAT(p.permission_name) as user_permissions
-          FROM users u
-          LEFT JOIN user_type ut ON ut.usertype_id = u.usertype_id
-          LEFT JOIN user_permissions up ON up.user_id = u.user_id
-          LEFT JOIN permissions p ON p.permission_id = up.permission_id
-          WHERE u.username != ? AND ut.role != 'customer'
-          GROUP BY u.user_id, u.username, ut.role
-          ORDER BY u.username";
-$stmt = $pdo->prepare($query);
-$stmt->execute([$_SESSION['username']]);
-$users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Get all roles
-$roles_query = "SELECT usertype_id, role, 
-                       (SELECT COUNT(*) FROM users WHERE usertype_id = ut.usertype_id) as user_count
+
+// Get all roles with their permissions
+$roles_query = "SELECT ut.usertype_id, ut.role, 
+                       (SELECT COUNT(*) FROM users WHERE usertype_id = ut.usertype_id AND is_active = 1) as user_count,
+                       GROUP_CONCAT(DISTINCT p.permission_name) as role_permissions
                 FROM user_type ut
-                ORDER BY role";
+                LEFT JOIN role_permissions rp ON rp.usertype_id = ut.usertype_id
+                LEFT JOIN permissions p ON p.permission_id = rp.permission_id
+                GROUP BY ut.usertype_id, ut.role
+                ORDER BY ut.role";
 $roles_stmt = $pdo->query($roles_query);
 $all_roles = $roles_stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -270,6 +255,7 @@ function getAdminHash(PDO $pdo, string $username): ?string {
     <title>User Permissions - Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <?php include 'includes/admin_styles.php'; ?>
     <style>
         :root {
@@ -437,6 +423,14 @@ function getAdminHash(PDO $pdo, string $username): ?string {
             color: white;
         }
         
+        .btn-group .btn {
+            margin-left: 2px;
+        }
+        
+        .btn-group .btn:first-child {
+            margin-left: 0;
+        }
+        
         @media (max-width: 768px) {
             .main-container {
                 padding: 1rem;
@@ -449,6 +443,19 @@ function getAdminHash(PDO $pdo, string $username): ?string {
             .page-header h2 {
                 font-size: 1.5rem;
             }
+        }
+        
+        /* SweetAlert2 Custom Styling */
+        .swal2-popup-rounded {
+            border-radius: 20px !important;
+        }
+        
+        .swal2-popup-rounded .swal2-title {
+            border-radius: 20px 20px 0 0 !important;
+        }
+        
+        .swal2-popup-rounded .swal2-actions {
+            border-radius: 0 0 20px 20px !important;
         }
     </style>
 </head>
@@ -507,7 +514,14 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                             <i class="fas fa-user-shield"></i>
                         </div>
                         <div class="card-content">
-                            <h3 class="card-number"><?php echo count($users); ?></h3>
+                            <h3 class="card-number"><?php 
+                                // Count total admin users (excluding customers)
+                                $admin_count_query = "SELECT COUNT(*) FROM users u 
+                                                    JOIN user_type ut ON u.usertype_id = ut.usertype_id 
+                                                    WHERE ut.role != 'customer'";
+                                $admin_count = $pdo->query($admin_count_query)->fetchColumn();
+                                echo $admin_count;
+                            ?></h3>
                             <p class="card-label">Admin Users</p>
                         </div>
                     </div>
@@ -552,16 +566,56 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                                 <div class="role-card" style="background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 1px solid #e9ecef;">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <h6 class="mb-0 fw-bold"><?php echo ucfirst(str_replace('_', ' ', $role['role'])); ?></h6>
-                                        <?php if ($role['user_count'] == 0 && !in_array($role['role'], ['super_admin', 'admin', 'customer'])): ?>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="showDeleteRoleModal(<?php echo $role['usertype_id']; ?>, '<?php echo htmlspecialchars($role['role']); ?>')">
-                                                <i class="fa fa-trash"></i>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="showManageAccessModal(<?php echo $role['usertype_id']; ?>, '<?php echo htmlspecialchars($role['role']); ?>')" title="Manage Access">
+                                                <i class="fa fa-cog"></i>
                                             </button>
+                                            <?php if ($role['user_count'] == 0 && !in_array($role['role'], ['super_admin', 'admin', 'customer'])): ?>
+                                                <button class="btn btn-sm btn-outline-danger" onclick="showDeleteRoleModal(<?php echo $role['usertype_id']; ?>, '<?php echo htmlspecialchars($role['role']); ?>')" title="Delete Role">
+                                                    <i class="fa fa-trash"></i>
+                                                </button>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-2">
+                                        <small class="text-info">
+                                            <i class="fa fa-users me-1"></i>
+                                            <?php echo $role['user_count']; ?> user(s) assigned
+                                        </small>
+                                    </div>
+                                    
+                                    <div class="mb-2">
+                                        <h6 class="text-muted mb-1">Access:</h6>
+                                        <?php
+                                        // Get role's current permissions
+                                        $role_perms_stmt = $pdo->prepare("SELECT permission_id FROM role_permissions WHERE usertype_id = ?");
+                                        $role_perms_stmt->execute([$role['usertype_id']]);
+                                        $role_permission_ids = $role_perms_stmt->fetchAll(PDO::FETCH_COLUMN);
+                                        
+                                        // Check which sections role has access to
+                                        $role_sections = [];
+                                        foreach ($sidebar_sections as $section_key => $section) {
+                                            $has_section = true;
+                                            foreach ($section['permissions'] as $required_perm_id) {
+                                                if (!in_array($required_perm_id, $role_permission_ids)) {
+                                                    $has_section = false;
+                                                    break;
+                                                }
+                                            }
+                                            if ($has_section) {
+                                                $role_sections[] = $section['title'];
+                                            }
+                                        }
+                                        
+                                        if (!empty($role_sections)): ?>
+                                            <?php foreach ($role_sections as $section_title): ?>
+                                                <span class="permission-badge"><?php echo htmlspecialchars($section_title); ?></span>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">No access assigned</span>
                                         <?php endif; ?>
                                     </div>
-                                    <small class="text-info">
-                                        <i class="fa fa-users me-1"></i>
-                                        <?php echo $role['user_count']; ?> user(s) assigned
-                                    </small>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -569,138 +623,9 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                 </div>
             </div>
 
-            <!-- Users List -->
-            <div class="row g-4">
-                <?php foreach ($users as $user): ?>
-                    <div class="col-lg-6 col-xl-4">
-                        <div class="user-card">
-                            <div class="d-flex align-items-center mb-3">
-                                <div class="user-avatar me-3" style="width: 50px; height: 50px; border-radius: 50%; background: #7F1734; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; font-weight: bold;">
-                                    <?php echo strtoupper(substr($user['username'], 0, 1)); ?>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <h5 class="mb-1 fw-bold"><?php echo htmlspecialchars($user['username']); ?></h5>
-                                    <span class="badge bg-warning text-dark"><?php echo ucfirst(str_replace('_', ' ', $user['role'])); ?></span>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <h6 class="text-muted mb-2">Current Access:</h6>
-                                <?php
-                                // Get user's current permissions
-                                $user_perms_stmt = $pdo->prepare("SELECT permission_id FROM user_permissions WHERE user_id = ?");
-                                $user_perms_stmt->execute([$user['user_id']]);
-                                $user_permission_ids = $user_perms_stmt->fetchAll(PDO::FETCH_COLUMN);
-                                
-                                // Check which sections user has access to
-                                $user_sections = [];
-                                foreach ($sidebar_sections as $section_key => $section) {
-                                    $has_section = true;
-                                    foreach ($section['permissions'] as $required_perm_id) {
-                                        if (!in_array($required_perm_id, $user_permission_ids)) {
-                                            $has_section = false;
-                                            break;
-                                        }
-                                    }
-                                    if ($has_section) {
-                                        $user_sections[] = $section['title'];
-                                    }
-                                }
-                                
-                                if (!empty($user_sections)): ?>
-                                    <?php foreach ($user_sections as $section_title): ?>
-                                        <span class="permission-badge"><?php echo htmlspecialchars($section_title); ?></span>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <span class="text-muted">Dashboard only</span>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <button class="btn btn-sm w-100" data-bs-toggle="modal" data-bs-target="#permissionModal<?php echo $user['user_id']; ?>" style="background-color: #7F1734; color: white; border: none;">
-                                <i class="fa fa-edit me-1"></i> Manage Access
-                            </button>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
         </div>
     </main>
 
-    <!-- Permission Modals -->
-    <?php foreach ($users as $user): ?>
-        <div class="modal fade" id="permissionModal<?php echo $user['user_id']; ?>" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <form action="user_permissions.php" method="POST">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Manage Access for <?php echo htmlspecialchars($user['username']); ?></h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
-                            
-                            <!-- Get current user permissions -->
-                            <?php
-                            $current_perms_stmt = $pdo->prepare("SELECT permission_id FROM user_permissions WHERE user_id = ?");
-                            $current_perms_stmt->execute([$user['user_id']]);
-                            $current_permissions = $current_perms_stmt->fetchAll(PDO::FETCH_COLUMN);
-                            
-                            // Check which sections user currently has access to
-                            $current_sections = [];
-                            foreach ($sidebar_sections as $section_key => $section) {
-                                $has_section = true;
-                                foreach ($section['permissions'] as $required_perm_id) {
-                                    if (!in_array($required_perm_id, $current_permissions)) {
-                                        $has_section = false;
-                                        break;
-                                    }
-                                }
-                                if ($has_section) {
-                                    $current_sections[] = $section_key;
-                                }
-                            }
-                            ?>
-                            
-                            <div class="alert alert-info">
-                                <i class="fa fa-info-circle me-2"></i>
-                                <strong>Dashboard is always visible</strong> for all users. Select sidebar sections to grant access to specific areas.
-                            </div>
-                            
-                            <?php foreach ($sidebar_sections as $section_key => $section): ?>
-                                <div class="permission-card">
-                                    <div class="module-header">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" 
-                                                   name="sections[]" 
-                                                   value="<?php echo $section_key; ?>"
-                                                   id="section_<?php echo $user['user_id']; ?>_<?php echo $section_key; ?>"
-                                                   <?php echo in_array($section_key, $current_sections) ? 'checked' : ''; ?>>
-                                            <label class="form-check-label w-100" for="section_<?php echo $user['user_id']; ?>_<?php echo $section_key; ?>">
-                                                <h6 class="mb-1">
-                                                    <i class="fa fa-<?php echo $section['icon']; ?> me-2"></i>
-                                                    <?php echo htmlspecialchars($section['title']); ?>
-                                                </h6>
-                                                <small class="text-light opacity-75"><?php echo htmlspecialchars($section['description']); ?></small>
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Admin Password (to confirm changes)</label>
-                                <input type="password" class="form-control" name="admin_password" required>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" name="update_permissions" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">Update Access</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-    <?php endforeach; ?>
 
     <!-- Create Role Modal -->
     <div class="modal fade" id="createRoleModal" tabindex="-1">
@@ -720,14 +645,94 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                                    title="Only letters, numbers, and underscores allowed">
                             <small class="text-muted">Use lowercase with underscores (e.g., store_manager)</small>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Admin Password (to confirm)</label>
-                            <input type="password" class="form-control" name="admin_password" required>
-                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" name="create_role" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">Create Role</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assign Role Permissions Modal -->
+    <div class="modal fade" id="assignRolePermissionsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <form action="user_permissions.php" method="POST">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Assign Permissions to Role: <span id="newRoleName"></span></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="role_id" id="newRoleId">
+                        
+                        
+                        <?php foreach ($sidebar_sections as $section_key => $section): ?>
+                            <div class="permission-card">
+                                <div class="module-header">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               name="sections[]" 
+                                               value="<?php echo $section_key; ?>"
+                                               id="role_section_<?php echo $section_key; ?>">
+                                        <label class="form-check-label w-100" for="role_section_<?php echo $section_key; ?>">
+                                            <h6 class="mb-1">
+                                                <i class="fa fa-<?php echo $section['icon']; ?> me-2"></i>
+                                                <?php echo htmlspecialchars($section['title']); ?>
+                                            </h6>
+                                            <small class="text-light opacity-75"><?php echo htmlspecialchars($section['description']); ?></small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="assign_role_permissions" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">Assign Permissions</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Manage Access Modal -->
+    <div class="modal fade" id="manageAccessModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <form action="user_permissions.php" method="POST">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Manage Access for Role: <span id="manageRoleName"></span></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="role_id" id="manageRoleId">
+                        
+                        
+                        <?php foreach ($sidebar_sections as $section_key => $section): ?>
+                            <div class="permission-card">
+                                <div class="module-header">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               name="sections[]" 
+                                               value="<?php echo $section_key; ?>"
+                                               id="manage_section_<?php echo $section_key; ?>">
+                                        <label class="form-check-label w-100" for="manage_section_<?php echo $section_key; ?>">
+                                            <h6 class="mb-1">
+                                                <i class="fa fa-<?php echo $section['icon']; ?> me-2"></i>
+                                                <?php echo htmlspecialchars($section['title']); ?>
+                                            </h6>
+                                            <small class="text-light opacity-75"><?php echo htmlspecialchars($section['description']); ?></small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="assign_role_permissions" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">Update Permissions</button>
                     </div>
                 </div>
             </form>
@@ -751,10 +756,6 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                             Are you sure you want to delete the role "<span id="deleteRoleName"></span>"?
                             <br><strong>This action cannot be undone.</strong>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Admin Password (to confirm)</label>
-                            <input type="password" class="form-control" name="admin_password" required>
-                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -768,11 +769,89 @@ function getAdminHash(PDO $pdo, string $username): ?string {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <?php include 'includes/admin_scripts.php'; ?>
     <script>
-        function showDeleteRoleModal(roleId, roleName) {
-            document.getElementById('deleteRoleId').value = roleId;
-            document.getElementById('deleteRoleName').textContent = roleName;
-            new bootstrap.Modal(document.getElementById('deleteRoleModal')).show();
+        function showManageAccessModal(roleId, roleName) {
+            // Set the role details in the modal
+            document.getElementById('manageRoleId').value = roleId;
+            document.getElementById('manageRoleName').textContent = roleName;
+            
+            // Get current permissions for this role
+            fetch('get_role_permissions.php?role_id=' + roleId)
+                .then(response => response.json())
+                .then(data => {
+                    // Clear all checkboxes first
+                    document.querySelectorAll('#manageAccessModal input[type="checkbox"]').forEach(checkbox => {
+                        checkbox.checked = false;
+                    });
+                    
+                    // Check the sections that this role has access to
+                    if (data.sections) {
+                        data.sections.forEach(sectionKey => {
+                            const checkbox = document.getElementById('manage_section_' + sectionKey);
+                            if (checkbox) {
+                                checkbox.checked = true;
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching role permissions:', error);
+                });
+            
+            // Show the modal
+            const manageModal = new bootstrap.Modal(document.getElementById('manageAccessModal'));
+            manageModal.show();
         }
+        
+        function showDeleteRoleModal(roleId, roleName) {
+            Swal.fire({
+                title: 'Confirm Role Deletion',
+                html: `Are you sure you want to delete the role "<strong>${roleName}</strong>"?<br><strong>This action cannot be undone.</strong>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, delete!',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    popup: 'swal2-popup-rounded'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Create a form and submit it
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = 'user_permissions.php';
+                    
+                    const roleIdInput = document.createElement('input');
+                    roleIdInput.type = 'hidden';
+                    roleIdInput.name = 'role_id';
+                    roleIdInput.value = roleId;
+                    
+                    const actionInput = document.createElement('input');
+                    actionInput.type = 'hidden';
+                    actionInput.name = 'delete_role';
+                    actionInput.value = '1';
+                    
+                    form.appendChild(roleIdInput);
+                    form.appendChild(actionInput);
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
+        }
+        
+        // Auto-show permission modal after role creation
+        document.addEventListener('DOMContentLoaded', function() {
+            <?php if (isset($_SESSION['new_role_id']) && isset($_SESSION['new_role_name'])): ?>
+                // Set the role details in the modal
+                document.getElementById('newRoleId').value = <?php echo $_SESSION['new_role_id']; ?>;
+                document.getElementById('newRoleName').textContent = '<?php echo htmlspecialchars($_SESSION['new_role_name']); ?>';
+                
+                // Show the permission assignment modal
+                const permissionModal = new bootstrap.Modal(document.getElementById('assignRolePermissionsModal'));
+                permissionModal.show();
+            <?php endif; ?>
+        });
     </script>
 </body>
 </html>

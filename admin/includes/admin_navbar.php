@@ -1,4 +1,7 @@
 <?php
+// Include permissions for role checking
+include_once '../includes/permissions.php';
+
 // Fetch user profile information
 $user_info = null;
 if (isset($_SESSION['username'])) {
@@ -16,6 +19,9 @@ if (isset($_SESSION['username'])) {
         $user_info = ['username' => $_SESSION['username'], 'role' => $_SESSION['role'] ?? 'admin'];
     }
 }
+
+// Check if user is Super Admin
+$is_super_admin = isSuperAdmin($pdo);
 
 // Fetch dynamic notification counts
 $notification_counts = [
@@ -71,10 +77,12 @@ if ($user_info) {
     
     // Set role display based on user role
     $user_role = $user_info['role'] ?? $_SESSION['role'] ?? 'admin';
-    if ($user_role === 'super_admin') {
+    if ($is_super_admin) {
         $role_display = 'Super Administrator';
     } elseif ($user_role === 'admin') {
         $role_display = 'Administrator';
+    } else {
+        $role_display = ucfirst(str_replace('_', ' ', $user_role));
     }
 }
 ?>
@@ -86,12 +94,14 @@ if ($user_info) {
     <button class="sidebar-toggle-nav" id="sidebarToggleNav">
       <i class="fas fa-bars"></i>
     </button>
-    <a href="admin_dashboard2.php" class="navbar-brand">
+    <a href="<?php echo $is_super_admin ? 'admin_dashboard2.php' : 'basic_dashboard.php'; ?>" class="navbar-brand">
       <div class="brand-logo">
         <img src="../images/logo.png" alt="MikeMadz Logo" class="navbar-logo">
+        <?php if ($is_super_admin): ?>
         <div class="logo-badge">
           <i class="fas fa-crown"></i>
         </div>
+        <?php endif; ?>
       </div>
       <div class="brand-text">
         <span class="brand-name">MikeMadz</span>
@@ -173,23 +183,10 @@ if ($user_info) {
             <i class="fas fa-user"></i>
             <span>Profile Settings</span>
           </a>
-          <a class="dropdown-item" href="account_settings.php">
-            <i class="fas fa-cog"></i>
-            <span>Account Settings</span>
-          </a>
-        </div>
+      
         
-        <div class="dropdown-section">
-          <div class="dropdown-section-title">Quick Actions</div>
-          <a class="dropdown-item" href="add_product.php">
-            <i class="fas fa-plus"></i>
-            <span>Add Product</span>
-          </a>
-          <a class="dropdown-item" href="restocking.php">
-            <i class="fas fa-warehouse"></i>
-            <span>Restock Inventory</span>
-          </a>
-        </div>
+       
+       
         
         <div class="dropdown-divider"></div>
         

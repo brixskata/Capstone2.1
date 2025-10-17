@@ -937,46 +937,301 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             opacity: 0.7;
         }
 
-        /* Features Section */
-        .features-section {
+        /* Seasonal Offerings Section */
+        .seasonal-offerings-section {
             padding: 5rem 0;
+            background: #ffffff;
+        }
+
+        .seasonal-card {
             background: white;
+            border-radius: 1rem;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            border: 1px solid #e9ecef;
+            height: 100%;
+            position: relative;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
 
-        .feature-card {
-            text-align: center;
-            padding: 2rem 1rem;
+        .seasonal-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
         }
 
-        .feature-icon {
-            width: 80px;
-            height: 80px;
+        .seasonal-image {
+            position: relative;
+            height: 200px;
+            overflow: hidden;
+        }
+
+        .seasonal-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .seasonal-card:hover .seasonal-image img {
+            transform: scale(1.05);
+        }
+
+        .seasonal-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
             background: var(--bs-secondary);
-            border-radius: 50%;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            font-weight: 600;
             display: flex;
             align-items: center;
-            justify-content: center;
-            margin: 0 auto 1.5rem;
-            color: white;
-            font-size: 2rem;
+            gap: 0.25rem;
+            box-shadow: 0 2px 8px rgba(127, 23, 52, 0.3);
         }
 
-        .feature-title {
+        .seasonal-content {
+            padding: 1.5rem;
+        }
+
+        .seasonal-title {
             font-size: 1.25rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
             color: var(--bs-dark);
         }
 
-        .feature-desc {
+        .seasonal-desc {
             color: #6c757d;
             line-height: 1.6;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .seasonal-price {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .price-old {
+            text-decoration: line-through;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .price-new {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--bs-secondary);
+        }
+
+        .discount {
+            background: #dc3545;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .seasonal-timer {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #6c757d;
+            font-size: 0.85rem;
+            font-weight: 500;
+            min-height: 1.5rem;
+            justify-content: flex-start;
+        }
+
+        .seasonal-timer i {
+            color: var(--bs-warning);
+        }
+
+        /* About Us Section */
+        .about-section {
+            padding: 5rem 0;
+            background: var(--bs-light);
+        }
+
+        .about-content {
+            padding: 0;
+        }
+
+        .about-story {
+            margin-bottom: 2rem;
+        }
+
+        .about-text {
+            font-size: 1rem;
+            line-height: 1.7;
+            color: #6c757d;
+            margin-bottom: 1.5rem;
+        }
+
+        .about-text strong {
+            color: var(--bs-dark);
+            font-weight: 600;
+        }
+
+        .about-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 1.5rem;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .stat-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bs-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .about-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .about-actions .btn {
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .about-actions .btn-primary {
+            background: var(--bs-secondary);
+            border-color: var(--bs-secondary);
+        }
+
+        .about-actions .btn-primary:hover {
+            background: #6b1429;
+            border-color: #6b1429;
+            transform: translateY(-2px);
+        }
+
+        .about-actions .btn-outline-primary {
+            color: var(--bs-secondary);
+            border-color: var(--bs-secondary);
+        }
+
+        .about-actions .btn-outline-primary:hover {
+            background: var(--bs-secondary);
+            border-color: var(--bs-secondary);
+            color: white;
+        }
+
+        .about-map {
+            position: relative;
+        }
+
+        .map-container {
+            position: relative;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .map-info {
+            margin-top: 1rem;
+            padding: 1.5rem;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .map-address {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .map-address i {
+            font-size: 1.2rem;
+            margin-top: 0.25rem;
+        }
+
+        .map-address div {
+            line-height: 1.5;
+        }
+
+        .map-address strong {
+            color: var(--bs-dark);
+            font-weight: 600;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .about-content {
+                padding-right: 0;
+                margin-bottom: 2rem;
+            }
+
+            .about-stats {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
+
+            .stat-item {
+                padding: 1rem;
+            }
+
+            .stat-number {
+                font-size: 1.5rem;
+            }
+
+            .about-actions {
+                flex-direction: column;
+            }
+
+            .about-actions .btn {
+                width: 100%;
+                text-align: center;
+            }
+
+            .map-container iframe {
+                height: 300px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .about-stats {
+                grid-template-columns: 1fr;
+            }
         }
 
         /* Testimonials Section */
         .testimonials-section {
             padding: 5rem 0;
-            background: var(--bs-light);
+            background: #ffffff;
         }
 
         .testimonial-card {
@@ -1338,49 +1593,141 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         </div>
     </section>
 
-    <!-- Features Section -->
-    <section class="features-section">
+    <!-- Seasonal Offerings Section -->
+    <section class="seasonal-offerings-section">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Why Choose MikeMadz?</h2>
-                <p class="section-subtitle">We're committed to delivering the highest quality products with exceptional service to your doorstep.</p>
+                <h2 class="section-title">Seasonal Specials</h2>
+                <p class="section-subtitle">Fresh seasonal offerings and limited-time deals you won't want to miss</p>
             </div>
 
             <div class="row g-4">
-                <div class="col-md-6 col-lg-3">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-truck"></i>
+                <div class="col-md-6 col-lg-4">
+                    <div class="seasonal-card">
+                        <div class="seasonal-image">
+                            <img src="images/beefscrap.jpg" alt="Holiday Specials" class="img-fluid">
+                            <div class="seasonal-badge">
+                                <i class="fas fa-gift"></i>
+                                Holiday Special
+                            </div>
                         </div>
-                        <h3 class="feature-title">Express Delivery</h3>
-                        <p class="feature-desc">Fast & reliable shipping nationwide. Get your fresh meat delivered within 24-48 hours.</p>
+                        <div class="seasonal-content">
+                            <h3 class="seasonal-title">Holiday Feast Package</h3>
+                            <p class="seasonal-desc">Complete your holiday table with our premium meat selection. Perfect for family gatherings and special celebrations.</p>
+                            <div class="seasonal-price">
+                                <span class="price-old">₱2,999</span>
+                                <span class="price-new">₱2,399</span>
+                                <span class="discount">20% OFF</span>
+                            </div>
+                            <div class="seasonal-timer">
+                                <i class="fas fa-clock"></i>
+                                <span>Limited time offer - Ends in 5 days</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-6 col-lg-3">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-shield-alt"></i>
+                <div class="col-md-6 col-lg-4">
+                    <div class="seasonal-card">
+                        <div class="seasonal-image">
+                            <img src="images/bangus.jpg" alt="Fresh Catch" class="img-fluid">
+                            <div class="seasonal-badge">
+                                <i class="fas fa-fish"></i>
+                                Fresh Catch
+                            </div>
                         </div>
-                        <h3 class="feature-title">Secure Payment</h3>
-                        <p class="feature-desc">100% secure transactions with multiple payment options. Your data is always protected.</p>
+                        <div class="seasonal-content">
+                            <h3 class="seasonal-title">Fresh Catch of the Week</h3>
+                            <p class="seasonal-desc">This week's fresh catch includes premium bangus, tilapia, and other seasonal fish varieties.</p>
+                            <div class="seasonal-price">
+                                <span class="price-old">₱350/kg</span>
+                                <span class="price-new">₱299/kg</span>
+                                <span class="discount">15% OFF</span>
+                            </div>
+                            <div class="seasonal-timer">
+                                <i class="fas fa-clock"></i>
+                                <span>Until stock lasts</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-6 col-lg-3">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-award"></i>
+                <div class="col-md-6 col-lg-4">
+                    <div class="seasonal-card">
+                        <div class="seasonal-image">
+                            <img src="images/beef1.jpg" alt="Premium Cuts" class="img-fluid">
+                            <div class="seasonal-badge">
+                                <i class="fas fa-star"></i>
+                                Premium Week
+                            </div>
                         </div>
-                        <h3 class="feature-title">Quality Products</h3>
-                        <p class="feature-desc">Premium cuts sourced from trusted suppliers. Quality guaranteed with every order.</p>
+                        <div class="seasonal-content">
+                            <h3 class="seasonal-title">Premium Cuts Week</h3>
+                            <p class="seasonal-desc">Hand-selected premium beef cuts with perfect marbling. Limited quantity available this week only.</p>
+                            <div class="seasonal-price">
+                                <span class="price-old">₱650/kg</span>
+                                <span class="price-new">₱599/kg</span>
+                                <span class="discount">8% OFF</span>
+                            </div>
+                            <div class="seasonal-timer">
+                                <i class="fas fa-clock"></i>
+                                <span>Weekend special - 2 days left</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-6 col-lg-3">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-tags"></i>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Us Section -->
+    <section class="about-section">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="about-content text-center">
+                        <div class="section-header">
+                            <h2 class="section-title">About MikeMadz</h2>
+                            <p class="section-subtitle">Your trusted frozen goods supplier since 2021</p>
                         </div>
-                        <h3 class="feature-title">Affordable Prices</h3>
-                        <p class="feature-desc">Competitive pricing with regular promotions and discounts for our valued customers.</p>
+                        
+                        <div class="about-story">
+                            <p class="about-text">
+                                Located in <strong>BIR Village Block 9 Lot 5 Franchise St., Brgy. Sauyo, Quezon City</strong>, 
+                                MikeMadz quickly grew from a small online venture into a trusted frozen goods supplier. 
+                                We now serve <strong>40 to 60 customers daily</strong>, offering 
+                                <strong>1,500 to 2,000 products every week</strong>, and proudly serving customers nationwide.
+                            </p>
+                        </div>
+                        
+                        <div class="about-map">
+                            <div class="map-container">
+                                <iframe 
+                                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.1234567890!2d121.1234567890!3d14.1234567890!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTTCsDA3JzI0LjQiTiAxMjHCsDA3JzI0LjQiRQ!5e0!3m2!1sen!2sph!4v1234567890123!5m2!1sen!2sph"
+                                    width="100%" 
+                                    height="400" 
+                                    style="border:0; border-radius: 1rem;" 
+                                    allowfullscreen="" 
+                                    loading="lazy" 
+                                    referrerpolicy="no-referrer-when-downgrade">
+                                </iframe>
+                            </div>
+                            <div class="map-info">
+                                <div class="map-address">
+                                    <i class="fas fa-map-marker-alt text-primary"></i>
+                                    <div>
+                                        <strong>MikeMadz Frozen Product Store</strong><br>
+                                        BIR Village Block 9 Lot 5 Franchise St.<br>
+                                        Brgy. Sauyo, Quezon City
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="about-actions mt-4">
+                            <a href="https://maps.app.goo.gl/DANPXbebykqEPmkS7" target="_blank" class="btn btn-outline-primary">
+                                <i class="fas fa-map-marker-alt me-2"></i>
+                                Visit Our Store
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1391,7 +1738,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
     <section class="testimonials-section">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">What Our Customers Say</h2>
+                <h2 class="section-title">Customer Ratings </h2>
                 <p class="section-subtitle">Don't just take our word for it - hear from our satisfied customers.</p>
             </div>
 

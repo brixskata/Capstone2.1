@@ -3,6 +3,8 @@ include '../includes/db.php';
 include_once '../includes/log_history.php';
 include_once '../includes/permissions.php';
 include_once '../includes/batch_manager.php';
+include_once '../includes/brand_stock_manager.php';
+include_once '../includes/reorder_point_calculator.php';
 session_start();
 
 // Ensure user is logged in and not a customer
@@ -18,8 +20,10 @@ if (isCustomer($pdo)) {
     exit;
 }
 
-// Initialize batch manager
+// Initialize managers
 $batchManager = new BatchManager($pdo);
+$brandStockManager = new BrandStockManager($pdo);
+$ropCalculator = new ReorderPointCalculator($pdo);
 
 // Handle stock adjustment form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
@@ -39,10 +43,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
         $notes = $_POST['notes'] ?: null;
         $expiration_date = $_POST['expiration_date'] ?: null;
         $supplier_id = $_POST['supplier_id'] ?: null;
+        $brand_id = $_POST['brand_id'] ?: null;
         
-        // Validate supplier is required for stock subtraction
-        if ($adjustment_type === 'subtract' && empty($supplier_id)) {
-            throw new Exception("Supplier is required when subtracting stock. You must specify which supplier's stock is being removed.");
+        // Validate supplier and brand are required for stock subtraction
+        if ($adjustment_type === 'subtract') {
+            if (empty($supplier_id)) {
+                throw new Exception("Supplier is required when subtracting stock. You must specify which supplier's stock is being removed.");
+            }
+            if (empty($brand_id)) {
+                throw new Exception("Brand is required when subtracting stock. You must specify which brand's stock is being removed.");
+            }
         }
 
         // Validate quantity
@@ -64,8 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
 
         $pdo->beginTransaction();
 
-        // Validate supplier-product relationship for stock subtraction
-        if ($adjustment_type === 'subtract' && !empty($supplier_id)) {
+        // Validate supplier-product-brand relationship for stock subtraction
+        if ($adjustment_type === 'subtract' && !empty($supplier_id) && !empty($brand_id)) {
+            // Check if supplier provides this product
             $stmt = $pdo->prepare("
                 SELECT COUNT(*) FROM supplier_products 
                 WHERE supplier_id = ? AND product_id = ? AND is_active = 1
@@ -84,6 +95,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
                 $product_name = $stmt->fetchColumn();
                 
                 throw new Exception("Cannot adjust stock: {$supplier_name} does not supply {$product_name}. Only suppliers who provide this product can adjust its stock.");
+            }
+            
+            // Check if this supplier-brand combination has batches for this product
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) FROM product_batches 
+                WHERE supplier_id = ? AND product_id = ? AND brand_id = ? AND quantity_remaining > 0 AND is_active = 1
+            ");
+            $stmt->execute([$supplier_id, $product_id, $brand_id]);
+            $batch_exists = $stmt->fetchColumn();
+            
+            if (!$batch_exists) {
+                // Get names for error message
+                $stmt = $pdo->prepare("SELECT name FROM suppliers WHERE supplier_id = ?");
+                $stmt->execute([$supplier_id]);
+                $supplier_name = $stmt->fetchColumn();
+                
+                $stmt = $pdo->prepare("SELECT name FROM brands WHERE id = ?");
+                $stmt->execute([$brand_id]);
+                $brand_name = $stmt->fetchColumn();
+                
+                $stmt = $pdo->prepare("SELECT product_name FROM products WHERE product_id = ?");
+                $stmt->execute([$product_id]);
+                $product_name = $stmt->fetchColumn();
+                
+                throw new Exception("Cannot adjust stock: No batches found for {$supplier_name} - {$brand_name} - {$product_name}. Only batches with remaining stock can be adjusted.");
             }
         }
 
@@ -117,6 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
             $batch_data = [
                 'product_id' => $product_id,
                 'supplier_id' => $supplier_id,
+                'brand_id' => $brand_id,
                 'quantity_received' => $quantity,
                 'expiration_date' => $expiration_date,
                 'received_date' => date('Y-m-d'),
@@ -127,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
             
             $batch_id = $batchManager->createBatch($batch_data);
         } elseif ($adjustment_type === 'subtract') {
-            // Consume stock from existing batches (FIFO) - only from specified supplier if provided
+            // Consume stock from existing batches (FIFO) - only from specified supplier and brand if provided
             $batches_used = $batchManager->consumeStock(
                 $product_id, 
                 $quantity, 
@@ -136,7 +173,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
                 null, 
                 $_SESSION['user_id'], 
                 "Stock adjustment: {$reason}",
-                $supplier_id // Pass supplier_id to only consume from their batches
+                $supplier_id, // Pass supplier_id to only consume from their batches
+                $brand_id     // Pass brand_id to only consume from their brand batches
             );
         }
 
@@ -152,15 +190,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
         ];
         $adjustment_type_id = $adjustment_type_map[$adjustment_type] ?? 3;
 
-        // Record stock adjustment (with optional supplier and expiration date)
+        // Record stock adjustment (with optional supplier, brand, and expiration date)
         try {
-            // Try to insert with new columns first
-            $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, supplier_id, expiration_date, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $supplier_id, $expiration_date, $_SESSION['user_id']]);
+            // Try to insert with all new columns first
+            $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, supplier_id, brand_id, expiration_date, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $supplier_id, $brand_id, $expiration_date, $_SESSION['user_id']]);
         } catch (PDOException $e) {
-            // Fallback to original columns if new columns don't exist
-            $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $_SESSION['user_id']]);
+            try {
+                // Try to insert with supplier and expiration columns (without brand)
+                $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, supplier_id, expiration_date, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $supplier_id, $expiration_date, $_SESSION['user_id']]);
+            } catch (PDOException $e2) {
+                // Fallback to original columns if new columns don't exist
+                $stmt = $pdo->prepare("INSERT INTO stock_adjustment (product_id, adjustment_type_id, quantity, previous_stock, new_stock, reason, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$product_id, $adjustment_type_id, $quantity, $previous_stock, $new_stock, $reason, $notes, $_SESSION['user_id']]);
+            }
         }
         
         $adjustment_id = $pdo->lastInsertId();
@@ -185,14 +229,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['adjust_stock'])) {
         logHistory($pdo, 'Stock Adjustment', "Product: $product_name, Type: $adjustment_type, Quantity: $quantity, Reason: $reason", $_SESSION['username']);
         $_SESSION['success'] = "Stock adjustment recorded successfully!";
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         $_SESSION['error'] = "Error adjusting stock: " . $e->getMessage();
     }
     header("Location: stock_adjustment.php");
     exit;
 }
 
-// Fetch products with current stock
+// Fetch products with current stock from product_batches and brand-specific reorder points
 $stmt = $pdo->query("
     SELECT 
         p.product_id AS id,
@@ -201,15 +247,29 @@ $stmt = $pdo->query("
         b.name as brand_name,
         s.name as supplier_name,
         u.name as uom_name,
-        COALESCE(ps.current_stock,0) AS stock,
-        COALESCE(ps.reorder_point, 10) AS reorder_point
+        COALESCE(stock_summary.total_stock, 0) AS stock,
+        COALESCE(AVG(bps.reorder_point), COALESCE(ps.reorder_point, 10)) AS reorder_point,
+        COALESCE(AVG(bps.average_daily_sales), 0) AS avg_ads,
+        COALESCE(AVG(bps.movement_type), 'Non-Moving') AS movement_type,
+        stock_summary.brand_count
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN brands b ON p.brand_id = b.id
     LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
     LEFT JOIN uom u ON p.uom_id = u.uom_id
     LEFT JOIN product_stock ps ON ps.product_id = p.product_id
+    LEFT JOIN (
+        SELECT 
+            pb.product_id,
+            SUM(pb.quantity_remaining) as total_stock,
+            COUNT(DISTINCT pb.brand_id) as brand_count
+        FROM product_batches pb
+        WHERE pb.is_active = 1 AND pb.quantity_remaining > 0
+        GROUP BY pb.product_id
+    ) stock_summary ON stock_summary.product_id = p.product_id
+    LEFT JOIN brand_product_stock bps ON bps.product_id = p.product_id
     WHERE p.is_archive = 0
+    GROUP BY p.product_id, p.product_name, c.category_name, b.name, s.name, u.name, stock_summary.total_stock, stock_summary.brand_count, ps.reorder_point
     ORDER BY p.product_name
 ");
 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -240,42 +300,94 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET' && isset($_GET['action']) && $_GET['acti
     exit;
 }
 
-// Fetch recent stock adjustments with supplier information
+// Handle AJAX request for getting brands by product
+if ($_SERVER['REQUEST_METHOD'] == 'GET' && isset($_GET['action']) && $_GET['action'] == 'get_brands_by_product') {
+    $product_id = (int)$_GET['product_id'];
+    
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT 
+            b.id,
+            b.name
+        FROM product_batches pb
+        INNER JOIN brands b ON pb.brand_id = b.id
+        WHERE pb.product_id = ? 
+        AND pb.is_active = 1
+        AND b.is_archived = 0
+        ORDER BY b.name
+    ");
+    $stmt->execute([$product_id]);
+    $product_brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    header('Content-Type: application/json');
+    echo json_encode($product_brands);
+    exit;
+}
+
+// Fetch recent stock adjustments with supplier and brand information
 try {
-    // Try to fetch with supplier information first
+    // Try to fetch with supplier and brand information first
     $stmt = $pdo->query("
         SELECT 
             sa.*,
             p.product_name,
             u.name as uom_name,
             at.name as adjustment_type_name,
-            s.name as supplier_name
+            s.name as supplier_name,
+            b.name as brand_name,
+            CASE 
+                WHEN sa.brand_id IS NOT NULL AND b.name IS NOT NULL THEN b.name
+                WHEN sa.brand_id IS NOT NULL THEN CONCAT('Brand ID: ', sa.brand_id)
+                ELSE NULL
+            END as display_brand_name
         FROM stock_adjustment sa
         JOIN products p ON sa.product_id = p.product_id
         LEFT JOIN uom u ON p.uom_id = u.uom_id
         LEFT JOIN adjustment_types at ON sa.adjustment_type_id = at.adjustment_type_id
         LEFT JOIN suppliers s ON sa.supplier_id = s.supplier_id
+        LEFT JOIN brands b ON sa.brand_id = b.id
         ORDER BY sa.created_at DESC
         LIMIT 20
     ");
     $recent_adjustments = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // Fallback query without supplier information if columns don't exist
-    $stmt = $pdo->query("
-        SELECT 
-            sa.*,
-            p.product_name,
-            u.name as uom_name,
-            at.name as adjustment_type_name,
-            NULL as supplier_name
-        FROM stock_adjustment sa
-        JOIN products p ON sa.product_id = p.product_id
-        LEFT JOIN uom u ON p.uom_id = u.uom_id
-        LEFT JOIN adjustment_types at ON sa.adjustment_type_id = at.adjustment_type_id
-        ORDER BY sa.created_at DESC
-        LIMIT 20
-    ");
-    $recent_adjustments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        // Try to fetch with supplier information (without brand)
+        $stmt = $pdo->query("
+            SELECT 
+                sa.*,
+                p.product_name,
+                u.name as uom_name,
+                at.name as adjustment_type_name,
+                s.name as supplier_name,
+                NULL as brand_name
+            FROM stock_adjustment sa
+            JOIN products p ON sa.product_id = p.product_id
+            LEFT JOIN uom u ON p.uom_id = u.uom_id
+            LEFT JOIN adjustment_types at ON sa.adjustment_type_id = at.adjustment_type_id
+            LEFT JOIN suppliers s ON sa.supplier_id = s.supplier_id
+            ORDER BY sa.created_at DESC
+            LIMIT 20
+        ");
+        $recent_adjustments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e2) {
+        // Fallback query without supplier and brand information if columns don't exist
+        $stmt = $pdo->query("
+            SELECT 
+                sa.*,
+                p.product_name,
+                u.name as uom_name,
+                at.name as adjustment_type_name,
+                NULL as supplier_name,
+                NULL as brand_name
+            FROM stock_adjustment sa
+            JOIN products p ON sa.product_id = p.product_id
+            LEFT JOIN uom u ON p.uom_id = u.uom_id
+            LEFT JOIN adjustment_types at ON sa.adjustment_type_id = at.adjustment_type_id
+            ORDER BY sa.created_at DESC
+            LIMIT 20
+        ");
+        $recent_adjustments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
 
 // Calculate adjustment statistics
@@ -503,6 +615,19 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
             box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
         }
         
+        /* SweetAlert2 Custom Styles */
+        .swal2-popup-rounded {
+            border-radius: 15px !important;
+        }
+        
+        .swal2-confirm-rounded {
+            border-radius: 8px !important;
+        }
+        
+        .swal2-cancel-rounded {
+            border-radius: 8px !important;
+        }
+        
         @media (max-width: 768px) {
             .main-container {
                 padding: 1rem;
@@ -661,7 +786,6 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                             <th class="fw-semibold">Product</th>
                             <th class="fw-semibold">Category</th>
                             <th class="fw-semibold">Current Stock</th>
-                            <th class="fw-semibold">Reorder Point</th>
                             <th class="fw-semibold">Status</th>
                             <th class="fw-semibold">Actions</th>
                         </tr>
@@ -672,20 +796,27 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                                 <td>
                                     <div class="fw-semibold"><?= htmlspecialchars($product['name']) ?></div>
                                     <small class="text-muted"><?= htmlspecialchars($product['supplier_name']) ?></small>
+                                    <?php if ($product['brand_count'] > 1): ?>
+                                        <br><small class="text-info"><i class="fa fa-tags me-1"></i><?= $product['brand_count'] ?> brands</small>
+                                    <?php endif; ?>
                                 </td>
                                 <td><?= htmlspecialchars($product['category_name']) ?></td>
                                 <td>
                                     <span class="fw-semibold"><?= $product['stock'] ?> <?= htmlspecialchars($product['uom_name']) ?></span>
                                 </td>
-                                <td><?= $product['reorder_point'] ?></td>
                                 <td>
-                                    <?php if ((int)$product['stock'] === 0): ?>
-                                        <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Out of Stock</span>
-                                    <?php elseif ((int)$product['stock'] <= (int)$product['reorder_point']): ?>
-                                        <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Low Stock</span>
-                                    <?php else: ?>
-                                        <span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">In Stock</span>
-                                    <?php endif; ?>
+                                    <?php 
+                                    $stock_status = $ropCalculator->getStockStatus($product['stock'], $product['reorder_point']);
+                                    $status_colors = [
+                                        'In Stock' => ['bg' => '#d4edda', 'color' => '#155724'],
+                                        'Low Stock' => ['bg' => '#fff3cd', 'color' => '#856404'],
+                                        'Out of Stock' => ['bg' => '#f5c6cb', 'color' => '#721c24']
+                                    ];
+                                    $status_color = $status_colors[$stock_status] ?? $status_colors['In Stock'];
+                                    ?>
+                                    <span class="badge" style="background: <?= $status_color['bg'] ?>; color: <?= $status_color['color'] ?>; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                                        <?= $stock_status ?>
+                                    </span>
                                 </td>
                                 <td>
                                     <button class="btn btn-sm" style="background: #cce5ff; color: #004085; border-radius: 8px;" onclick="openAdjustModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>', <?= (int)$product['stock'] ?>)">
@@ -719,7 +850,6 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                             <th class="fw-semibold">Quantity</th>
                             <th class="fw-semibold">Stock Change</th>
                             <th class="fw-semibold">Supplier</th>
-                            <th class="fw-semibold">Expiration</th>
                             <th class="fw-semibold">Reason</th>
                             <th class="fw-semibold">Notes</th>
                         </tr>
@@ -727,7 +857,7 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                     <tbody>
                         <?php if (empty($recent_adjustments)): ?>
                             <tr>
-                                <td colspan="9" class="text-center text-muted py-4">
+                                <td colspan="8" class="text-center text-muted py-4">
                                     <i class="fa fa-inbox fa-2x mb-2"></i><br>
                                     No stock adjustments found
                                 </td>
@@ -779,25 +909,6 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                                     <td>
                                         <?php if (!empty($adjustment['supplier_name'])): ?>
                                             <span class="badge" style="background: #e2e3e5; color: #383d41; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= htmlspecialchars($adjustment['supplier_name']) ?></span>
-                                        <?php else: ?>
-                                            <span class="text-muted">N/A</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if (!empty($adjustment['expiration_date'])): ?>
-                                            <?php 
-                                            $exp_date = strtotime($adjustment['expiration_date']);
-                                            $today = time();
-                                            $days_diff = ($exp_date - $today) / (60 * 60 * 24);
-                                            
-                                            if ($days_diff < 0) {
-                                                echo '<span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Expired</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
-                                            } elseif ($days_diff <= 7) {
-                                                echo '<span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Expires Soon</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
-                                            } else {
-                                                echo '<span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Valid</span><br><small class="text-muted">' . date('M d, Y', $exp_date) . '</small>';
-                                            }
-                                            ?>
                                         <?php else: ?>
                                             <span class="text-muted">N/A</span>
                                         <?php endif; ?>
@@ -865,9 +976,20 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                                     <option value="Counting Error">Counting Error</option>
                                     <option value="Theft/Loss">Theft/Loss</option>
                                     <option value="Quality Control">Quality Control</option>
+                                    <option value="Supplier Return">Supplier Return</option>
                                     <option value="Manual Correction">Manual Correction</option>
                                     <option value="Other">Other</option>
                                 </select>
+                            </div>
+                            <div class="col-md-6" id="brandField">
+                                <label class="form-label fw-semibold">Brand <span class="text-danger" id="brandRequired" style="display: none;">*</span></label>
+                                <select name="brand_id" id="brandSelect" class="form-select">
+                                    <option value="">Select Product First</option>
+                                </select>
+                                <div class="form-text">
+                                    <i class="fa fa-info-circle me-1"></i>
+                                    <span id="brandHelperMessage">Brands will be filtered based on the selected product</span>
+                                </div>
                             </div>
                             <div class="col-md-6" id="supplierField" style="display: none;">
                                 <label class="form-label fw-semibold">Supplier <span class="text-danger" id="supplierRequired" style="display: none;">*</span></label>
@@ -929,7 +1051,8 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                 if (select && $(select).hasClass('select2-hidden-accessible')) {
                     // Set value using Select2
                     $(select).val(productId).trigger('change');
-                    // Load suppliers for this product
+                    // Load brands and suppliers for this product
+                    loadBrandsForProduct(productId);
                     loadSuppliersForProduct(productId);
                 }
                 updateStockDisplay();
@@ -960,6 +1083,63 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
             }
 
             newStockDisplay.textContent = newStock;
+        }
+
+        // Function to load brands for a selected product
+        function loadBrandsForProduct(productId) {
+            const brandSelect = document.getElementById('brandSelect');
+            
+            if (!productId) {
+                brandSelect.innerHTML = '<option value="">Select Product First</option>';
+                // Update Select2 if it's initialized
+                if ($(brandSelect).hasClass('select2-hidden-accessible')) {
+                    $(brandSelect).trigger('change');
+                }
+                return;
+            }
+            
+            // Show loading state
+            brandSelect.innerHTML = '<option value="">Loading brands...</option>';
+            brandSelect.disabled = true;
+            
+            // Update Select2 if it's initialized
+            if ($(brandSelect).hasClass('select2-hidden-accessible')) {
+                $(brandSelect).trigger('change');
+            }
+            
+            fetch(`stock_adjustment.php?action=get_brands_by_product&product_id=${productId}`)
+                .then(response => response.json())
+                .then(brands => {
+                    brandSelect.innerHTML = '<option value="">Select Brand</option>';
+                    
+                    if (brands.length === 0) {
+                        brandSelect.innerHTML += '<option value="" disabled>No brands found for this product</option>';
+                    } else {
+                        brands.forEach(brand => {
+                            const option = document.createElement('option');
+                            option.value = brand.id;
+                            option.textContent = brand.name;
+                            brandSelect.appendChild(option);
+                        });
+                    }
+                    
+                    brandSelect.disabled = false;
+                    
+                    // Update Select2 if it's initialized
+                    if ($(brandSelect).hasClass('select2-hidden-accessible')) {
+                        $(brandSelect).trigger('change');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading brands:', error);
+                    brandSelect.innerHTML = '<option value="">Error loading brands</option>';
+                    brandSelect.disabled = false;
+                    
+                    // Update Select2 if it's initialized
+                    if ($(brandSelect).hasClass('select2-hidden-accessible')) {
+                        $(brandSelect).trigger('change');
+                    }
+                });
         }
 
         // Function to load suppliers for a selected product
@@ -1037,12 +1217,31 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                         // Product selection change handler
                         $(productSelect).on('change', function() {
                             updateStockDisplay();
+                            loadBrandsForProduct(this.value);
                             loadSuppliersForProduct(this.value);
                         });
                         
                         console.log('Product Select2 initialized successfully');
                     } catch (error) {
                         console.error('Error initializing Product Select2:', error);
+                    }
+                }
+                
+                // Initialize Select2 on brand dropdown
+                const brandSelect = document.querySelector('#adjustStockModal select[name="brand_id"]');
+                if (brandSelect && !$(brandSelect).hasClass('select2-hidden-accessible')) {
+                    try {
+                        $(brandSelect).select2({
+                            theme: 'bootstrap-5',
+                            placeholder: 'Search and select a brand...',
+                            allowClear: true,
+                            width: '100%',
+                            dropdownParent: $('#adjustStockModal')
+                        });
+                        
+                        console.log('Brand Select2 initialized successfully');
+                    } catch (error) {
+                        console.error('Error initializing Brand Select2:', error);
                     }
                 }
                 
@@ -1072,6 +1271,11 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                     $(productSelect).select2('destroy');
                 }
                 
+                const brandSelect = document.querySelector('#adjustStockModal select[name="brand_id"]');
+                if (brandSelect && $(brandSelect).hasClass('select2-hidden-accessible')) {
+                    $(brandSelect).select2('destroy');
+                }
+                
                 const supplierSelect = document.querySelector('#adjustStockModal select[name="supplier_id"]');
                 if (supplierSelect && $(supplierSelect).hasClass('select2-hidden-accessible')) {
                     $(supplierSelect).select2('destroy');
@@ -1094,17 +1298,23 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
 
         function toggleAdditionalFields() {
             const adjustmentType = document.getElementById('adjustmentType').value;
+            const brandField = document.getElementById('brandField');
             const supplierField = document.getElementById('supplierField');
             const expirationField = document.getElementById('expirationField');
             const supplierHelperMessage = document.getElementById('supplierHelperMessage');
             const supplierRequired = document.getElementById('supplierRequired');
             const supplierSelect = document.getElementById('supplierSelect');
+            const brandSelect = document.getElementById('brandSelect');
+            const brandRequired = document.getElementById('brandRequired');
             
             if (adjustmentType === 'add') {
+                brandField.style.display = 'block';
                 supplierField.style.display = 'block';
                 expirationField.style.display = 'block';
                 supplierRequired.style.display = 'none';
                 supplierSelect.required = false;
+                brandSelect.required = false;
+                brandRequired.style.display = 'none';
                 supplierHelperMessage.textContent = 'Suppliers will be filtered based on the selected product';
                 
                 // Set default expiration date to 3 months from today
@@ -1114,11 +1324,14 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                 document.getElementById('expirationDateInput').value = expirationDate.toISOString().split('T')[0];
                 validateExpirationDate();
             } else if (adjustmentType === 'subtract') {
+                brandField.style.display = 'block';
                 supplierField.style.display = 'block';
                 expirationField.style.display = 'none';
                 supplierRequired.style.display = 'inline';
                 supplierSelect.required = true;
-                supplierHelperMessage.textContent = 'Select the supplier who provided the items being removed (required for stock tracking)';
+                brandSelect.required = true;
+                brandRequired.style.display = 'inline';
+                supplierHelperMessage.textContent = 'Select the supplier and brand for the items being removed (required for accurate stock tracking)';
                 
                 // Clear validation messages when hiding expiration field
                 const existingAlert = document.querySelector('.expiration-validation-alert');
@@ -1126,10 +1339,13 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                     existingAlert.remove();
                 }
             } else {
+                brandField.style.display = 'block';
                 supplierField.style.display = 'none';
                 expirationField.style.display = 'none';
                 supplierRequired.style.display = 'none';
                 supplierSelect.required = false;
+                brandSelect.required = false;
+                brandRequired.style.display = 'none';
                 // Clear validation messages when hiding expiration field
                 const existingAlert = document.querySelector('.expiration-validation-alert');
                 if (existingAlert) {

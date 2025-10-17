@@ -1,12 +1,27 @@
 
 <?php 
 include '../includes/db.php';
+include '../includes/permissions.php';
 session_start();
 
-// Ensure user is logged in and has admin access (any non-customer role)
-if (!isset($_SESSION['username']) || $_SESSION['role'] === 'customer') {
-	header("Location: login_admin.php");
-	exit; 
+// Ensure user is logged in and has admin access
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login_admin.php");
+    exit; 
+}
+
+// Check if user is a customer (deny access)
+if (isCustomer($pdo)) {
+    $_SESSION['error'] = "You don't have permission to access this page.";
+    header("Location: login_admin.php");
+    exit;
+}
+
+// Check if user is super admin (only super admin can access dashboard)
+if (!isSuperAdmin($pdo)) {
+    $_SESSION['error'] = "Only Super Admin can access the dashboard.";
+    header("Location: login_admin.php");
+    exit;
 }
 
 try {

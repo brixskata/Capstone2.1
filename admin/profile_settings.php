@@ -311,8 +311,8 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
             </div>
         </div>
 
-        <div class="row">
-            <div class="col-lg-8">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
                 <!-- Profile Information Card -->
                 <div class="profile-card mb-4">
                     <div class="profile-header">
@@ -384,18 +384,33 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                         <form method="POST">
                             <div class="mb-3">
                                 <label for="current_password" class="form-label">Current Password</label>
-                                <input type="password" class="form-control" id="current_password" name="current_password" required>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="current_password" name="current_password" required>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('current_password')">
+                                        <i class="fa-solid fa-eye" id="current_password_icon"></i>
+                                    </button>
+                                </div>
                             </div>
                             
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label for="new_password" class="form-label">New Password</label>
-                                    <input type="password" class="form-control" id="new_password" name="new_password" required>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="new_password" name="new_password" required>
+                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('new_password')">
+                                            <i class="fa-solid fa-eye" id="new_password_icon"></i>
+                                        </button>
+                                    </div>
                                     <div class="form-text">Password must be at least 6 characters long.</div>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="confirm_password" class="form-label">Confirm New Password</label>
-                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('confirm_password')">
+                                            <i class="fa-solid fa-eye" id="confirm_password_icon"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -405,48 +420,6 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                                 </button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-lg-4">
-                <!-- Account Information Card -->
-                <div class="profile-card">
-                    <div class="form-section">
-                        <h5 class="section-title">
-                            <i class="fa-solid fa-circle-info me-2"></i>Account Information
-                        </h5>
-                        
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">User ID</label>
-                            <p class="form-control-plaintext">#<?php echo $user['user_id']; ?></p>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Role</label>
-                            <p class="form-control-plaintext">
-                                <span class="badge bg-primary"><i class="fa-solid fa-user-shield me-1"></i><?php echo ucfirst(isset($user['role']) ? $user['role'] : 'admin'); ?></span>
-                            </p>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Account Created</label>
-                            <p class="form-control-plaintext"><?php echo isset($user['date_created']) ? date('M d, Y', strtotime($user['date_created'])) : 'Unknown'; ?></p>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Last Login</label>
-                            <p class="form-control-plaintext">
-                                <?php echo (isset($user['last_login']) && $user['last_login']) ? date('M d, Y g:i A', strtotime($user['last_login'])) : 'Never'; ?>
-                            </p>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Status</label>
-                            <p class="form-control-plaintext">
-                                <span class="badge bg-success">Active</span>
-                            </p>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -513,6 +486,22 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 reader.readAsDataURL(file);
             }
         });
+
+        // Password visibility toggle functionality
+        function togglePassword(fieldId) {
+            const passwordField = document.getElementById(fieldId);
+            const icon = document.getElementById(fieldId + '_icon');
+            
+            if (passwordField.type === 'password') {
+                passwordField.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                passwordField.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
     </script>
 </body>
 </html>

@@ -41,8 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Start transaction to ensure both inserts succeed
             $pdo->beginTransaction();
             try {
-                // Insert user into users table (without email)
-                $stmt = $pdo->prepare("INSERT INTO users (username, password, email_verified, is_active, usertype_id) VALUES (:username, :password, 0, 1, NULL)");
+                // Insert user into users table with customer usertype_id (2)
+                $stmt = $pdo->prepare("INSERT INTO users (username, password, email_verified, is_active, usertype_id) VALUES (:username, :password, 0, 1, 2)");
                 $stmt->bindParam(':username', $username);
                 $stmt->bindParam(':password', $hashed_password);
                 $stmt->execute();
@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 // Commit transaction
                 $pdo->commit();
                 
-                $_SESSION['success'] = "Registration successful! Please verify your email to complete the process.";
+                $_SESSION['success'] = "Registration successful! Verify your email to complete the process.";
                 header("Location: email_verification.php?email=" . urlencode($email));
                 exit;
             } catch (Exception $e) {

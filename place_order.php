@@ -667,8 +667,8 @@ try {
                     ${orderDetailsHtml}
                 `,
                 showCancelButton: true,
-                confirmButtonText: '<i class="fas fa-list me-2"></i>View Orders',
-                cancelButtonText: '<i class="fas fa-shopping-bag me-2"></i>Continue Shopping',
+                confirmButtonText: '<i class="fas fa-list" style="margin-right: 12px;"></i>View Orders',
+                cancelButtonText: '<i class="fas fa-shopping-bag" style="margin-right: 12px;"></i>Continue Shopping',
                 confirmButtonColor: '#7F1734',
                 cancelButtonColor: '#7F1734',
                 reverseButtons: true,

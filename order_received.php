@@ -5,12 +5,24 @@ include 'includes/log_history.php';
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
+    if (isset($_POST['auto_confirm'])) {
+        // Return JSON error for AJAX calls
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'User not logged in']);
+        exit;
+    }
     header('Location: login.php');
     exit;
 }
 
 // Check if order ID is provided
 if (!isset($_POST['order_id']) || !is_numeric($_POST['order_id'])) {
+    if (isset($_POST['auto_confirm'])) {
+        // Return JSON error for AJAX calls
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'Invalid order ID']);
+        exit;
+    }
     $_SESSION['error'] = "Invalid order ID.";
     header('Location: orders.php');
     exit;
@@ -18,6 +30,7 @@ if (!isset($_POST['order_id']) || !is_numeric($_POST['order_id'])) {
 
 $order_id = (int)$_POST['order_id'];
 $user_id = $_SESSION['user_id'];
+$is_auto_confirm = isset($_POST['auto_confirm']) && $_POST['auto_confirm'] == '1';
 
 try {
     // First, verify that the order belongs to the current user and is in "Out for delivery" status
@@ -30,6 +43,11 @@ try {
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$order) {
+        if ($is_auto_confirm) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Order not found or you don\'t have permission to access this order']);
+            exit;
+        }
         $_SESSION['error'] = "Order not found or you don't have permission to access this order.";
         header('Location: orders.php');
         exit;
@@ -37,6 +55,11 @@ try {
 
     // Check if order is in "Out for delivery" status
     if ($order['status_name'] !== 'Out for delivery') {
+        if ($is_auto_confirm) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Order must be out for delivery before it can be confirmed']);
+            exit;
+        }
         $_SESSION['error'] = "Order must be out for delivery before you can confirm receipt.";
         header('Location: orders.php');
         exit;
@@ -64,7 +87,21 @@ try {
     $stmt->execute([':status_id' => $completed_status_id, ':order_id' => $order_id]);
 
     // Log the action
-    logHistory($pdo, 'Order Received Confirmed', 'Order ID: ' . $order_id . ' marked as received by customer', $_SESSION['username']);
+    $log_message = $is_auto_confirm ? 
+        'Order ID: ' . $order_id . ' automatically confirmed after 48 hours' : 
+        'Order ID: ' . $order_id . ' marked as received by customer';
+    logHistory($pdo, 'Order Received Confirmed', $log_message, $_SESSION['username']);
+
+    if ($is_auto_confirm) {
+        // Return JSON response for AJAX calls
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true, 
+            'message' => 'Order automatically confirmed after 48 hours',
+            'order_id' => $order_id
+        ]);
+        exit;
+    }
 
     $_SESSION['success'] = "Thank you for confirming receipt of your order!";
     $_SESSION['order_confirmed'] = true;
@@ -72,6 +109,11 @@ try {
     exit;
 
 } catch (Exception $e) {
+    if ($is_auto_confirm) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'An error occurred while updating your order status']);
+        exit;
+    }
     $_SESSION['error'] = "An error occurred while updating your order status. Please try again.";
     error_log("Order received error: " . $e->getMessage());
     header('Location: orders.php');

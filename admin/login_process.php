@@ -34,7 +34,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $_SESSION['user_id'] = $user['user_id'];
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['role'] = $user['role'] ?: 'admin'; // Default to admin for legacy users
-                header("Location: admin_dashboard2.php");
+                
+                // Role-based redirect after successful login
+                include '../includes/permissions.php';
+                
+                // Check if user is Super Admin first
+                if (isSuperAdmin($pdo)) {
+                    // Super Admin goes to full dashboard
+                    header("Location: admin_dashboard2.php");
+                } elseif (hasPermission($pdo, 'order_view')) {
+                    // Users with order view go to transaction logs
+                    header("Location: transaction_logs.php");
+                } elseif (hasPermission($pdo, 'product_view')) {
+                    // Users with product view go to products
+                    header("Location: products.php");
+                } elseif (hasPermission($pdo, 'user_view')) {
+                    // Users with user management go to user management
+                    header("Location: manage_users.php");
+                } elseif (hasPermission($pdo, 'report_view')) {
+                    // Users with report access go to reports
+                    header("Location: reports.php");
+                } else {
+                    // All other users go to basic dashboard
+                    header("Location: basic_dashboard.php");
+                }
                 exit;
             }
         }

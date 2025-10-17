@@ -50,7 +50,6 @@ if (isset($_POST['create_user'])) {
     $new_email = trim($_POST['new_email']);
     $new_password = $_POST['new_password'];
     $new_role = $_POST['new_role'];
-    $admin_password = $_POST['admin_password_create'];
 
     // Only Super Admin can create Super Admin users
     if (!isSuperAdmin($pdo) && $new_role === 'super_admin') {
@@ -59,14 +58,7 @@ if (isset($_POST['create_user'])) {
         exit;
     }
 
-    $adminHash = getAdminHash($pdo, $_SESSION['username']);
-    $passwordOk = false;
-    if ($adminHash) {
-        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
-        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
-    }
-
-    if ($passwordOk) {
+    // Proceed with user creation
         // Check if username or email exists
         $stmt = $pdo->prepare("SELECT 1 FROM users WHERE username = ?");
         $stmt->execute([$new_username]);
@@ -100,9 +92,6 @@ if (isset($_POST['create_user'])) {
                 }
             }
         }
-    } else {
-        $_SESSION['error'] = "Invalid admin password.";
-    }
     header("Location: manage_users.php");
     exit;
 }
@@ -116,23 +105,13 @@ if (isset($_POST['deactivate_user'])) {
     }
 
     $user_id = (int)$_POST['user_id'];
-    $admin_password = $_POST['admin_password_deactivate'];
-    $adminHash = getAdminHash($pdo, $_SESSION['username']);
-    $passwordOk = false;
-    if ($adminHash) {
-        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
-        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
-    }
-    if ($passwordOk) {
+    // Proceed with deactivation
         $pdo->prepare("UPDATE users SET is_active = 0 WHERE user_id = ? AND username != ?")->execute([$user_id, $_SESSION['username']]);
         $_SESSION['success'] = "User deactivated successfully.";
         $stmt = $pdo->prepare("SELECT u.username, ui.email FROM users u LEFT JOIN user_info ui ON ui.user_id = u.user_id WHERE u.user_id = ?");
         $stmt->execute([$user_id]);
         $user = $stmt->fetch();
         logHistory($pdo, 'User Deactivated', "Username: {$user['username']}, Email: {$user['email']}", $_SESSION['username']);
-    } else {
-        $_SESSION['error'] = "Invalid admin password.";
-    }
     header("Location: manage_users.php");
     exit;
 }
@@ -147,23 +126,13 @@ if (isset($_POST['reactivate_user'])) {
     }
 
     $user_id = (int)$_POST['user_id'];
-    $admin_password = $_POST['admin_password_reactivate'];
-    $adminHash = getAdminHash($pdo, $_SESSION['username']);
-    $passwordOk = false;
-    if ($adminHash) {
-        $isHash = preg_match('/^(\$2[aby]\$|\$argon2)/', (string)$adminHash) === 1;
-        $passwordOk = $isHash ? password_verify($admin_password, $adminHash) : hash_equals($adminHash, $admin_password);
-    }
-    if ($passwordOk) {
+    // Proceed with reactivation
         $pdo->prepare("UPDATE users SET is_active = 1 WHERE user_id = ? AND username != ?")->execute([$user_id, $_SESSION['username']]);
         $_SESSION['success'] = "User reactivated successfully.";
         $stmt = $pdo->prepare("SELECT u.username, ui.email FROM users u LEFT JOIN user_info ui ON ui.user_id = u.user_id WHERE u.user_id = ?");
         $stmt->execute([$user_id]);
         $user = $stmt->fetch();
         logHistory($pdo, 'User Reactivated', "Username: {$user['username']}, Email: {$user['email']}", $_SESSION['username']);
-    } else {
-        $_SESSION['error'] = "Invalid admin password.";
-    }
     header("Location: manage_users.php");
     exit;
 }
@@ -210,6 +179,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <title>Manage Users - Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <?php include 'includes/admin_styles.php'; ?>
       <style>
         :root {
@@ -377,6 +347,19 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             .page-header h2 {
                 font-size: 1.5rem;
             }
+        }
+        
+        /* SweetAlert2 Custom Styling */
+        .swal2-popup-rounded {
+            border-radius: 20px !important;
+        }
+        
+        .swal2-popup-rounded .swal2-title {
+            border-radius: 20px 20px 0 0 !important;
+        }
+        
+        .swal2-popup-rounded .swal2-actions {
+            border-radius: 0 0 20px 20px !important;
         }
     </style>
 </head>
@@ -612,16 +595,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 ?>
               </select>
             </div>
-            <div class="mb-3">
-              <label class="form-label" id="adminPasswordLabel">Admin Password (to confirm)</label>
-              <div class="position-relative">
-                <input type="password" class="form-control pe-4" name="admin_password_create" id="admin_password_create" required>
-                <span class="position-absolute top-50 end-0 translate-middle-y me-3 cursor-pointer text-gray-500 hover:text-gray-700" id="toggleAdminPassword">
-                  <i class="fas fa-eye"></i>
-                </span>
-              </div>
-              <small class="text-muted" id="adminPasswordHelp">Enter your admin password to confirm user creation</small>
-            </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -632,76 +605,87 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
   </div>
 
-  <!-- Deactivate User Modal -->
-  <div class="modal fade" id="deactivateUserModal" tabindex="-1">
-    <div class="modal-dialog">
-      <form action="manage_users.php" method="POST">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Confirm Deactivation</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <input type="hidden" name="user_id" id="deactivateUserId">
-            <input type="hidden" name="deactivate_user" value="1">
-            <div class="mb-3">
-              <label class="form-label">Enter your admin password to confirm deactivation</label>
-              <input type="password" class="form-control" name="admin_password_deactivate" required>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">
-              <i class="fa fa-trash me-1"></i> Deactivate
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Reactivate User Modal -->
-  <div class="modal fade" id="reactivateUserModal" tabindex="-1">
-    <div class="modal-dialog">
-      <form action="manage_users.php" method="POST">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Confirm Reactivation</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <input type="hidden" name="user_id" id="reactivateUserId">
-            <input type="hidden" name="reactivate_user" value="1">
-            <div class="mb-3">
-              <label class="form-label">Enter your admin password to confirm reactivation</label>
-              <input type="password" class="form-control" name="admin_password_reactivate" required>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">
-              <i class="fa fa-undo me-1"></i> Reactivate
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <?php include 'includes/admin_scripts.php'; ?>
   <script>
     function showDeactivateModal(userId) {
-      document.getElementById('deactivateUserId').value = userId;
-      new bootstrap.Modal(document.getElementById('deactivateUserModal')).show();
+      Swal.fire({
+        title: 'Confirm Deactivation',
+        text: 'Are you sure you want to deactivate this user?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Yes, deactivate!',
+        cancelButtonText: 'Cancel',
+        customClass: {
+          popup: 'swal2-popup-rounded'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Create a form and submit it
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = 'manage_users.php';
+          
+          const userIdInput = document.createElement('input');
+          userIdInput.type = 'hidden';
+          userIdInput.name = 'user_id';
+          userIdInput.value = userId;
+          
+          const actionInput = document.createElement('input');
+          actionInput.type = 'hidden';
+          actionInput.name = 'deactivate_user';
+          actionInput.value = '1';
+          
+          form.appendChild(userIdInput);
+          form.appendChild(actionInput);
+          document.body.appendChild(form);
+          form.submit();
+        }
+      });
     }
     
     function showReactivateModal(userId) {
-      document.getElementById('reactivateUserId').value = userId;
-      new bootstrap.Modal(document.getElementById('reactivateUserModal')).show();
+      Swal.fire({
+        title: 'Confirm Reactivation',
+        text: 'Are you sure you want to reactivate this user?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Yes, reactivate!',
+        cancelButtonText: 'Cancel',
+        customClass: {
+          popup: 'swal2-popup-rounded'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Create a form and submit it
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = 'manage_users.php';
+          
+          const userIdInput = document.createElement('input');
+          userIdInput.type = 'hidden';
+          userIdInput.name = 'user_id';
+          userIdInput.value = userId;
+          
+          const actionInput = document.createElement('input');
+          actionInput.type = 'hidden';
+          actionInput.name = 'reactivate_user';
+          actionInput.value = '1';
+          
+          form.appendChild(userIdInput);
+          form.appendChild(actionInput);
+          document.body.appendChild(form);
+          form.submit();
+        }
+      });
     }
     
-    // Password visibility toggles
+    // Password visibility toggle for new user password
     function togglePasswordVisibility(inputId, toggleId) {
       const input = document.getElementById(inputId);
       const toggle = document.getElementById(toggleId);
@@ -718,39 +702,13 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
       }
     }
     
-    // Update password label based on role selection
     document.addEventListener('DOMContentLoaded', function() {
-      const roleSelect = document.querySelector('select[name="new_role"]');
-      const passwordLabel = document.getElementById('adminPasswordLabel');
-      const passwordHelp = document.getElementById('adminPasswordHelp');
-      
-      if (roleSelect) {
-        roleSelect.addEventListener('change', function() {
-          if (this.value === 'super_admin' || this.value === 'admin') {
-            passwordLabel.textContent = 'Super Admin Password (required for admin users)';
-            passwordHelp.textContent = 'Enter your Super Admin password to create admin users';
-            passwordHelp.className = 'text-warning';
-          } else {
-            passwordLabel.textContent = 'Admin Password (to confirm)';
-            passwordHelp.textContent = 'Enter your admin password to confirm user creation';
-            passwordHelp.className = 'text-muted';
-          }
-        });
-      }
-      
-      // Add click event listeners for password toggles
+      // Add click event listener for password toggle
       const toggleNewPassword = document.getElementById('toggleNewPassword');
-      const toggleAdminPassword = document.getElementById('toggleAdminPassword');
       
       if (toggleNewPassword) {
         toggleNewPassword.addEventListener('click', function() {
           togglePasswordVisibility('new_password', 'toggleNewPassword');
-        });
-      }
-      
-      if (toggleAdminPassword) {
-        toggleAdminPassword.addEventListener('click', function() {
-          togglePasswordVisibility('admin_password_create', 'toggleAdminPassword');
         });
       }
     });

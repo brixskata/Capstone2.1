@@ -2,6 +2,7 @@
 include '../includes/db.php';
 include_once '../includes/log_history.php';
 include_once '../includes/permissions.php';
+include_once '../includes/reorder_point_calculator.php';
 session_start();
 
 // Ensure user is logged in and not a customer
@@ -17,72 +18,86 @@ if (isCustomer($pdo)) {
     exit;
 }
 
+// Initialize reorder point calculator
+$ropCalculator = new ReorderPointCalculator($pdo);
+
+// Check if reorder points need to be calculated (if table is empty)
+$stmt = $pdo->query('SELECT COUNT(*) as count FROM brand_product_stock');
+$rop_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+
+if ($rop_count == 0) {
+    // Automatically calculate reorder points on first load
+    try {
+        $result = $ropCalculator->calculateAllReorderPoints();
+        if ($result['success']) {
+            logHistory($pdo, 'Auto Reorder Points Calculation', "Automatically calculated {$result['count']} reorder points on first load", $_SESSION['username']);
+        }
+    } catch (Exception $e) {
+        // Log error but don't stop page loading
+        error_log("Auto reorder point calculation failed: " . $e->getMessage());
+    }
+}
+
+// Handle AJAX request for recalculating reorder points
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'recalculate_rop') {
+    header('Content-Type: application/json');
+    
+    try {
+        $result = $ropCalculator->calculateAllReorderPoints();
+        
+        if ($result['success']) {
+            logHistory($pdo, 'Reorder Points Recalculated', "Recalculated {$result['count']} brand-product reorder points", $_SESSION['username']);
+        }
+        
+        echo json_encode($result);
+    } catch (Exception $e) {
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage(),
+            'count' => 0
+        ]);
+    }
+    exit;
+}
+
 // Get analysis period
 $period = $_GET['period'] ?? '30'; // days
 $period_days = (int)$period;
 
-// Calculate movement analysis for all products
-$stmt = $pdo->prepare("
-    SELECT 
-        p.product_id,
-        p.product_name,
-        c.category_name,
-        b.name as brand_name,
-        s.name as supplier_name,
-        u.name as uom_name,
-        COALESCE(ps.current_stock,0) as current_stock,
-        COALESCE(ps.reorder_point, 10) as reorder_point,
-        COUNT(sm.stockmovement_id) as total_movements,
-        SUM(CASE WHEN sm.quantity > 0 THEN sm.quantity ELSE 0 END) as total_in,
-        SUM(CASE WHEN sm.quantity < 0 THEN ABS(sm.quantity) ELSE 0 END) as total_out,
-        AVG(sm.quantity) as avg_quantity_per_movement,
-        MIN(sm.created_at) as first_movement,
-        MAX(sm.created_at) as last_movement,
-        DATEDIFF(NOW(), MAX(sm.created_at)) as days_since_last_movement
-    FROM products p
-    LEFT JOIN categories c ON p.category_id = c.category_id
-    LEFT JOIN brands b ON p.brand_id = b.id
-    LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
-    LEFT JOIN uom u ON p.uom_id = u.uom_id
-    LEFT JOIN product_stock ps ON ps.product_id = p.product_id
-    LEFT JOIN stock_movements sm ON p.product_id = sm.product_id 
-        AND sm.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
-    WHERE p.is_archive = 0
-    GROUP BY p.product_id, p.product_name, c.category_name, b.name, s.name, u.name, ps.current_stock, ps.reorder_point
-    ORDER BY total_movements DESC, p.product_name
-");
-$stmt->execute([$period_days]);
-$all_products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Get brand-product stock data with ADS and reorder points
+$brand_product_data = $ropCalculator->getBrandProductStockData();
 
-// Classify products based on movement patterns
+// Group data by movement type for display
 $fast_moving = [];
 $slow_moving = [];
 $non_moving = [];
 
-foreach ($all_products as $product) {
-    $movement_rate = $product['total_movements'] > 0 ? round(($product['total_movements'] / $period_days) * 100, 1) : 0;
-    $days_since_last = $product['days_since_last_movement'] ?? $period_days;
+foreach ($brand_product_data as $item) {
+    $movement_type = $item['movement_type'];
+    $ads = (float)$item['ads'];
     
-    // Classification logic - removed medium moving category
-    if ($product['total_movements'] == 0) {
-        $non_moving[] = $product;
-    } elseif ($movement_rate > 7 || $product['total_movements'] > ($period_days * 0.2)) {
-        $fast_moving[] = $product;
+    // Add stock status
+    $item['stock_status'] = $ropCalculator->getStockStatus($item['current_stock'], $item['reorder_point']);
+    
+    if ($movement_type === 'Fast-Moving') {
+        $fast_moving[] = $item;
+    } elseif ($movement_type === 'Slow-Moving') {
+        $slow_moving[] = $item;
     } else {
-        $slow_moving[] = $product;
+        $non_moving[] = $item;
     }
 }
 
 // Calculate summary statistics
-$total_products = count($all_products);
+$total_items = count($brand_product_data);
 $fast_count = count($fast_moving);
 $slow_count = count($slow_moving);
 $non_count = count($non_moving);
 
 // Calculate inventory value by movement category
-$fast_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100; }, $fast_moving)); // Assuming 100 as base value
-$slow_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100; }, $slow_moving));
-$non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100; }, $non_moving));
+$fast_value = array_sum(array_map(function($item) { return $item['current_stock'] * 100; }, $fast_moving)); // Assuming 100 as base value
+$slow_value = array_sum(array_map(function($item) { return $item['current_stock'] * 100; }, $slow_moving));
+$non_value = array_sum(array_map(function($item) { return $item['current_stock'] * 100; }, $non_moving));
 ?>
 
 <!DOCTYPE html>
@@ -91,7 +106,7 @@ $non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100
     <?php include 'includes/admin_head.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Movement Analysis - Admin Dashboard</title>
+    <title>Brand Movement Analysis - Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <?php include 'includes/admin_styles.php'; ?>
@@ -259,6 +274,19 @@ $non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100
             box-shadow: 0 5px 15px rgba(127, 23, 52, 0.3);
         }
         
+        /* SweetAlert2 Custom Styles */
+        .swal2-popup-rounded {
+            border-radius: 15px !important;
+        }
+        
+        .swal2-confirm-rounded {
+            border-radius: 8px !important;
+        }
+        
+        .swal2-cancel-rounded {
+            border-radius: 8px !important;
+        }
+        
         @media (max-width: 768px) {
             .main-container {
                 padding: 1rem;
@@ -283,11 +311,19 @@ $non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100
         <div class="main-container">
             <!-- Page Header -->
             <div class="page-header">
-                <div>
-                    <h2>
-                        <i class="fa fa-chart-bar me-3"></i>Product Movement Analysis
-                    </h2>
-                    <p class="mb-0 opacity-75">Analyze product performance and identify movement patterns</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2>
+                            <i class="fa fa-chart-bar me-3"></i>Brand Movement Analysis
+                        </h2>
+                        <p class="mb-0 opacity-75">Analyze brand performance and identify movement patterns</p>
+                    </div>
+                    <button class="btn text-white fw-bold px-4" 
+                            style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); cursor: pointer; border-radius: 10px;" 
+                            onclick="recalculateReorderPoints()"
+                            id="recalculateBtn">
+                        <i class="fa fa-calculator me-2"></i>Recalculate Reorder Points
+                    </button>
                 </div>
             </div>
 
@@ -348,11 +384,11 @@ $non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100
                 </div>
             </div>
 
-            <!-- Fast Moving Products -->
+            <!-- Fast Moving Brands -->
             <div class="category-section">
                 <div class="category-header">
                     <h5 class="fw-bold mb-0">
-                        <i class="fa fa-rocket me-2"></i>Fast Moving Products (<?= $fast_count ?>)
+                        <i class="fa fa-rocket me-2"></i>Fast Moving Brands (<?= $fast_count ?>)
                     </h5>
                     <small class="opacity-75">High demand, frequent sales</small>
                 </div>
@@ -361,25 +397,47 @@ $non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>
+                                <th class="fw-semibold">Brand</th>
                                 <th class="fw-semibold">Product</th>
-                                <th class="fw-semibold">Category</th>
-                                <th class="fw-semibold">Movements</th>
-                                <th class="fw-semibold">Stock In</th>
-                                <th class="fw-semibold">Stock Out</th>
+                                <th class="fw-semibold">Average Sales Per Day</th>
                                 <th class="fw-semibold">Current Stock</th>
-                                <th class="fw-semibold">Last Movement</th>
+                                <th class="fw-semibold">Reorder Point</th>
+                                <th class="fw-semibold">Stock Status</th>
+                                <th class="fw-semibold">Last Calculated</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($fast_moving as $product): ?>
+                            <?php foreach ($fast_moving as $item): ?>
                                 <tr>
-                                    <td class="fw-semibold"><?= htmlspecialchars($product['product_name']) ?></td>
-                                    <td><?= htmlspecialchars($product['category_name']) ?></td>
-                                    <td><span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= $product['total_movements'] ?></span></td>
-                                    <td class="text-success">+<?= $product['total_in'] ?></td>
-                                    <td class="text-danger">-<?= $product['total_out'] ?></td>
-                                    <td><?= $product['current_stock'] ?> <?= htmlspecialchars($product['uom_name']) ?></td>
-                                    <td><?= $product['last_movement'] ? date('M d, Y', strtotime($product['last_movement'])) : 'Never' ?></td>
+                                    <td class="fw-semibold"><?= htmlspecialchars($item['brand_name']) ?></td>
+                                    <td><?= htmlspecialchars($item['product_name']) ?></td>
+                                    <td>
+                                        <span class="fw-semibold"><?= number_format($item['ads'], 2) ?></span>
+                                        <br><small class="text-muted">(<?= $item['total_sales_7d'] ?> sold)</small>
+                                    </td>
+                                    <td><?= number_format($item['current_stock'], 2) ?></td>
+                                    <td><?= number_format($item['reorder_point'], 2) ?></td>
+                                    <td>
+                                        <?php 
+                                        $status = $item['stock_status'];
+                                        $status_colors = [
+                                            'In Stock' => ['bg' => '#d4edda', 'color' => '#155724'],
+                                            'Low Stock' => ['bg' => '#fff3cd', 'color' => '#856404'],
+                                            'Out of Stock' => ['bg' => '#f5c6cb', 'color' => '#721c24']
+                                        ];
+                                        $colors = $status_colors[$status] ?? $status_colors['In Stock'];
+                                        ?>
+                                        <span class="badge" style="background: <?= $colors['bg'] ?>; color: <?= $colors['color'] ?>; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                                            <?= $status ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if ($item['last_calculated']): ?>
+                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($item['last_calculated'])) ?></small>
+                                        <?php else: ?>
+                                            <span class="text-warning">Not Calculated</span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -389,11 +447,11 @@ $non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100
         </div>
 
 
-            <!-- Slow Moving Products -->
+            <!-- Slow Moving Brands -->
             <div class="category-section">
                 <div class="category-header">
                     <h5 class="fw-bold mb-0">
-                        <i class="fa fa-hourglass-half me-2"></i>Slow Moving Products (<?= $slow_count ?>)
+                        <i class="fa fa-hourglass-half me-2"></i>Slow Moving Brands (<?= $slow_count ?>)
                     </h5>
                     <small class="opacity-75">Low demand, infrequent sales</small>
                 </div>
@@ -402,25 +460,47 @@ $non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>
+                                <th class="fw-semibold">Brand</th>
                                 <th class="fw-semibold">Product</th>
-                                <th class="fw-semibold">Category</th>
-                                <th class="fw-semibold">Movements</th>
-                                <th class="fw-semibold">Stock In</th>
-                                <th class="fw-semibold">Stock Out</th>
+                                <th class="fw-semibold">Average Sales Per Day</th>
                                 <th class="fw-semibold">Current Stock</th>
-                                <th class="fw-semibold">Last Movement</th>
+                                <th class="fw-semibold">Reorder Point</th>
+                                <th class="fw-semibold">Stock Status</th>
+                                <th class="fw-semibold">Last Calculated</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($slow_moving as $product): ?>
+                            <?php foreach ($slow_moving as $item): ?>
                                 <tr>
-                                    <td class="fw-semibold"><?= htmlspecialchars($product['product_name']) ?></td>
-                                    <td><?= htmlspecialchars($product['category_name']) ?></td>
-                                    <td><span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= $product['total_movements'] ?></span></td>
-                                    <td class="text-success">+<?= $product['total_in'] ?></td>
-                                    <td class="text-danger">-<?= $product['total_out'] ?></td>
-                                    <td><?= $product['current_stock'] ?> <?= htmlspecialchars($product['uom_name']) ?></td>
-                                    <td><?= $product['last_movement'] ? date('M d, Y', strtotime($product['last_movement'])) : 'Never' ?></td>
+                                    <td class="fw-semibold"><?= htmlspecialchars($item['brand_name']) ?></td>
+                                    <td><?= htmlspecialchars($item['product_name']) ?></td>
+                                    <td>
+                                        <span class="fw-semibold"><?= number_format($item['ads'], 2) ?></span>
+                                        <br><small class="text-muted">(<?= $item['total_sales_7d'] ?> sold)</small>
+                                    </td>
+                                    <td><?= number_format($item['current_stock'], 2) ?></td>
+                                    <td><?= number_format($item['reorder_point'], 2) ?></td>
+                                    <td>
+                                        <?php 
+                                        $status = $item['stock_status'];
+                                        $status_colors = [
+                                            'In Stock' => ['bg' => '#d4edda', 'color' => '#155724'],
+                                            'Low Stock' => ['bg' => '#fff3cd', 'color' => '#856404'],
+                                            'Out of Stock' => ['bg' => '#f5c6cb', 'color' => '#721c24']
+                                        ];
+                                        $colors = $status_colors[$status] ?? $status_colors['In Stock'];
+                                        ?>
+                                        <span class="badge" style="background: <?= $colors['bg'] ?>; color: <?= $colors['color'] ?>; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                                            <?= $status ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if ($item['last_calculated']): ?>
+                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($item['last_calculated'])) ?></small>
+                                        <?php else: ?>
+                                            <span class="text-warning">Not Calculated</span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -429,11 +509,11 @@ $non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100
             </div>
         </div>
 
-            <!-- Non-Moving Products -->
+            <!-- Non-Moving Brands -->
             <div class="category-section">
                 <div class="category-header">
                     <h5 class="fw-bold mb-0">
-                        <i class="fa fa-stop me-2"></i>Non-Moving Products (<?= $non_count ?>)
+                        <i class="fa fa-stop me-2"></i>Non-Moving Brands (<?= $non_count ?>)
                     </h5>
                     <small class="opacity-75">No sales activity - potential dead stock</small>
                 </div>
@@ -442,39 +522,46 @@ $non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>
+                                <th class="fw-semibold">Brand</th>
                                 <th class="fw-semibold">Product</th>
-                                <th class="fw-semibold">Category</th>
+                                <th class="fw-semibold">Average Sales Per Day</th>
                                 <th class="fw-semibold">Current Stock</th>
                                 <th class="fw-semibold">Reorder Point</th>
-                                <th class="fw-semibold">Status</th>
-                                <th class="fw-semibold">Actions</th>
+                                <th class="fw-semibold">Stock Status</th>
+                                <th class="fw-semibold">Last Calculated</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($non_moving as $product): ?>
+                            <?php foreach ($non_moving as $item): ?>
                                 <tr>
-                                    <td class="fw-semibold"><?= htmlspecialchars($product['product_name']) ?></td>
-                                    <td><?= htmlspecialchars($product['category_name']) ?></td>
-                                    <td><?= $product['current_stock'] ?> <?= htmlspecialchars($product['uom_name']) ?></td>
-                                    <td><?= $product['reorder_point'] ?></td>
+                                    <td class="fw-semibold"><?= htmlspecialchars($item['brand_name']) ?></td>
+                                    <td><?= htmlspecialchars($item['product_name']) ?></td>
                                     <td>
-                                        <?php if ((int)$product['current_stock'] === 0): ?>
-                                            <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Out of Stock</span>
-                                        <?php elseif ((int)$product['current_stock'] <= (int)$product['reorder_point']): ?>
-                                            <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Low Stock</span>
-                                        <?php else: ?>
-                                            <span class="badge" style="background: #cce5ff; color: #004085; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">In Stock</span>
-                                        <?php endif; ?>
+                                        <span class="fw-semibold"><?= number_format($item['ads'], 2) ?></span>
+                                        <br><small class="text-muted">(<?= $item['total_sales_7d'] ?> sold)</small>
+                                    </td>
+                                    <td><?= number_format($item['current_stock'], 2) ?></td>
+                                    <td><?= number_format($item['reorder_point'], 2) ?></td>
+                                    <td>
+                                        <?php 
+                                        $status = $item['stock_status'];
+                                        $status_colors = [
+                                            'In Stock' => ['bg' => '#d4edda', 'color' => '#155724'],
+                                            'Low Stock' => ['bg' => '#fff3cd', 'color' => '#856404'],
+                                            'Out of Stock' => ['bg' => '#f5c6cb', 'color' => '#721c24']
+                                        ];
+                                        $colors = $status_colors[$status] ?? $status_colors['In Stock'];
+                                        ?>
+                                        <span class="badge" style="background: <?= $colors['bg'] ?>; color: <?= $colors['color'] ?>; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                                            <?= $status ?>
+                                        </span>
                                     </td>
                                     <td>
-                                        <div class="btn-group" role="group">
-                                            <a href="stock_levels.php" class="btn btn-sm" style="background: #fff3cd; color: #856404; border-radius: 8px;">
-                                                <i class="fa fa-chart-line me-1"></i>Review
-                                            </a>
-                                            <a href="products.php" class="btn btn-sm" style="background: #cce5ff; color: #004085; border-radius: 8px;">
-                                                <i class="fa fa-edit me-1"></i>Edit
-                                            </a>
-                                        </div>
+                                        <?php if ($item['last_calculated']): ?>
+                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($item['last_calculated'])) ?></small>
+                                        <?php else: ?>
+                                            <span class="text-warning">Not Calculated</span>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -488,5 +575,113 @@ $non_value = array_sum(array_map(function($p) { return $p['current_stock'] * 100
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <?php include 'includes/admin_scripts.php'; ?>
+    <script>
+        // Test button click
+        document.addEventListener('DOMContentLoaded', function() {
+            const btn = document.getElementById('recalculateBtn');
+            if (btn) {
+                console.log('Recalculate button found:', btn);
+                btn.addEventListener('click', function(e) {
+                    console.log('Button click event triggered');
+                });
+            } else {
+                console.log('Recalculate button not found');
+            }
+        });
+        
+        function recalculateReorderPoints() {
+            console.log('Button clicked - recalculateReorderPoints function called');
+            
+            // Check if SweetAlert2 is loaded
+            if (typeof Swal === 'undefined') {
+                alert('SweetAlert2 is not loaded. Please refresh the page.');
+                return;
+            }
+            
+            Swal.fire({
+                title: 'Recalculate Reorder Points?',
+                text: 'This will recalculate reorder points for all brand-product combinations based on current sales data. This may take a moment.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#7F1734',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, Recalculate',
+                cancelButtonText: 'Cancel',
+                allowOutsideClick: false,
+                customClass: {
+                    popup: 'swal2-popup-rounded',
+                    confirmButton: 'swal2-confirm-rounded',
+                    cancelButton: 'swal2-cancel-rounded'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Show loading state
+                    Swal.fire({
+                        title: 'Calculating...',
+                        text: 'Please wait while we recalculate reorder points',
+                        icon: 'info',
+                        allowOutsideClick: false,
+                        showConfirmButton: false,
+                        customClass: {
+                            popup: 'swal2-popup-rounded'
+                        },
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    fetch('product_movement_analysis.php', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                        body: 'action=recalculate_rop'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire({
+                                title: 'Success!',
+                                text: `Successfully recalculated ${data.count} reorder points!`,
+                                icon: 'success',
+                                confirmButtonColor: '#7F1734',
+                                confirmButtonText: 'OK',
+                                customClass: {
+                                    popup: 'swal2-popup-rounded',
+                                    confirmButton: 'swal2-confirm-rounded'
+                                }
+                            }).then(() => {
+                                location.reload();
+                            });
+                        } else {
+                            Swal.fire({
+                                title: 'Error',
+                                text: data.message || 'Failed to recalculate reorder points',
+                                icon: 'error',
+                                confirmButtonColor: '#7F1734',
+                                confirmButtonText: 'OK',
+                                customClass: {
+                                    popup: 'swal2-popup-rounded',
+                                    confirmButton: 'swal2-confirm-rounded'
+                                }
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        Swal.fire({
+                            title: 'Error',
+                            text: 'Failed to recalculate reorder points. Please try again.',
+                            icon: 'error',
+                            confirmButtonColor: '#7F1734',
+                            confirmButtonText: 'OK',
+                            customClass: {
+                                popup: 'swal2-popup-rounded',
+                                confirmButton: 'swal2-confirm-rounded'
+                            }
+                        });
+                    });
+                }
+            });
+        }
+    </script>
 </body>
 </html>

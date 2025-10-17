@@ -1135,6 +1135,25 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .swal2-cancel {
             background: #6c757d !important; /* Gray for cancel */
         }
+
+        /* Auto-confirmation countdown styles */
+        .auto-confirm-countdown {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%) !important;
+            border: 1px solid #ffc107 !important;
+            border-left: 4px solid #ffc107 !important;
+            animation: pulse-warning 2s infinite;
+        }
+
+        .auto-confirm-countdown .countdown-text {
+            font-weight: 600;
+            color: #856404;
+        }
+
+        @keyframes pulse-warning {
+            0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+        }
     </style>
 </head>
 <body>
@@ -3188,12 +3207,226 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         `;
         document.head.appendChild(orderStyle);
 
+        // Auto-confirm orders after 48 hours
+        function initializeAutoConfirmation() {
+            console.log('Initializing auto-confirmation for out-for-delivery orders...');
+            
+            // Check all out-for-delivery orders
+            const outForDeliveryOrders = document.querySelectorAll('#out-for-delivery-orders .order-card');
+            console.log(`Found ${outForDeliveryOrders.length} out-for-delivery orders`);
+            
+            outForDeliveryOrders.forEach(orderCard => {
+                const orderId = orderCard.getAttribute('data-order-id');
+                console.log(`Processing order ${orderId}`);
+                
+                if (orderId) {
+                    // Fetch the actual timestamp and show indicator
+                    fetchOutForDeliveryTimestamp(orderId, orderCard);
+                }
+            });
+        }
+        
+        async function fetchOutForDeliveryTimestamp(orderId, orderCard) {
+            try {
+                console.log(`Fetching out-for-delivery timestamp for order ${orderId}`);
+                const response = await fetch(`get_order_out_for_delivery_time.php?order_id=${orderId}`);
+                const data = await response.json();
+                
+                console.log(`API response for order ${orderId}:`, data);
+                
+                if (data.success && data.out_for_delivery_time) {
+                    const outForDeliveryTime = new Date(data.out_for_delivery_time);
+                    const now = new Date();
+                    const hoursElapsed = (now - outForDeliveryTime) / (1000 * 60 * 60);
+                    
+                    console.log(`Order ${orderId}: ${hoursElapsed.toFixed(2)} hours elapsed since out for delivery`);
+                    
+                    // If 48+ hours have passed, auto-confirm
+                    if (hoursElapsed >= 48) {
+                        console.log(`Auto-confirming order ${orderId} (${hoursElapsed.toFixed(2)} hours elapsed)`);
+                        autoConfirmOrder(orderId);
+                    } else {
+                        // Schedule auto-confirmation for when 48 hours will be reached
+                        const hoursRemaining = 48 - hoursElapsed;
+                        const millisecondsRemaining = hoursRemaining * 60 * 60 * 1000;
+                        
+                        console.log(`Scheduling auto-confirmation for order ${orderId} in ${hoursRemaining.toFixed(2)} hours`);
+                        
+                        setTimeout(() => {
+                            autoConfirmOrder(orderId);
+                        }, millisecondsRemaining);
+                        
+                        // Update the existing indicator with correct time
+                        updateAutoConfirmIndicator(orderCard, hoursRemaining);
+                    }
+                } else {
+                    console.warn(`Could not get out-for-delivery time for order ${orderId}:`, data.message);
+                    console.warn(`Error details:`, data.error_details);
+                    console.warn(`Error file:`, data.error_file, `Line:`, data.error_line);
+                    // If API fails, we can't determine the correct time, so don't show indicator
+                    console.log('API failed - not showing auto-confirm indicator');
+                }
+            } catch (error) {
+                console.error(`Error fetching out-for-delivery time for order ${orderId}:`, error);
+                // If API fails, we can't determine the correct time, so don't show indicator
+                console.log('API failed - not showing auto-confirm indicator');
+            }
+        }
+        
+        
+        function addAutoConfirmIndicator(orderCard, hoursRemaining) {
+            console.log(`Adding auto-confirm indicator for ${hoursRemaining} hours remaining`);
+            console.log(`Order card:`, orderCard);
+            
+            const actionsDiv = orderCard.querySelector('.order-actions');
+            console.log(`Actions div found:`, actionsDiv);
+            
+            if (!actionsDiv) {
+                console.error('No .order-actions div found in order card');
+                return;
+            }
+            
+            // Check if indicator already exists to avoid duplicates
+            if (actionsDiv.querySelector('.auto-confirm-countdown')) {
+                console.log('Auto-confirm indicator already exists, skipping');
+                return;
+            }
+            
+            // Create countdown indicator
+            const countdownDiv = document.createElement('div');
+            countdownDiv.className = 'auto-confirm-countdown alert alert-warning mb-2 py-2';
+            countdownDiv.innerHTML = `
+                <small>
+                    <i class="fas fa-clock me-1"></i>
+                    <strong>Auto-confirmation:</strong> 
+                    <span class="countdown-text">${formatTimeRemaining(hoursRemaining)}</span>
+                </small>
+            `;
+            
+            console.log(`Created countdown div:`, countdownDiv);
+            
+            // Insert at the beginning of order-actions div
+            actionsDiv.insertBefore(countdownDiv, actionsDiv.firstChild);
+            
+            console.log(`Countdown indicator added successfully`);
+            
+            // Update countdown every minute
+            const countdownInterval = setInterval(() => {
+                hoursRemaining -= (1/60); // Subtract 1 minute
+                
+                if (hoursRemaining <= 0) {
+                    clearInterval(countdownInterval);
+                    countdownDiv.remove();
+                } else {
+                    const countdownText = countdownDiv.querySelector('.countdown-text');
+                    if (countdownText) {
+                        countdownText.textContent = formatTimeRemaining(hoursRemaining);
+                    }
+                }
+            }, 60000); // Update every minute
+        }
+        
+        function updateAutoConfirmIndicator(orderCard, hoursRemaining) {
+            const existingIndicator = orderCard.querySelector('.auto-confirm-countdown');
+            if (existingIndicator) {
+                const countdownText = existingIndicator.querySelector('.countdown-text');
+                if (countdownText) {
+                    countdownText.textContent = formatTimeRemaining(hoursRemaining);
+                }
+            } else {
+                // If no existing indicator, create one
+                addAutoConfirmIndicator(orderCard, hoursRemaining);
+            }
+        }
+        
+        function formatTimeRemaining(hours) {
+            if (hours <= 0) return 'Auto-confirming now...';
+            
+            const days = Math.floor(hours / 24);
+            const remainingHours = Math.floor(hours % 24);
+            const minutes = Math.floor((hours % 1) * 60);
+            
+            if (days > 0) {
+                return `${days}d ${remainingHours}h ${minutes}m remaining`;
+            } else if (remainingHours > 0) {
+                return `${remainingHours}h ${minutes}m remaining`;
+            } else {
+                return `${minutes}m remaining`;
+            }
+        }
+        
+        function autoConfirmOrder(orderId) {
+            console.log(`Auto-confirming order ${orderId}`);
+            
+            // Show notification that order is being auto-confirmed
+            Swal.fire({
+                title: 'Auto-Confirming Order',
+                html: `
+                    <div class="text-center">
+                        <div class="mb-3">
+                            <i class="fas fa-clock" style="font-size: 3rem; color: #ffc107;"></i>
+                        </div>
+                        <h5 class="mb-3">Order #${orderId} Auto-Confirmed</h5>
+                        <p class="text-muted small">This order has been automatically confirmed after 48 hours.</p>
+                    </div>
+                `,
+                icon: 'info',
+                confirmButtonColor: '#198754',
+                confirmButtonText: '<i class="fas fa-check me-2"></i>Understood',
+                customClass: {
+                    popup: 'swal2-popup',
+                    confirmButton: 'swal2-confirm'
+                },
+                buttonsStyling: true,
+                timer: 5000,
+                timerProgressBar: true
+            });
+            
+            // Submit the confirmation
+            const formData = new FormData();
+            formData.append('order_id', orderId);
+            formData.append('auto_confirm', '1'); // Flag to indicate this is auto-confirmation
+            
+            fetch('order_received.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log(`Order ${orderId} auto-confirmed successfully`);
+                    // Reload the page to show updated order status
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    console.error(`Failed to auto-confirm order ${orderId}:`, data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error auto-confirming order:', error);
+            });
+        }
+        
+        // Check for auto-confirmation on page load and periodically
+        function checkAutoConfirmation() {
+            // Only re-initialize if there are out-for-delivery orders
+            const outForDeliveryOrders = document.querySelectorAll('#out-for-delivery-orders .order-card');
+            if (outForDeliveryOrders.length > 0) {
+                initializeAutoConfirmation();
+            }
+        }
+        
         // Initialize auto-refresh when page loads
         document.addEventListener('DOMContentLoaded', function() {
             // Add a small delay to ensure all order cards are rendered
             setTimeout(() => {
                 initializeOrderAutoRefresh();
+                checkAutoConfirmation();
             }, 1000);
+            
+            // Check for auto-confirmation every hour
+            setInterval(checkAutoConfirmation, 60 * 60 * 1000);
         });
     </script>
     

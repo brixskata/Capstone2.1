@@ -16,6 +16,13 @@ if (isCustomer($pdo)) {
     exit;
 }
 
+// Check if user has reports permission
+if (!hasPermission($pdo, 'reports_view') && !hasPermission($pdo, 'reports_analytics')) {
+    $_SESSION['error'] = "You don't have permission to access reports.";
+    header("Location: admin_dashboard2.php");
+    exit;
+}
+
 // Helper function to get date ranges
 date_default_timezone_set('Asia/Manila');
 function getDateRange($type) {

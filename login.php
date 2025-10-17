@@ -382,11 +382,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                         <i class="fas fa-eye toggle-password" onclick="togglePassword()"></i>
                     </div>
 
-                    <div class="terms-notice">
-                        <small class="text-muted">
-                            By signing in, you agree to our Terms and Conditions
-                        </small>
-                    </div>
+                
 
                     <button type="submit" name="login" class="btn btn-primary btn-login">
                         <i class="fas fa-sign-in-alt me-2"></i>Sign In

@@ -5,7 +5,7 @@ include_once '../includes/permissions.php';
 
 // Check if user has any module permissions (if not, only show Dashboard)
 function hasAnyModulePermissions($pdo) {
-    $modules = ['inventory', 'products', 'suppliers', 'users', 'transactions', 'reports', 'system'];
+    $modules = ['inventory', 'products', 'suppliers', 'users', 'system', 'reports'];
     foreach ($modules as $module) {
         if (hasModuleAccess($pdo, $module)) {
             return true;
@@ -93,7 +93,8 @@ try {
 <nav class="sidebar" id="sidebar">
   <!-- Navigation Menu -->
   <div class="nav flex-column">
-    <!-- Overview Section -->
+    <!-- Overview Section - Super Admin only -->
+    <?php if (isSuperAdmin($pdo)): ?>
     <div class="nav-section">
       <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#overviewDropdown" role="button">
         <div class="section-icon">
@@ -122,9 +123,10 @@ try {
         <?php endif; ?>
       </div>
     </div>
+    <?php endif; ?>
 
     <!-- Sales Section -->
-    <?php if ($userHasModulePermissions && hasModuleAccess($pdo, 'transactions')): ?>
+    <?php if ($userHasModulePermissions && hasPermission($pdo, 'order_view')): ?>
     <div class="nav-section">
       <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#salesDropdown" role="button">
         <div class="section-icon">
@@ -353,7 +355,7 @@ try {
     <?php endif; ?>
 
     <!-- Monitoring Section -->
-    <?php if ($userHasModulePermissions && (hasModuleAccess($pdo, 'reports') || hasModuleAccess($pdo, 'system'))): ?>
+    <?php if ($userHasModulePermissions && (hasPermission($pdo, 'reports_view') || hasPermission($pdo, 'reports_analytics') || hasPermission($pdo, 'history_view'))): ?>
     <div class="nav-section">
       <div class="nav-section-title" data-bs-toggle="collapse" data-bs-target="#monitoringDropdown" role="button">
         <div class="section-icon">
@@ -363,7 +365,7 @@ try {
         <i class="fas fa-chevron-down dropdown-arrow"></i>
       </div>
       <div class="nav-dropdown collapse show" id="monitoringDropdown">
-        <?php if (hasModuleAccess($pdo, 'reports')): ?>
+        <?php if (hasPermission($pdo, 'reports_view') || hasPermission($pdo, 'reports_analytics')): ?>
         <a href="reports.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
             <i class="fas fa-chart-pie"></i>
@@ -372,6 +374,7 @@ try {
           <div class="nav-indicator"></div>
         </a>
         <?php endif; ?>
+        <?php if (hasPermission($pdo, 'history_view')): ?>
         <a href="history.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'history.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
             <i class="fas fa-history"></i>
@@ -379,6 +382,7 @@ try {
           <span>Activity Log</span>
           <div class="nav-indicator"></div>
         </a>
+        <?php endif; ?>
       </div>
     </div>
     <?php endif; ?>
