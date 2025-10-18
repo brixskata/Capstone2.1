@@ -13,7 +13,7 @@ $user_id = $_SESSION['user_id'];
 // Fetch all orders for the current user
 $sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price,
                oi.quantity, p.product_name, COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) as price,
-               oc.reason AS cancel_reason,
+               oc.reason AS cancel_reason, oc.receipt_path, oc.receipt_filename,
                a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country
         FROM orders o
         LEFT JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
@@ -22,7 +22,7 @@ $sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_pric
         LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
         LEFT JOIN addresses a ON a.address_id = o.address_id
         LEFT JOIN (
-            SELECT oc1.order_id, oc1.reason
+            SELECT oc1.order_id, oc1.reason, oc1.receipt_path, oc1.receipt_filename
             FROM order_cancellations oc1
             INNER JOIN (
                 SELECT order_id, MAX(id) AS max_id
@@ -48,6 +48,8 @@ foreach ($rawOrders as $row) {
             'status' => $row['status'],
             'total_price' => $row['total_price'],
             'cancel_reason' => $row['cancel_reason'] ?? null,
+            'receipt_path' => $row['receipt_path'] ?? null,
+            'receipt_filename' => $row['receipt_filename'] ?? null,
             'address' => [
                 'address_line' => $row['address_line'] ?? '',
                 'address_line2' => $row['address_line2'] ?? '',

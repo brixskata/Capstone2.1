@@ -5,10 +5,10 @@ include '../includes/db.php';
 header('Content-Type: application/json');
 
 try {
-    // Get page parameter
-    $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-    $categoriesPerPage = 4;
-    $offset = ($page - 1) * $categoriesPerPage;
+    // Load all categories at once for carousel display
+    $page = 1;
+    $categoriesPerPage = 100; // Load all categories
+    $offset = 0;
     
     // Fetch all categories with pagination (including those without products)
     $stmt = $pdo->query("
@@ -54,10 +54,10 @@ try {
         
         $processedCategories[] = [
             'id' => $category['category_id'],
-            'name' => strtoupper(htmlspecialchars($categoryName)),
+            'name' => strtoupper(htmlspecialchars($category['category_name'])),
             'description' => $productCount > 0 ? $productCount . ' products available' : 'No products yet',
             'image' => $imagePath,
-            'url' => 'product.php?category=' . urlencode(strtolower($categoryName))
+            'url' => 'product.php?category=' . urlencode(strtolower($category['category_name']))
         ];
     }
     

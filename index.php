@@ -89,7 +89,7 @@ try {
     $featuredProducts = [];
 }
 
-// Fetch customer testimonials from order ratings
+// Fetch customer testimonials from order ratings (only 5-star ratings)
 $testimonials = [];
 try {
     $stmt = $pdo->query("
@@ -104,9 +104,9 @@ try {
         FROM order_ratings o
         JOIN users u ON o.user_id = u.user_id
         LEFT JOIN user_info ui ON u.user_id = ui.user_id
-        WHERE o.review IS NOT NULL AND TRIM(o.review) != ''
+        WHERE o.review IS NOT NULL AND TRIM(o.review) != '' AND o.rating = 5
         ORDER BY o.created_at DESC
-        LIMIT 3
+        LIMIT 10
     ");
     $testimonials = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -280,7 +280,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         #highlight-text {
             display: inline;
             opacity: 0;
-            animation: fadeInHighlight 0.5s ease-in-out 3s forwards;
+            animation: fadeInHighlight 0.3s ease-in-out 0.8s forwards;
         }
 
         @keyframes fadeInHighlight {
@@ -305,31 +305,31 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .hero-badge {
             opacity: 0;
             transform: translateY(-20px);
-            animation: fadeInDown 0.8s ease-out 0.5s forwards;
+            animation: fadeInDown 0.3s ease-out 0.1s forwards;
         }
 
         .hero-title {
             opacity: 0;
             transform: translateY(20px);
-            animation: fadeInUp 0.8s ease-out 1s forwards;
+            animation: fadeInUp 0.3s ease-out 0.2s forwards;
         }
 
         .hero-subtitle {
             opacity: 0;
             transform: translateY(20px);
-            animation: fadeInUp 0.8s ease-out 1.3s forwards;
+            animation: fadeInUp 0.3s ease-out 0.3s forwards;
         }
 
         .hero-features {
             opacity: 0;
             transform: translateY(20px);
-            animation: fadeInUp 0.8s ease-out 1.6s forwards;
+            animation: fadeInUp 0.3s ease-out 0.4s forwards;
         }
 
         .hero-buttons {
             opacity: 0;
             transform: translateY(20px);
-            animation: fadeInUp 0.8s ease-out 1.9s forwards;
+            animation: fadeInUp 0.3s ease-out 0.5s forwards;
         }
 
         @keyframes fadeInDown {
@@ -536,64 +536,90 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         /* Categories Section */
         .categories-section {
-            padding: 5rem 0;
-            background: #ffffff;
+            padding: 6rem 0;
+            background: #f8f9fa;
+            width: 100vw;
+            position: relative;
+            left: 50%;
+            right: 50%;
+            margin-left: -50vw;
+            margin-right: -50vw;
         }
 
         .section-header {
             text-align: center;
-            margin-bottom: 3rem;
+            margin-bottom: 4rem;
+            padding: 0 2rem;
         }
 
         .section-title {
-            font-size: 2.5rem;
+            font-size: 3rem;
             font-weight: 700;
             color: var(--bs-dark);
             margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        .section-subtitle {
-            font-size: 1.1rem;
-            color: #6c757d;
-            max-width: 600px;
+        .title-divider {
+            width: 60px;
+            height: 3px;
+            background: var(--bs-secondary);
             margin: 0 auto;
+        }
+
+        .section-header.text-start .title-divider {
+            margin: 0;
         }
 
         .category-card {
             background: white;
-            border-radius: 1rem;
+            border-radius: 1.5rem;
             overflow: hidden;
             transition: all 0.3s ease;
             border: 1px solid #e9ecef;
-            height: 200px;
+            height: 350px;
             position: relative;
             display: flex;
             align-items: end;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
         }
 
         .category-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .category-card:visited {
+            color: inherit;
+            text-decoration: none;
         }
 
         .category-card-content {
             position: relative;
             z-index: 2;
-            padding: 1.5rem;
+            padding: 2.5rem;
             color: white;
             width: 100%;
-            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
         }
 
         .category-card-title {
-            font-size: 1.25rem;
+            font-size: 1.8rem;
             font-weight: 700;
-            margin-bottom: 0.5rem;
+            margin-bottom: 1rem;
+            line-height: 1.2;
         }
 
         .category-card-desc {
-            font-size: 0.9rem;
+            font-size: 1rem;
             opacity: 0.9;
+            line-height: 1.5;
         }
 
         /* Categories Carousel */
@@ -607,26 +633,40 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             position: relative;
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
         }
 
         .categories-carousel {
             flex: 1;
             overflow: hidden;
-            border-radius: 1rem;
+            width: 100%;
         }
 
         .categories-row {
             display: flex;
-            transition: transform 0.5s ease-in-out;
             gap: 1.5rem;
+            overflow-x: auto;
+            scroll-behavior: smooth;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE and Edge */
+            scroll-snap-type: x mandatory;
+            padding: 0 2rem; /* Increased padding for better peeking */
+            justify-content: flex-start;
+        }
+
+        .categories-row::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
         }
 
         .category-carousel-item {
-            flex: 0 0 25%;
-            min-width: 280px;
+            flex: 0 0 auto;
+            min-width: 500px;
+            max-width: 600px;
+            scroll-snap-align: center;
+            margin: 0 auto;
         }
-
 
         .btn-arrow {
             width: 50px;
@@ -672,45 +712,170 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             100% { transform: rotate(360deg); }
         }
 
+        @media (max-width: 1200px) {
+            .category-carousel-item {
+                flex: 0 0 auto;
+                min-width: 450px;
+                max-width: 550px;
+            }
+        }
+
+        @media (max-width: 992px) {
+            .category-carousel-item {
+                flex: 0 0 auto;
+                min-width: 350px;
+                max-width: 450px;
+            }
+            
+            .category-card {
+                height: 320px;
+            }
+            
+            .category-card-content {
+                padding: 2rem;
+            }
+            
+            .category-card-title {
+                font-size: 1.6rem;
+            }
+        }
+
         @media (max-width: 768px) {
-            .categories-carousel-wrapper {
-                flex-direction: column;
-                gap: 1.5rem;
+            .categories-section {
+                padding: 3rem 0;
             }
 
-            .categories-carousel-wrapper .btn-arrow {
-                position: absolute;
-                z-index: 10;
+            .section-title {
+                font-size: 2.2rem;
+                margin-bottom: 0.5rem;
             }
 
-            .categories-carousel-wrapper .btn-arrow-prev {
-                left: 10px;
-                top: 50%;
-                transform: translateY(-50%);
+            .section-header {
+                margin-bottom: 2.5rem;
+                padding: 0 1rem;
             }
 
-            .categories-carousel-wrapper .btn-arrow-next {
-                right: 10px;
-                top: 50%;
-                transform: translateY(-50%);
+            .categories-carousel-container {
+                padding: 0 0.5rem;
             }
 
             .category-carousel-item {
-                flex: 0 0 50%;
-                min-width: 250px;
+                flex: 0 0 auto;
+                min-width: 280px;
+                max-width: 350px;
+                padding: 0 0.5rem;
             }
 
-            .btn-arrow {
-                width: 45px;
-                height: 45px;
-                font-size: 1.1rem;
+            .categories-row {
+                gap: 1rem;
+            }
+
+            .category-card {
+                height: 280px;
+                border-radius: 1rem;
+            }
+
+            .category-card-content {
+                padding: 1.5rem;
+            }
+
+            .category-card-title {
+                font-size: 1.4rem;
+                margin-bottom: 0.75rem;
+            }
+
+            .category-card-desc {
+                font-size: 0.9rem;
+                line-height: 1.4;
             }
         }
 
         @media (max-width: 576px) {
+            .categories-section {
+                padding: 2.5rem 0;
+            }
+
+            .section-title {
+                font-size: 1.8rem;
+                letter-spacing: 0.5px;
+            }
+
+            .section-header {
+                margin-bottom: 2rem;
+                padding: 0 0.5rem;
+            }
+
+            .title-divider {
+                width: 50px;
+                height: 2px;
+            }
+
+            .categories-carousel-container {
+                padding: 0 0.25rem;
+            }
+
             .category-carousel-item {
-                flex: 0 0 100%;
-                min-width: 100%;
+                flex: 0 0 auto;
+                min-width: 250px;
+                max-width: 300px;
+                padding: 0 0.5rem;
+            }
+
+            .categories-row {
+                gap: 1rem;
+            }
+
+            .category-card {
+                height: 240px;
+                border-radius: 0.75rem;
+            }
+
+            .category-card-content {
+                padding: 1.25rem;
+            }
+
+            .category-card-title {
+                font-size: 1.2rem;
+                margin-bottom: 0.5rem;
+                line-height: 1.1;
+            }
+
+            .category-card-desc {
+                font-size: 0.85rem;
+                line-height: 1.3;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .section-title {
+                font-size: 1.6rem;
+            }
+
+            .category-carousel-item {
+                flex: 0 0 auto;
+                min-width: 200px;
+                max-width: 250px;
+                padding: 0 0.25rem;
+            }
+
+            .categories-row {
+                gap: 0.75rem;
+            }
+
+            .category-card {
+                height: 220px;
+            }
+
+            .category-card-content {
+                padding: 1rem;
+            }
+
+            .category-card-title {
+                font-size: 1.1rem;
+            }
+
+            .category-card-desc {
+                font-size: 0.8rem;
             }
         }
 
@@ -1228,56 +1393,296 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             }
         }
 
-        /* Testimonials Section */
-        .testimonials-section {
+        /* Customer Ratings Section */
+        .customer-ratings-section {
             padding: 5rem 0;
             background: #ffffff;
+            position: relative;
+            overflow: hidden;
         }
 
-        .testimonial-card {
-            background: white;
-            border-radius: 1rem;
-            padding: 2rem;
-            border: 1px solid #e9ecef;
-            height: 100%;
+        .customer-ratings-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(127,23,52,0.02) 0%, rgba(255,255,255,0.8) 100%);
+            z-index: 1;
         }
 
-        .testimonial-header {
+        .customer-ratings-section .container {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Food Image Container */
+        .food-image-container {
+            position: relative;
             display: flex;
-            align-items: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .testimonial-avatar {
-            width: 50px;
-            height: 50px;
-            background: var(--bs-secondary);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
             justify-content: center;
-            color: white;
-            font-weight: 600;
-            margin-right: 1rem;
-            flex-shrink: 0;
+            align-items: center;
+            height: 400px;
         }
 
-        .testimonial-avatar img {
+        .food-plate {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            transform: rotate(-5deg);
+            transition: all 0.3s ease;
+        }
+
+        .food-plate:hover {
+            transform: rotate(0deg) scale(1.05);
+        }
+
+        .food-image {
             width: 100%;
             height: 100%;
-            border-radius: 50%;
             object-fit: cover;
+            border-radius: 50%;
         }
 
-        .testimonial-rating {
+
+        /* Background Decorations */
+        .bg-decoration {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.1;
+            animation: floatDecoration 8s ease-in-out infinite;
+        }
+
+        .bg-decoration-1 {
+            width: 100px;
+            height: 100px;
+            background: var(--bs-secondary);
+            top: 10%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .bg-decoration-2 {
+            width: 60px;
+            height: 60px;
+            background: var(--bs-warning);
+            top: 60%;
+            right: 20%;
+            animation-delay: 3s;
+        }
+
+        .bg-decoration-3 {
+            width: 80px;
+            height: 80px;
+            background: var(--bs-info);
+            bottom: 20%;
+            left: 20%;
+            animation-delay: 6s;
+        }
+
+        @keyframes floatDecoration {
+            0%, 100% { transform: translateY(0px) scale(1); }
+            50% { transform: translateY(-30px) scale(1.1); }
+        }
+
+        /* Testimonials Content */
+        .testimonials-content {
+            padding-left: 2rem;
+        }
+
+        .section-header.text-start .section-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--bs-dark);
+            margin-bottom: 0.5rem;
+            line-height: 1.2;
+        }
+
+        .title-underline {
+            width: 60px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--bs-secondary), var(--bs-warning));
+            border-radius: 2px;
+            margin-bottom: 2rem;
+        }
+
+        /* Testimonial Carousel */
+        .testimonial-carousel {
+            position: relative;
+            min-height: 300px;
+            overflow: hidden;
+        }
+
+        .testimonial-slide {
+            position: relative;
+            width: 100%;
+        }
+
+        .testimonial-content {
+            opacity: 0;
+            transform: translateX(50px);
+            transition: all 0.6s ease;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 2rem 0;
+        }
+
+        .testimonial-content.active {
+            opacity: 1;
+            transform: translateX(0);
+            position: relative;
+        }
+
+        .quote-mark {
+            font-size: 4rem;
             color: var(--bs-warning);
-            margin-top: 0.25rem;
+            opacity: 0.3;
+            margin-bottom: 1rem;
+            line-height: 1;
         }
 
         .testimonial-text {
+            font-size: 1.1rem;
+            line-height: 1.7;
             color: #6c757d;
+            margin-bottom: 1.5rem;
             font-style: italic;
-            line-height: 1.6;
+            max-width: 500px;
+        }
+
+        .testimonial-rating {
+            margin-bottom: 2rem;
+        }
+
+        .testimonial-rating i {
+            font-size: 1.2rem;
+            color: #ddd;
+            margin-right: 0.25rem;
+            transition: all 0.3s ease;
+        }
+
+        .testimonial-rating i.active {
+            color: var(--bs-warning);
+            transform: scale(1.1);
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .author-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 3px solid var(--bs-secondary);
+            flex-shrink: 0;
+        }
+
+        .avatar-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .avatar-placeholder {
+            width: 100%;
+            height: 100%;
+            background: var(--bs-secondary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .author-info h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--bs-dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .author-info p {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin: 0;
+        }
+
+
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .customer-ratings-section {
+                padding: 3rem 0;
+            }
+
+            .food-image-container {
+                height: 250px;
+                margin-bottom: 2rem;
+            }
+
+            .food-plate {
+                width: 200px;
+                height: 200px;
+            }
+
+            .testimonials-content {
+                padding-left: 0;
+            }
+
+            .section-header.text-start .section-title {
+                font-size: 2rem;
+                text-align: center;
+            }
+
+            .title-underline {
+                margin: 0 auto 2rem auto;
+            }
+
+            .testimonial-text {
+                font-size: 1rem;
+                text-align: center;
+            }
+
+            .testimonial-author {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .food-plate {
+                width: 150px;
+                height: 150px;
+            }
+
+            .quote-mark {
+                font-size: 3rem;
+            }
+
+            .testimonial-text {
+                font-size: 0.95rem;
+            }
+
+            .author-avatar {
+                width: 50px;
+                height: 50px;
+            }
+
+            .nav-btn {
+                width: 45px;
+                height: 45px;
+                font-size: 1rem;
+            }
         }
 
         /* Footer */
@@ -1497,8 +1902,8 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
     <section class="categories-section">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Shop by Category</h2>
-                <p class="section-subtitle">Discover our premium selection of fresh meat and seafood, carefully curated for quality and taste.</p>
+                <h2 class="section-title">Categories</h2>
+                <div class="title-divider"></div>
             </div>
 
             <!-- Categories Carousel -->
@@ -1528,8 +1933,8 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
     <section id="featured" class="featured-section">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Popular Products</h2>
-                <p class="section-subtitle">Hand-picked premium selections for your table</p>
+                <h2 class="section-title">Best Sellers</h2>
+                <div class="title-divider"></div>
             </div>
 
             <div class="row g-4">
@@ -1598,7 +2003,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         <div class="container">
             <div class="section-header">
                 <h2 class="section-title">Seasonal Specials</h2>
-                <p class="section-subtitle">Fresh seasonal offerings and limited-time deals you won't want to miss</p>
+                <div class="title-divider"></div>
             </div>
 
             <div class="row g-4">
@@ -1686,7 +2091,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                     <div class="about-content text-center">
                         <div class="section-header">
                             <h2 class="section-title">About MikeMadz</h2>
-                            <p class="section-subtitle">Your trusted frozen goods supplier since 2021</p>
+                            <div class="title-divider"></div>
                         </div>
                         
                         <div class="about-story">
@@ -1734,98 +2139,99 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         </div>
     </section>
 
-    <!-- Testimonials Section -->
-    <section class="testimonials-section">
+    <!-- Customer Ratings Section -->
+    <section class="customer-ratings-section">
         <div class="container">
-            <div class="section-header">
-                <h2 class="section-title">Customer Ratings </h2>
-                <p class="section-subtitle">Don't just take our word for it - hear from our satisfied customers.</p>
+            <div class="row align-items-center">
+                <!-- Food Image Column -->
+                <div class="col-lg-4 col-md-6 mb-4 mb-lg-0">
+                    <div class="food-image-container">
+                        <div class="food-plate">
+                            <img src="images/homepage-chicken.png" alt="Fresh Chicken Drumsticks" class="food-image">
             </div>
+                        <!-- Background decorative elements -->
+                        <div class="bg-decoration bg-decoration-1"></div>
+                        <div class="bg-decoration bg-decoration-2"></div>
+                        <div class="bg-decoration bg-decoration-3"></div>
+                                    </div>
+                                </div>
 
-            <div class="row g-4">
-                <?php if (empty($testimonials)): ?>
-                    <!-- Fallback testimonials if no real ratings exist -->
-                    <div class="col-md-4">
-                        <div class="testimonial-card">
-                            <div class="testimonial-header">
-                                <div class="testimonial-avatar">M</div>
-                                <div>
-                                    <h4 class="mb-1">Marion Brix</h4>
-                                    <div class="testimonial-rating">
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                    </div>
-                                </div>
+                <!-- Testimonials Column -->
+                <div class="col-lg-8 col-md-6">
+                    <div class="testimonials-content">
+                        <div class="section-header text-start mb-4">
+                            <h2 class="section-title">Customer Ratings</h2>
+                            <div class="title-divider"></div>
                             </div>
-                            <p class="testimonial-text">"Nice Nice!"</p>
+
+                        <div class="testimonial-carousel">
+                            <div class="testimonial-slide" id="testimonialSlide">
+                                <?php if (empty($testimonials)): ?>
+                                    <!-- Enhanced fallback testimonials -->
+                                    <div class="testimonial-content active" data-index="0">
+                                        <div class="quote-mark">
+                                            <i class="fas fa-quote-left"></i>
+                        </div>
+                                        <p class="testimonial-text">
+                                            "The quality of meat from MikeMadz is exceptional! Fresh, properly frozen, and delivered right to my doorstep. 
+                                            The chicken drumsticks are perfect for my family's needs and the pricing is very reasonable. Highly recommended!"
+                                        </p>
+                                    <div class="testimonial-rating">
+                                            <i class="fas fa-star active"></i>
+                                            <i class="fas fa-star active"></i>
+                                            <i class="fas fa-star active"></i>
+                                            <i class="fas fa-star active"></i>
+                                            <i class="fas fa-star active"></i>
+                                    </div>
+                                        <div class="testimonial-author">
+                                            <div class="author-avatar">
+                                                <img src="https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face" alt="Marion Brix" class="avatar-img">
+                                </div>
+                                            <div class="author-info">
+                                                <h4 class="author-name">Marion Brix</h4>
+                                                <p class="author-title">Project Manager</p>
+                            </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="testimonial-card">
-                            <div class="testimonial-header">
-                                <div class="testimonial-avatar">J</div>
-                                <div>
-                                    <h4 class="mb-1">Jay</h4>
+                                <?php else: ?>
+                                    <?php foreach ($testimonials as $index => $testimonial): ?>
+                                        <div class="testimonial-content <?= $index === 0 ? 'active' : '' ?>" data-index="<?= $index ?>">
+                                            <div class="quote-mark">
+                                                <i class="fas fa-quote-left"></i>
+                                            </div>
+                                            <p class="testimonial-text">
+                                                "<?= htmlspecialchars($testimonial['review']) ?>"
+                                            </p>
                                     <div class="testimonial-rating">
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
+                                                <i class="fas fa-star active"></i>
+                                                <i class="fas fa-star active"></i>
+                                                <i class="fas fa-star active"></i>
+                                                <i class="fas fa-star active"></i>
+                                                <i class="fas fa-star active"></i>
                                     </div>
-                                </div>
-                            </div>
-                            <p class="testimonial-text">"Angas!"</p>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="testimonial-card">
-                            <div class="testimonial-header">
-                                <div class="testimonial-avatar">E</div>
-                                <div>
-                                    <h4 class="mb-1">Ekko</h4>
-                                    <div class="testimonial-rating">
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                        <i class="fas fa-star"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            <p class="testimonial-text">"Solid"</p>
-                        </div>
-                    </div>
-                <?php else: ?>
-                    <?php foreach ($testimonials as $testimonial): ?>
-                        <div class="col-md-4">
-                            <div class="testimonial-card">
-                                <div class="testimonial-header">
-                                    <div class="testimonial-avatar">
+                                            <div class="testimonial-author">
+                                                <div class="author-avatar">
                                         <?php if (!empty($testimonial['profile_picture'])): ?>
-                                            <img src="<?= htmlspecialchars($testimonial['profile_picture']) ?>" alt="<?= htmlspecialchars($testimonial['first_name']) ?>" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                                                        <img src="<?= htmlspecialchars($testimonial['profile_picture']) ?>" alt="<?= htmlspecialchars($testimonial['first_name']) ?>" class="avatar-img">
                                         <?php else: ?>
+                                                        <div class="avatar-placeholder">
                                             <?= strtoupper(substr($testimonial['first_name'], 0, 1)) ?>
+                                                        </div>
                                         <?php endif; ?>
                                     </div>
-                                    <div>
-                                        <h4 class="mb-1"><?= htmlspecialchars(trim($testimonial['first_name'] . ' ' . $testimonial['last_name'])) ?></h4>
-                                        <div class="testimonial-rating">
-                                            <?php for ($i = 1; $i <= 5; $i++): ?>
-                                                <i class="fas fa-star <?= $i <= $testimonial['rating'] ? 'text-warning' : 'text-muted' ?>"></i>
-                                            <?php endfor; ?>
+                                                <div class="author-info">
+                                                    <h4 class="author-name"><?= htmlspecialchars(trim($testimonial['first_name'] . ' ' . $testimonial['last_name'])) ?></h4>
+                                                    <p class="author-title">Verified Customer</p>
                                         </div>
-                                        <small class="text-muted"><?= date('M d, Y', strtotime($testimonial['created_at'])) ?></small>
-                                    </div>
-                                </div>
-                                <p class="testimonial-text">"<?= htmlspecialchars($testimonial['review']) ?>"</p>
                             </div>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -1855,7 +2261,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                 if (i < text.length) {
                     typewriterText.textContent += text.charAt(i);
                     i++;
-                    setTimeout(typeWriter, 100); // Speed of typing (100ms per character)
+                    setTimeout(typeWriter, 50); // Speed of typing (50ms per character)
                 } else {
                     // After typing is complete, show highlight text
                     setTimeout(() => {
@@ -1863,13 +2269,13 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                         // Hide cursor after highlight appears
                         setTimeout(() => {
                             cursor.style.display = 'none';
-                        }, 500);
-                    }, 500);
+                        }, 200);
+                    }, 200);
                 }
             }
             
             // Start typing after a short delay
-            setTimeout(typeWriter, 1000);
+            setTimeout(typeWriter, 200);
         }
 
         // Initialize typewriter when page loads
@@ -2253,9 +2659,32 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         let totalPages = 1;
         let isLoading = false;
 
+        // Test function to check if categories are loading
+        function testCategories() {
+            console.log('Testing categories...');
+            const categoriesRow = document.getElementById('categoriesRow');
+            console.log('Categories row element:', categoriesRow);
+            
+            // Add a test category to see if the HTML structure works
+            if (categoriesRow) {
+                categoriesRow.innerHTML = `
+                    <div class="category-carousel-item">
+                        <a href="product.php?category=test" class="category-card text-decoration-none" style="background: linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url('images/beef1.jpg'); background-size: cover; background-position: center;">
+                            <div class="category-card-content">
+                                <h3 class="category-card-title">TEST CATEGORY</h3>
+                                <p class="category-card-desc">Test description</p>
+                            </div>
+                        </a>
+                    </div>
+                `;
+                console.log('Test category added');
+            }
+        }
+
         // Initialize page on load
         document.addEventListener('DOMContentLoaded', function() {
-            loadCategories(1);
+            console.log('Page loaded, initializing...');
+            loadCategories();
             updateCartBadge(); // Initialize cart badge
             initializeCartButtons(); // Initialize cart button event listeners
             initializeCartRefresh(); // Initialize cart refresh functionality
@@ -2369,35 +2798,166 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             });
         }
 
-        function loadCategories(page) {
+        function loadCategories() {
             if (isLoading) return;
             
             isLoading = true;
-            const prevBtn = document.getElementById('prevBtn');
-            const nextBtn = document.getElementById('nextBtn');
-            
-            // Disable buttons during loading
-            prevBtn.disabled = true;
-            nextBtn.disabled = true;
 
-            fetch(`api/categories.php?page=${page}`)
-                .then(response => response.json())
+            fetch('api/categories.php')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Categories API Response:', data);
                     if (data.success) {
-                        displayCategories(data.categories);
-                        updateNavigation(data.pagination);
-                        currentPage = page;
-                        totalPages = data.pagination.total_pages;
+                        displayAllCategories(data.categories);
+                        console.log(`Loaded ${data.categories.length} categories`);
                     } else {
                         console.error('Failed to load categories:', data.error);
+                        showFallbackCategories();
                     }
                 })
                 .catch(error => {
                     console.error('Error loading categories:', error);
+                    showFallbackCategories();
                 })
                 .finally(() => {
                     isLoading = false;
                 });
+        }
+
+        function showFallbackCategories() {
+            const categoriesRow = document.getElementById('categoriesRow');
+            const fallbackCategories = [
+                {
+                    name: 'BEEF',
+                    description: 'Premium beef cuts',
+                    image: 'images/beef1.jpg',
+                    url: 'product.php?category=beef'
+                },
+                {
+                    name: 'CHICKEN',
+                    description: 'Fresh chicken products',
+                    image: 'images/breast.jpg',
+                    url: 'product.php?category=chicken'
+                },
+                {
+                    name: 'SEAFOOD',
+                    description: 'Fresh fish and seafood',
+                    image: 'images/bangus.jpg',
+                    url: 'product.php?category=seafood'
+                },
+                {
+                    name: 'PORK',
+                    description: 'Quality pork products',
+                    image: 'images/porkjowls.jpg',
+                    url: 'product.php?category=pork'
+                }
+            ];
+            
+            displayCategories(fallbackCategories);
+            
+            // Disable navigation for fallback
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            prevBtn.disabled = true;
+            nextBtn.disabled = true;
+        }
+
+        function displayAllCategories(categories) {
+            console.log('Displaying categories:', categories);
+            const categoriesRow = document.getElementById('categoriesRow');
+            
+            if (!categoriesRow) {
+                console.error('categoriesRow element not found!');
+                return;
+            }
+            
+            if (categories.length === 0) {
+                console.log('No categories to display');
+                categoriesRow.innerHTML = '<div class="col-12 text-center text-muted">No categories available.</div>';
+                return;
+            }
+
+            let html = '';
+            
+            // Add the last category at the beginning for seamless loop
+            if (categories.length > 0) {
+                const lastCategory = categories[categories.length - 1];
+                html += `
+                    <div class="category-carousel-item">
+                        <a href="${lastCategory.url}" class="category-card text-decoration-none" style="background: linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url('${lastCategory.image}'); background-size: cover; background-position: center;">
+                            <div class="category-card-content">
+                                <h3 class="category-card-title">${lastCategory.name}</h3>
+                                <p class="category-card-desc">${lastCategory.description}</p>
+                            </div>
+                        </a>
+                    </div>
+                `;
+            }
+            
+            // Add all categories
+            categories.forEach(category => {
+                console.log('Processing category:', category);
+                html += `
+                    <div class="category-carousel-item">
+                        <a href="${category.url}" class="category-card text-decoration-none" style="background: linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url('${category.image}'); background-size: cover; background-position: center;">
+                            <div class="category-card-content">
+                                <h3 class="category-card-title">${category.name}</h3>
+                                <p class="category-card-desc">${category.description}</p>
+                            </div>
+                        </a>
+                    </div>
+                `;
+            });
+            
+            // Add the first category at the end for seamless loop
+            if (categories.length > 0) {
+                const firstCategory = categories[0];
+                html += `
+                    <div class="category-carousel-item">
+                        <a href="${firstCategory.url}" class="category-card text-decoration-none" style="background: linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url('${firstCategory.image}'); background-size: cover; background-position: center;">
+                            <div class="category-card-content">
+                                <h3 class="category-card-title">${firstCategory.name}</h3>
+                                <p class="category-card-desc">${firstCategory.description}</p>
+                            </div>
+                        </a>
+                    </div>
+                `;
+            }
+            
+            console.log('Generated HTML:', html);
+            categoriesRow.innerHTML = html;
+            
+            // Set initial scroll position to center the first category (skip the duplicate at beginning)
+            setTimeout(() => {
+                if (categoriesRow.children.length > 1) {
+                    const containerWidth = categoriesRow.parentElement.offsetWidth;
+                    const firstItem = categoriesRow.children[1]; // Skip the duplicate last category
+                    const itemWidth = firstItem.offsetWidth;
+                    const centerOffset = (containerWidth - itemWidth) / 2;
+                    categoriesRow.scrollLeft = centerOffset;
+                    console.log('Initial scroll position set to:', centerOffset);
+                }
+            }, 200);
+            
+            // Enable navigation buttons
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            if (prevBtn) {
+                prevBtn.style.display = 'flex';
+                prevBtn.disabled = false;
+                console.log('Previous button enabled');
+            }
+            if (nextBtn) {
+                nextBtn.style.display = 'flex';
+                nextBtn.disabled = false;
+                console.log('Next button enabled');
+            }
+            console.log('Categories loaded successfully');
         }
 
         function displayCategories(categories) {
@@ -2412,12 +2972,10 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             categories.forEach(category => {
                 html += `
                     <div class="category-carousel-item">
-                        <a href="${category.url}" class="text-decoration-none">
-                            <div class="category-card" style="background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('${category.image}'); background-size: cover; background-position: center;">
-                                <div class="category-card-content">
-                                    <h3 class="category-card-title">${category.name}</h3>
-                                    <p class="category-card-desc">${category.description}</p>
-                                </div>
+                        <a href="${category.url}" class="category-card text-decoration-none" style="background: linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url('${category.image}'); background-size: cover; background-position: center;">
+                            <div class="category-card-content">
+                                <h3 class="category-card-title">${category.name}</h3>
+                                <p class="category-card-desc">${category.description}</p>
                             </div>
                         </a>
                     </div>
@@ -2427,25 +2985,250 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             categoriesRow.innerHTML = html;
         }
 
-        function updateNavigation(pagination) {
-            const prevBtn = document.getElementById('prevBtn');
-            const nextBtn = document.getElementById('nextBtn');
-            
-            prevBtn.disabled = !pagination.has_prev;
-            nextBtn.disabled = !pagination.has_next;
-        }
+
+
+        // Simple index-based carousel
+        let currentCategoryIndex = 0;
+        let totalCategories = 0;
 
         function loadNextCategories() {
-            if (currentPage < totalPages && !isLoading) {
-                loadCategories(currentPage + 1);
-            }
+            console.log('Next button clicked');
+            const categoriesRow = document.getElementById('categoriesRow');
+            if (!categoriesRow || categoriesRow.children.length === 0) return;
+
+            const firstItem = categoriesRow.children[0];
+            const itemWidth = firstItem.offsetWidth;
+            const gap = parseFloat(getComputedStyle(categoriesRow).gap);
+            const scrollAmount = itemWidth + gap;
+            
+            // Always scroll forward by one category
+            categoriesRow.scrollBy({
+                left: scrollAmount,
+                behavior: 'smooth'
+            });
+            
+            // Check if we need to loop seamlessly
+            setTimeout(() => {
+                const maxScroll = categoriesRow.scrollWidth - categoriesRow.clientWidth;
+                const currentScroll = categoriesRow.scrollLeft;
+                
+                // If we're at the duplicate at the end, instantly jump to the real beginning
+                if (currentScroll >= maxScroll - 10) {
+                    // Calculate position of the first real category (skip duplicate)
+                    const firstRealItem = categoriesRow.children[1];
+                    const firstItemWidth = firstRealItem.offsetWidth;
+                    const centerOffset = (categoriesRow.parentElement.offsetWidth - firstItemWidth) / 2;
+                    const targetPosition = centerOffset;
+                    
+                    // Instantly jump without animation
+                    categoriesRow.style.scrollBehavior = 'auto';
+                    categoriesRow.scrollLeft = targetPosition;
+                    
+                    // Re-enable smooth scrolling
+                    setTimeout(() => {
+                        categoriesRow.style.scrollBehavior = 'smooth';
+                    }, 10);
+                    
+                    console.log('Seamlessly looped to beginning');
+                }
+            }, 300);
         }
 
         function loadPreviousCategories() {
-            if (currentPage > 1 && !isLoading) {
-                loadCategories(currentPage - 1);
+            console.log('Previous button clicked');
+            const categoriesRow = document.getElementById('categoriesRow');
+            if (!categoriesRow || categoriesRow.children.length === 0) return;
+
+            const firstItem = categoriesRow.children[0];
+            const itemWidth = firstItem.offsetWidth;
+            const gap = parseFloat(getComputedStyle(categoriesRow).gap);
+            const scrollAmount = itemWidth + gap;
+            
+            console.log('Current scroll position:', categoriesRow.scrollLeft);
+            console.log('Scroll amount:', scrollAmount);
+            
+            // Check if we're already at the beginning (duplicate SEA FOODS)
+            if (categoriesRow.scrollLeft <= 50) {
+                console.log('Already at beginning, jumping to end');
+                
+                // Calculate position of the last real category (skip duplicate BEEF at end)
+                const lastRealItem = categoriesRow.children[categoriesRow.children.length - 2];
+                const lastItemWidth = lastRealItem.offsetWidth;
+                const centerOffset = (categoriesRow.parentElement.offsetWidth - lastItemWidth) / 2;
+                
+                // Instantly jump to the end
+                categoriesRow.style.scrollBehavior = 'auto';
+                categoriesRow.scrollLeft = centerOffset;
+                
+                // Re-enable smooth scrolling
+                setTimeout(() => {
+                    categoriesRow.style.scrollBehavior = 'smooth';
+                }, 10);
+                
+                console.log('Jumped to end position:', centerOffset);
+                return;
+            }
+            
+            // Normal scroll backward
+            categoriesRow.scrollBy({
+                left: -scrollAmount,
+                behavior: 'smooth'
+            });
+            
+            console.log('Scrolled backward by:', scrollAmount);
+        }
+
+        function showCategory(index) {
+            const categoriesRow = document.getElementById('categoriesRow');
+            if (!categoriesRow || categoriesRow.children.length === 0) return;
+            
+            // Show all categories (for peeking effect)
+            for (let i = 0; i < categoriesRow.children.length; i++) {
+                categoriesRow.children[i].style.display = 'block';
+            }
+            
+            // Calculate the actual index (accounting for duplicate at beginning)
+            const actualIndex = index + 1; // Skip the duplicate at the beginning
+            
+            // Calculate scroll position to center the current category
+            const containerWidth = categoriesRow.parentElement.offsetWidth;
+            const itemWidth = categoriesRow.children[actualIndex].offsetWidth;
+            const gap = parseFloat(getComputedStyle(categoriesRow).gap);
+            
+            // Calculate the scroll position to center the current item
+            const scrollPosition = (itemWidth + gap) * actualIndex;
+            const centerOffset = (containerWidth - itemWidth) / 2;
+            const finalScrollPosition = scrollPosition - centerOffset;
+            
+            // Smooth scroll to the calculated position
+            categoriesRow.scrollTo({
+                left: finalScrollPosition,
+                behavior: 'smooth'
+            });
+            
+            console.log('Showing category index:', index, 'actual index:', actualIndex, 'scroll position:', finalScrollPosition);
+        }
+
+        // Testimonial Carousel Functionality
+        let currentTestimonialIndex = 0;
+        let testimonials = [];
+        let isTransitioning = false;
+        
+        // Initialize testimonials array
+        function initializeTestimonials() {
+            const testimonialElements = document.querySelectorAll('.testimonial-content');
+            testimonials = Array.from(testimonialElements);
+            
+            // If no testimonials, create fallback ones
+            if (testimonials.length === 0) {
+                testimonials = [
+                    {
+                        name: "Marion Brix",
+                        title: "Project Manager",
+                        rating: 5,
+                        text: "The quality of meat from MikeMadz is exceptional! Fresh, properly frozen, and delivered right to my doorstep. The chicken drumsticks are perfect for my family's needs and the pricing is very reasonable. Highly recommended!",
+                        avatar: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face"
+                    },
+                    {
+                        name: "Jay Rodriguez",
+                        title: "Chef",
+                        rating: 5,
+                        text: "As a professional chef, I demand the highest quality ingredients. MikeMadz consistently delivers premium cuts that exceed my expectations. Their frozen products maintain excellent texture and flavor.",
+                        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face"
+                    },
+                    {
+                        name: "Sarah Johnson",
+                        title: "Food Blogger",
+                        rating: 5,
+                        text: "I've been ordering from MikeMadz for over a year now, and they never disappoint. The variety of products is amazing, and everything arrives perfectly frozen. Great customer service too!",
+                        avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face"
+                    }
+                ];
+                createFallbackTestimonials();
             }
         }
+        
+        function createFallbackTestimonials() {
+            const slideContainer = document.getElementById('testimonialSlide');
+            if (!slideContainer) return;
+            
+            let html = '';
+            testimonials.forEach((testimonial, index) => {
+                html += `
+                    <div class="testimonial-content ${index === 0 ? 'active' : ''}" data-index="${index}">
+                        <div class="quote-mark">
+                            <i class="fas fa-quote-left"></i>
+                        </div>
+                        <p class="testimonial-text">
+                            "${testimonial.text}"
+                        </p>
+                        <div class="testimonial-rating">
+                            <i class="fas fa-star active"></i>
+                            <i class="fas fa-star active"></i>
+                            <i class="fas fa-star active"></i>
+                            <i class="fas fa-star active"></i>
+                            <i class="fas fa-star active"></i>
+                        </div>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">
+                                <img src="${testimonial.avatar}" alt="${testimonial.name}" class="avatar-img">
+                            </div>
+                            <div class="author-info">
+                                <h4 class="author-name">${testimonial.name}</h4>
+                                <p class="author-title">${testimonial.title}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            slideContainer.innerHTML = html;
+            testimonials = Array.from(document.querySelectorAll('.testimonial-content'));
+        }
+        
+        function showTestimonial(index) {
+            if (isTransitioning || testimonials.length <= 1) return;
+            
+            isTransitioning = true;
+            const testimonialContents = document.querySelectorAll('.testimonial-content');
+            const currentActive = document.querySelector('.testimonial-content.active');
+            
+            // Remove active class from current testimonial
+            if (currentActive) {
+                currentActive.classList.remove('active');
+            }
+            
+            // Add active class to new testimonial
+            if (testimonialContents[index]) {
+                testimonialContents[index].classList.add('active');
+            }
+            
+            currentTestimonialIndex = index;
+            
+            // Reset transition flag after animation completes
+            setTimeout(() => {
+                isTransitioning = false;
+            }, 600);
+        }
+        
+        function nextTestimonial() {
+            const nextIndex = (currentTestimonialIndex + 1) % testimonials.length;
+            showTestimonial(nextIndex);
+        }
+        
+        // Auto-rotate testimonials every 5 seconds
+        function startTestimonialRotation() {
+            if (testimonials.length > 1) {
+                setInterval(() => {
+                    nextTestimonial();
+                }, 5000);
+            }
+        }
+        
+        // Initialize testimonials when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeTestimonials();
+            startTestimonialRotation();
+        });
 
     </script>
     

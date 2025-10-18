@@ -180,6 +180,17 @@
                     <i class="fas fa-check-circle me-1"></i>Done
                   </span>
                 <?php endif; ?>
+                <?php if ($order['status'] == 'Cancelled' && !empty($order['receipt_path']) && !empty($order['receipt_filename'])): ?>
+                  <?php if ($order['cancel_reason'] === 'Insufficient Payment'): ?>
+                    <button type="button" class="action-btn" style="background: #28a745; color: white;" onclick="event.stopPropagation(); viewRefundReceipt(<?= $order['id'] ?>, '<?= htmlspecialchars($order['receipt_path']) ?>', '<?= htmlspecialchars($order['receipt_filename']) ?>')">
+                      <i class="fas fa-receipt me-1"></i>Refund Receipt
+                    </button>
+                  <?php else: ?>
+                    <button type="button" class="action-btn" style="background: #17a2b8; color: white;" onclick="event.stopPropagation(); viewRefundReceipt(<?= $order['id'] ?>, '<?= htmlspecialchars($order['receipt_path']) ?>', '<?= htmlspecialchars($order['receipt_filename']) ?>')">
+                      <i class="fas fa-file-alt me-1"></i>View Receipt
+                    </button>
+                  <?php endif; ?>
+                <?php endif; ?>
               </div>
             </td>
           </tr>

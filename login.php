@@ -11,10 +11,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
     } else {
         try {
             // Join users and user_info tables to get user data with email
+            // Get the LATEST VERIFIED user with this email
             $sql = "SELECT u.user_id, u.username, u.password, u.email_verified, u.is_active, u.usertype_id, ui.email 
                     FROM users u 
                     INNER JOIN user_info ui ON u.user_id = ui.user_id 
-                    WHERE ui.email = :email";
+                    WHERE ui.email = :email AND u.email_verified = 1
+                    ORDER BY u.date_created DESC 
+                    LIMIT 1";
             $stmt = $pdo->prepare($sql);
             $stmt->bindParam(':email', $email);
             $stmt->execute();

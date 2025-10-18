@@ -607,7 +607,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                         <p class="mb-0 opacity-75">Record new stock entries and track restocking activities</p>
                     </div>
                     <button class="btn text-white fw-bold px-4" style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);" data-bs-toggle="modal" data-bs-target="#restockModal">
-                        <i class="fa fa-plus me-2"></i>Record Restocking
+                        <i class="fa fa-plus me-2"></i>Add Stock
                     </button>
                 </div>
             </div>
@@ -788,7 +788,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title fw-bold">
-                            <i class="fa fa-plus-circle me-2" style="color: #7F1734;"></i>Record Restocking
+                            <i class="fa fa-plus-circle me-2" style="color: #7F1734;"></i>Add Stock
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
@@ -856,7 +856,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn text-white fw-bold" style="background-color: #7F1734; border-radius: 8px;">
-                            <i class="fa fa-save me-2"></i>Record Restocking
+                            <i class="fa fa-save me-2"></i>Add Stock
                         </button>
                     </div>
                 </div>

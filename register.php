@@ -21,19 +21,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } else if (strlen($last_name) < 2) {
         $_SESSION['error'] = "Last name must be at least 2 characters long.";
     } else {
-        // Check if user already exists (check username in users table and email in user_info table)
+        // Check if username already exists
         $stmt = $pdo->prepare("SELECT 1 FROM users WHERE username = :username");
         $stmt->bindParam(':username', $username);
         $stmt->execute();
         $usernameExists = $stmt->fetch();
         
-        $stmt = $pdo->prepare("SELECT 1 FROM user_info WHERE email = :email");
+        // Check if email already exists in VERIFIED users only
+        $stmt = $pdo->prepare("
+            SELECT 1 FROM users u 
+            INNER JOIN user_info ui ON u.user_id = ui.user_id 
+            WHERE ui.email = :email AND u.email_verified = 1
+        ");
         $stmt->bindParam(':email', $email);
         $stmt->execute();
-        $emailExists = $stmt->fetch();
+        $verifiedEmailExists = $stmt->fetch();
         
-        if ($usernameExists || $emailExists) {
-            $_SESSION['error'] = "Username or email already exists.";
+        if ($usernameExists || $verifiedEmailExists) {
+            $_SESSION['error'] = "Username or verified email already exists.";
         } else {
             // Hash password
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
@@ -63,6 +68,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $_SESSION['success'] = "Registration successful! Verify your email to complete the process.";
                 header("Location: email_verification.php?email=" . urlencode($email));
                 exit;
+            } catch (PDOException $e) {
+                // Rollback transaction on error
+                $pdo->rollBack();
+                
+                // Check if it's a duplicate email error
+                if ($e->getCode() == 23000 && strpos($e->getMessage(), 'email') !== false) {
+                    $_SESSION['error'] = "This email is already registered but not verified. Please use a different email or contact support.";
+                } else {
+                    $_SESSION['error'] = "Registration failed. Please try again.";
+                }
             } catch (Exception $e) {
                 // Rollback transaction on error
                 $pdo->rollBack();

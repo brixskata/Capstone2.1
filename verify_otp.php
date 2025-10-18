@@ -14,8 +14,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     
     try {
-        // First, get the user_id from user_info table
-        $stmt = $pdo->prepare("SELECT user_id FROM user_info WHERE email = ?");
+        // Get the LATEST user_id from user_info table (most recent registration)
+        $stmt = $pdo->prepare("
+            SELECT ui.user_id 
+            FROM user_info ui 
+            INNER JOIN users u ON ui.user_id = u.user_id 
+            WHERE ui.email = ? 
+            ORDER BY u.date_created DESC 
+            LIMIT 1
+        ");
         $stmt->execute([$email]);
         $user_info = $stmt->fetch(PDO::FETCH_ASSOC);
         

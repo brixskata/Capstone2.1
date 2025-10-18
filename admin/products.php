@@ -17,6 +17,34 @@ if (isCustomer($pdo)) {
     exit;
 }
 
+// Handle unarchive action
+if (isset($_GET['unarchive'])) {
+    $product_id = (int)$_GET['unarchive'];
+    
+    try {
+        // Get product name for logging
+        $stmt = $pdo->prepare("SELECT product_name FROM products WHERE product_id = ?");
+        $stmt->execute([$product_id]);
+        $product = $stmt->fetch();
+        
+        if ($product) {
+            // Unarchive product
+            $stmt = $pdo->prepare("UPDATE products SET is_archive = 0 WHERE product_id = ?");
+            $stmt->execute([$product_id]);
+            
+            $_SESSION['success'] = "Product '{$product['product_name']}' unarchived successfully";
+            logHistory($pdo, 'Product Unarchived', "Unarchived product: {$product['product_name']}", $_SESSION['username']);
+        } else {
+            $_SESSION['error'] = "Product not found";
+        }
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Error unarchiving product: " . $e->getMessage();
+    }
+    
+    header("Location: products.php?tab=archived");
+    exit;
+}
+
 // Fetch categories from the database
 $stmt = $pdo->query("SELECT category_id AS id, category_name AS name FROM categories");
 $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -33,6 +61,43 @@ $suppliers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $stmt = $pdo->query("SELECT uom_id AS id, name FROM uom");
 $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Get current tab (default to active)
+$current_tab = isset($_GET['tab']) && $_GET['tab'] === 'archived' ? 'archived' : 'active';
+$is_archived = $current_tab === 'archived' ? 1 : 0;
+
+// Fetch products based on current tab
+$stmt = $pdo->prepare("
+    SELECT 
+      p.product_id AS id,
+      p.product_name AS name,
+      p.product_description AS description,
+      c.category_name as category_name,
+      b.name as brand_name,
+      s.name as supplier_name,
+      u.name as uom_name,
+      COALESCE(ps.current_stock,0) AS stock,
+      COALESCE(pp.markup_price,0) AS markup_value,
+      COALESCE(pp.markup_price,0) + COALESCE(pp.cost_price,0) AS price,
+      (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 ORDER BY pi.product_image_id DESC LIMIT 1) AS image1,
+      ps.expiration_date,
+      COALESCE(pp.cost_price,0) AS cost_per_unit,
+      p.is_archive
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.id
+    LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
+    LEFT JOIN uom u ON p.uom_id = u.uom_id
+    LEFT JOIN product_stock ps ON ps.product_id = p.product_id
+    LEFT JOIN product_pricing pp ON pp.product_id = p.product_id
+    WHERE p.is_archive = ?
+    ORDER BY p.product_name
+");
+$stmt->execute([$is_archived]);
+$products = $stmt->fetchAll();
+
+// Get counts for analytics
+$active_count = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 0")->fetchColumn();
+$archived_count = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 1")->fetchColumn();
 
 ?>
 <!DOCTYPE html>
@@ -365,6 +430,53 @@ $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
       box-shadow: 0 4px 12px rgba(249, 231, 159, 0.4);
     }
 
+    .btn-unarchive {
+      background-color: #A8D5BA;
+      color: #2E7D32;
+      border: 1px solid rgba(168, 213, 186, 0.3);
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .btn-unarchive:hover {
+      background-color: #81C784;
+      color: #1B5E20;
+      border-color: rgba(129, 199, 132, 0.4);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(168, 213, 186, 0.4);
+    }
+
+    /* Tab Button Styling */
+    .btn-outline-primary {
+      border-color: var(--bs-primary);
+      color: var(--bs-primary);
+      transition: all 0.2s ease;
+    }
+
+    .btn-outline-primary:hover {
+      background-color: var(--bs-primary);
+      border-color: var(--bs-primary);
+      color: white;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(127, 23, 52, 0.3);
+    }
+
+    .btn-primary {
+      background-color: var(--bs-primary);
+      border-color: var(--bs-primary);
+      color: white;
+      box-shadow: 0 2px 8px rgba(127, 23, 52, 0.2);
+    }
+
+    .btn-primary:hover {
+      background-color: #6b1429;
+      border-color: #6b1429;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(127, 23, 52, 0.4);
+    }
+
     /* Empty State */
     .empty-state {
       text-align: center;
@@ -518,7 +630,7 @@ $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <i class="fas fa-box"></i>
             </div>
             <div class="card-content">
-              <h3 class="card-number" id="totalProducts">0</h3>
+              <h3 class="card-number"><?= $active_count + $archived_count ?></h3>
               <p class="card-label">Total Products</p>
             </div>
           </div>
@@ -529,7 +641,7 @@ $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <i class="fas fa-check-circle"></i>
             </div>
             <div class="card-content">
-              <h3 class="card-number" id="activeProducts">0</h3>
+              <h3 class="card-number"><?= $active_count ?></h3>
               <p class="card-label">Active Products</p>
             </div>
           </div>
@@ -540,7 +652,7 @@ $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <i class="fas fa-archive"></i>
             </div>
             <div class="card-content">
-              <h3 class="card-number" id="archivedProducts">0</h3>
+              <h3 class="card-number"><?= $archived_count ?></h3>
               <p class="card-label">Archived Products</p>
             </div>
           </div>
@@ -576,11 +688,22 @@ $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
 
 
-      <!-- Active Products -->
+      <!-- Tab Navigation -->
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="fw-bold mb-0" style="color: var(--bs-dark);">Active Products</h4>
+        <div class="d-flex gap-2">
+          <a class="btn <?= $current_tab === 'active' ? 'btn-primary' : 'btn-outline-primary' ?> btn-sm" 
+             href="?tab=active">
+            <i class="fas fa-check-circle me-1"></i>Active
+          </a>
+          <a class="btn <?= $current_tab === 'archived' ? 'btn-primary' : 'btn-outline-primary' ?> btn-sm" 
+             href="?tab=archived">
+            <i class="fas fa-archive me-1"></i>Archived
+          </a>
+        </div>
         <div class="d-flex align-items-center gap-3">
-          <span class="badge" id="activeCount" style="background-color: var(--bs-primary); color: white;">0 products</span>
+          <span class="badge" id="productCount" style="background-color: var(--bs-primary); color: white;">
+            <?= count($products) ?> products
+          </span>
           <div class="btn-group" role="group">
             <input type="radio" class="btn-check" name="viewMode" id="gridView" autocomplete="off" checked>
             <label class="btn btn-outline-primary btn-sm" for="gridView">
@@ -594,35 +717,16 @@ $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
       </div>
     <div class="row g-4 mb-5" id="productsGrid">
-      <?php
-      // Fetch active products with related data from normalized tables
-      $stmt = $pdo->query("
-        SELECT 
-          p.product_id AS id,
-          p.product_name AS name,
-          p.product_description AS description,
-          c.category_name as category_name,
-          b.name as brand_name,
-          s.name as supplier_name,
-          u.name as uom_name,
-          COALESCE(ps.current_stock,0) AS stock,
-          COALESCE(pp.markup_price,0) AS markup_value,
-          COALESCE(pp.markup_price,0) + COALESCE(pp.cost_price,0) AS price,
-          (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 ORDER BY pi.product_image_id DESC LIMIT 1) AS image1,
-          ps.expiration_date,
-          COALESCE(pp.cost_price,0) AS cost_per_unit
-        FROM products p
-        LEFT JOIN categories c ON p.category_id = c.category_id
-        LEFT JOIN brands b ON p.brand_id = b.id
-        LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
-        LEFT JOIN uom u ON p.uom_id = u.uom_id
-        LEFT JOIN product_stock ps ON ps.product_id = p.product_id
-        LEFT JOIN product_pricing pp ON pp.product_id = p.product_id
-        WHERE p.is_archive = 0
-        ORDER BY p.product_name
-      ");
-      $activeProducts = $stmt->fetchAll();
-      foreach ($activeProducts as $product): ?>
+      <?php if (empty($products)): ?>
+        <div class="col-12">
+          <div class="text-center py-5">
+            <i class="fas fa-<?= $current_tab === 'active' ? 'box' : 'archive' ?> fa-3x text-muted mb-3"></i>
+            <h4 class="text-muted">No <?= $current_tab ?> products found</h4>
+            <p class="text-muted"><?= $current_tab === 'active' ? 'All products are currently archived' : 'All products are currently active' ?></p>
+          </div>
+        </div>
+      <?php else: ?>
+        <?php foreach ($products as $product): ?>
         <div class="col-lg-4 col-md-6 product-item" 
              data-name="<?= strtolower(htmlspecialchars($product['name'])) ?>"
              data-category="<?= strtolower(htmlspecialchars($product['category_name'])) ?>"
@@ -656,9 +760,15 @@ $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="p-3">
               <div class="d-flex justify-content-between align-items-start mb-2">
                 <h5 class="fw-bold mb-0"><?= htmlspecialchars($product['name']) ?></h5>
-                <span class="badge" style="background-color: <?= $product['stock'] > 10 ? '#198754' : ($product['stock'] > 0 ? '#ffc107' : '#db3030') ?>; color: <?= $product['stock'] > 0 && $product['stock'] <= 10 ? 'black' : 'white' ?>;">
-                  <?= $product['stock'] > 10 ? 'In Stock' : ($product['stock'] > 0 ? 'Low Stock' : 'Out of Stock') ?>
-                </span>
+                <div class="d-flex flex-column gap-1">
+                  <?php if ($current_tab === 'archived'): ?>
+                    <span class="badge" style="background-color: #F9E79F; color: #F57F17;">Archived</span>
+                  <?php else: ?>
+                    <span class="badge" style="background-color: <?= $product['stock'] > 10 ? '#198754' : ($product['stock'] > 0 ? '#ffc107' : '#db3030') ?>; color: <?= $product['stock'] > 0 && $product['stock'] <= 10 ? 'black' : 'white' ?>;">
+                      <?= $product['stock'] > 10 ? 'In Stock' : ($product['stock'] > 0 ? 'Low Stock' : 'Out of Stock') ?>
+                    </span>
+                  <?php endif; ?>
+                </div>
               </div>
               
               <div class="text-muted small mb-3">
@@ -678,18 +788,24 @@ $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
               </div>
               
               <div class="d-flex gap-2">
-                <a href="edit_product.php?id=<?= $product['id'] ?>" class="btn btn-sm flex-fill btn-edit">
-                  <i class="fa fa-edit me-1"></i> Edit
-                </a>
-                <a href="archive_product.php?id=<?= $product['id'] ?>" class="btn btn-sm flex-fill btn-archive archive-btn" onclick="return confirmArchive(event, this.href)">
-                  <i class="fa fa-archive me-1"></i> Archive
-                </a>
+                <?php if ($current_tab === 'active'): ?>
+                  <a href="edit_product.php?id=<?= $product['id'] ?>" class="btn btn-sm flex-fill btn-edit">
+                    <i class="fa fa-edit me-1"></i> Edit
+                  </a>
+                  <a href="archive_product.php?id=<?= $product['id'] ?>" class="btn btn-sm flex-fill btn-archive archive-btn" onclick="return confirmArchive(event, this.href)">
+                    <i class="fa fa-archive me-1"></i> Archive
+                  </a>
+                <?php else: ?>
+                  <a href="products.php?unarchive=<?= $product['id'] ?>&tab=archived" class="btn btn-sm w-100 btn-unarchive unarchive-btn" onclick="return confirmUnarchive(event, this.href)">
+                    <i class="fa fa-undo me-1"></i> Unarchive
+                  </a>
+                <?php endif; ?>
               </div>
             </div>
           </div>
         </div>
       <?php endforeach; ?>
-      </div>
+      <?php endif; ?>
     </div>
   </main>
 
@@ -719,26 +835,26 @@ $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     // Unarchive confirmation with SweetAlert2
-    document.querySelectorAll('.unarchive-btn').forEach(button => {
-      button.addEventListener('click', function(e) {
-        e.preventDefault();
-        
-        Swal.fire({
-          title: 'Unarchive Product',
-          text: 'Are you sure you want to unarchive this product?',
-          icon: 'question',
-          showCancelButton: true,
-          confirmButtonColor: '#198754',
-          cancelButtonColor: '#6c757d',
-          confirmButtonText: 'Unarchive Product',
-          cancelButtonText: 'Cancel'
-        }).then((result) => {
-          if (result.isConfirmed) {
-            window.location.href = this.href;
-          }
-        });
+    function confirmUnarchive(event, url) {
+      event.preventDefault();
+      
+      Swal.fire({
+        title: 'Unarchive Product',
+        text: 'Are you sure you want to unarchive this product?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Unarchive Product',
+        cancelButtonText: 'Cancel'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = url;
+        }
       });
-    });
+      
+      return false;
+    }
 
 
     // Image carousel functionality
@@ -818,21 +934,14 @@ $uoms = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if (show) visibleCount++;
       });
       
-      document.getElementById('activeCount').textContent = `${visibleCount} products`;
+      document.getElementById('productCount').textContent = `${visibleCount} products`;
     }
 
     // Update statistics
     function updateStatistics() {
-      const totalProducts = document.querySelectorAll('.product-item').length;
-      const activeProducts = document.querySelectorAll('.product-item').length;
+      const currentProducts = document.querySelectorAll('.product-item').length;
       
-      // Get archived count (you might need to fetch this via AJAX)
-      const archivedProducts = 0; // This should be fetched from server
-      
-      document.getElementById('totalProducts').textContent = totalProducts;
-      document.getElementById('activeProducts').textContent = activeProducts;
-      document.getElementById('archivedProducts').textContent = archivedProducts;
-      document.getElementById('activeCount').textContent = `${activeProducts} products`;
+      document.getElementById('productCount').textContent = `${currentProducts} products`;
     }
 
     // View mode toggle

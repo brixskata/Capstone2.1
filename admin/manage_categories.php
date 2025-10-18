@@ -47,49 +47,112 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_category'])) {
     exit;
 }
 
-// Handle category deletion
-if (isset($_GET['delete'])) {
-    $category_id = (int)$_GET['delete'];
+// Handle category archiving
+if (isset($_GET['archive'])) {
+    $category_id = (int)$_GET['archive'];
     
     try {
-        // Check if category is in use
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM products WHERE category_id = ?");
+        // Check if category is in use by active products
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM products WHERE category_id = ? AND is_archive = 0");
         $stmt->execute([$category_id]);
-        $productCount = $stmt->fetchColumn();
+        $activeProductCount = $stmt->fetchColumn();
         
-        if ($productCount > 0) {
-            $_SESSION['error'] = "Cannot delete category: $productCount product(s) are using this category";
+        // Check if category has products with stock
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM products p 
+            LEFT JOIN product_stock ps ON p.product_id = ps.product_id 
+            WHERE p.category_id = ? AND p.is_archive = 0 AND COALESCE(ps.current_stock, 0) > 0
+        ");
+        $stmt->execute([$category_id]);
+        $productsWithStockCount = $stmt->fetchColumn();
+        
+        // Check if category has active batches
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM products p 
+            LEFT JOIN product_batches pb ON p.product_id = pb.product_id 
+            WHERE p.category_id = ? AND p.is_archive = 0 AND pb.is_active = 1
+        ");
+        $stmt->execute([$category_id]);
+        $activeBatchCount = $stmt->fetchColumn();
+        
+        if ($activeProductCount > 0) {
+            $_SESSION['error'] = "Cannot archive category: $activeProductCount active product(s) are using this category";
+        } elseif ($productsWithStockCount > 0) {
+            $_SESSION['error'] = "Cannot archive category: $productsWithStockCount product(s) with stock are using this category";
+        } elseif ($activeBatchCount > 0) {
+            $_SESSION['error'] = "Cannot archive category: $activeBatchCount active batch(es) are using this category";
         } else {
             // Get category name for logging
             $stmt = $pdo->prepare("SELECT category_name FROM categories WHERE category_id = ?");
             $stmt->execute([$category_id]);
             $category = $stmt->fetch();
             
-            // Delete category
-            $stmt = $pdo->prepare("DELETE FROM categories WHERE category_id = ?");
+            // Archive category
+            $stmt = $pdo->prepare("UPDATE categories SET is_archive = 1 WHERE category_id = ?");
             $stmt->execute([$category_id]);
             
-            $_SESSION['success'] = "Category '{$category['category_name']}' deleted successfully";
-            logHistory($pdo, 'Category Deleted', "Deleted category: {$category['category_name']}", $_SESSION['username']);
+            $_SESSION['success'] = "Category '{$category['category_name']}' archived successfully";
+            logHistory($pdo, 'Category Archived', "Archived category: {$category['category_name']}", $_SESSION['username']);
         }
     } catch (Exception $e) {
-        $_SESSION['error'] = "Error deleting category: " . $e->getMessage();
+        $_SESSION['error'] = "Error archiving category: " . $e->getMessage();
     }
     
     header("Location: manage_categories.php");
     exit;
 }
 
-// Fetch all categories with product counts
+// Handle category unarchiving
+if (isset($_GET['unarchive'])) {
+    $category_id = (int)$_GET['unarchive'];
+    
+    try {
+        // Get category name for logging
+        $stmt = $pdo->prepare("SELECT category_name FROM categories WHERE category_id = ?");
+        $stmt->execute([$category_id]);
+        $category = $stmt->fetch();
+        
+        if ($category) {
+            // Unarchive category
+            $stmt = $pdo->prepare("UPDATE categories SET is_archive = 0 WHERE category_id = ?");
+            $stmt->execute([$category_id]);
+            
+            $_SESSION['success'] = "Category '{$category['category_name']}' unarchived successfully";
+            logHistory($pdo, 'Category Unarchived', "Unarchived category: {$category['category_name']}", $_SESSION['username']);
+        } else {
+            $_SESSION['error'] = "Category not found";
+        }
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Error unarchiving category: " . $e->getMessage();
+    }
+    
+    header("Location: manage_categories.php");
+    exit;
+}
+
+// Fetch active categories with product counts
+$stmt = $pdo->query("
+    SELECT c.category_id, c.category_name, 
+           COUNT(p.product_id) as product_count
+    FROM categories c
+    LEFT JOIN products p ON c.category_id = p.category_id AND p.is_archive = 0
+    WHERE c.is_archive = 0
+    GROUP BY c.category_id, c.category_name
+    ORDER BY c.category_name
+");
+$categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch archived categories with product counts
 $stmt = $pdo->query("
     SELECT c.category_id, c.category_name, 
            COUNT(p.product_id) as product_count
     FROM categories c
     LEFT JOIN products p ON c.category_id = p.category_id
+    WHERE c.is_archive = 1
     GROUP BY c.category_id, c.category_name
     ORDER BY c.category_name
 ");
-$categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$archivedCategories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -101,6 +164,7 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <title>Manage Categories - Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <?php include 'includes/admin_styles.php'; ?>
     <style>
         :root {
@@ -309,48 +373,62 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             <!-- Analytics Cards -->
             <div class="row g-4 mb-4">
-                <div class="col-md-4">
-                    <div class="analytics-card">
-                        <div class="card-icon">
-                            <i class="fas fa-tags"></i>
-                        </div>
-                        <div class="card-content">
-                            <h3 class="card-number"><?php echo count($categories); ?></h3>
-                            <p class="card-label">Total Categories</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="analytics-card">
-                        <div class="card-icon">
-                            <i class="fas fa-box"></i>
-                        </div>
-                        <div class="card-content">
-                            <h3 class="card-number"><?php echo array_sum(array_column($categories, 'product_count')); ?></h3>
-                            <p class="card-label">Total Products</p>
+                <div class="col-md-3">
+                        <div class="analytics-card">
+                            <div class="card-icon">
+                                <i class="fas fa-tags"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3 class="card-number"><?php echo count($categories); ?></h3>
+                                <p class="card-label">Active Categories</p>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="analytics-card">
-                        <div class="card-icon">
-                            <i class="fas fa-chart-bar"></i>
-                        </div>
-                        <div class="card-content">
-                            <h3 class="card-number"><?php echo count(array_filter($categories, function($cat) { return $cat['product_count'] > 0; })); ?></h3>
-                            <p class="card-label">Active Categories</p>
+                    <div class="col-md-3">
+                        <div class="analytics-card">
+                            <div class="card-icon">
+                                <i class="fas fa-archive"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3 class="card-number"><?php echo count($archivedCategories); ?></h3>
+                                <p class="card-label">Archived Categories</p>
+                            </div>
                         </div>
                     </div>
+                    <div class="col-md-3">
+                        <div class="analytics-card">
+                            <div class="card-icon">
+                                <i class="fas fa-box"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3 class="card-number"><?php echo array_sum(array_column($categories, 'product_count')); ?></h3>
+                                <p class="card-label">Total Products</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="analytics-card">
+                            <div class="card-icon">
+                                <i class="fas fa-chart-bar"></i>
+                            </div>
+                            <div class="card-content">
+                                <h3 class="card-number"><?php echo count(array_filter($categories, function($cat) { return $cat['product_count'] > 0; })); ?></h3>
+                                <p class="card-label">Active Categories</p>
+                            </div>
+                        </div>
                 </div>
             </div>
 
             <!-- Categories List -->
-            <div class="row g-4">
+            <div class="row g-4 mb-4">
+                <div class="col-12">
+                    <h4 class="mb-3"><i class="fas fa-tags me-2"></i>Active Categories</h4>
+                </div>
                 <?php if (empty($categories)): ?>
                     <div class="col-12">
                         <div class="text-center py-5">
                             <i class="fas fa-tags fa-3x text-muted mb-3"></i>
-                            <h4 class="text-muted">No categories found</h4>
+                            <h4 class="text-muted">No active categories found</h4>
                             <p class="text-muted">Start by creating your first category</p>
                             <button class="btn text-white fw-bold px-4" 
                                     style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);" 
@@ -370,12 +448,13 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <i class="fa fa-ellipsis-v"></i>
                                         </button>
                                         <ul class="dropdown-menu">
-                                            <li>
-                                                <a class="dropdown-item text-danger" href="manage_categories.php?delete=<?php echo $category['category_id']; ?>" 
-                                                   onclick="return confirm('Are you sure you want to delete this category? This action cannot be undone.')">
-                                                    <i class="fa fa-trash me-2"></i>Delete
-                                                </a>
-                                            </li>
+                                             <li>
+                                                 <a class="dropdown-item text-warning archive-category" 
+                                                    data-category-id="<?php echo $category['category_id']; ?>"
+                                                    data-category-name="<?php echo htmlspecialchars($category['category_name']); ?>">
+                                                     <i class="fa fa-archive me-2"></i>Archive
+                                                 </a>
+                                             </li>
                                         </ul>
                                     </div>
                                 </div>
@@ -397,6 +476,47 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
+
+            <!-- Archived Categories Section -->
+            <?php if (!empty($archivedCategories)): ?>
+                <div class="row g-4">
+                    <div class="col-12">
+                        <h4 class="mb-3"><i class="fas fa-archive me-2"></i>Archived Categories</h4>
+                    </div>
+                    <?php foreach ($archivedCategories as $category): ?>
+                        <div class="col-lg-4 col-md-6">
+                            <div class="category-card" style="opacity: 0.7; background-color: #f8f9fa;">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <h5 class="fw-bold mb-0 text-muted"><?php echo htmlspecialchars($category['category_name']); ?></h5>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                            <i class="fa fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                             <li>
+                                                 <a class="dropdown-item text-success unarchive-category" 
+                                                    data-category-id="<?php echo $category['category_id']; ?>"
+                                                    data-category-name="<?php echo htmlspecialchars($category['category_name']); ?>">
+                                                     <i class="fa fa-undo me-2"></i>Unarchive
+                                                 </a>
+                                             </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fa fa-box me-2 text-muted"></i>
+                                        <span class="text-muted"><?php echo $category['product_count']; ?> product(s)</span>
+                                    </div>
+                                    
+                                    <span class="badge bg-warning">Archived</span>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         </div>
     </main>
 
@@ -430,5 +550,88 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <?php include 'includes/admin_scripts.php'; ?>
+    
+    <script>
+        // SweetAlert2 confirmation for archive action
+        document.addEventListener('DOMContentLoaded', function() {
+            // Archive category confirmation
+            document.querySelectorAll('.archive-category').forEach(function(element) {
+                element.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const categoryId = this.getAttribute('data-category-id');
+                    const categoryName = this.getAttribute('data-category-name');
+                    
+                    Swal.fire({
+                        title: 'Archive Category',
+                        text: `Are you sure you want to archive "${categoryName}"? This will hide it from the main category list.`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#ffc107',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: 'Yes, Archive It!',
+                        cancelButtonText: 'Cancel',
+                        customClass: {
+                            popup: 'swal2-popup-custom',
+                            confirmButton: 'swal2-confirm-custom',
+                            cancelButton: 'swal2-cancel-custom'
+                        }
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = `manage_categories.php?archive=${categoryId}`;
+                        }
+                    });
+                });
+            });
+            
+            // Unarchive category confirmation
+            document.querySelectorAll('.unarchive-category').forEach(function(element) {
+                element.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const categoryId = this.getAttribute('data-category-id');
+                    const categoryName = this.getAttribute('data-category-name');
+                    
+                    Swal.fire({
+                        title: 'Unarchive Category',
+                        text: `Are you sure you want to unarchive "${categoryName}"? This will make it visible in the main category list.`,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: '#198754',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: 'Yes, Unarchive It!',
+                        cancelButtonText: 'Cancel',
+                        customClass: {
+                            popup: 'swal2-popup-custom',
+                            confirmButton: 'swal2-confirm-custom',
+                            cancelButton: 'swal2-cancel-custom'
+                        }
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = `manage_categories.php?unarchive=${categoryId}`;
+                        }
+                    });
+                });
+            });
+        });
+    </script>
+    
+    <style>
+        /* SweetAlert2 Custom Styling */
+        .swal2-popup-custom {
+            border-radius: 20px !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2) !important;
+        }
+        
+        .swal2-confirm-custom {
+            border-radius: 15px !important;
+            padding: 10px 25px !important;
+            font-weight: 600 !important;
+        }
+        
+        .swal2-cancel-custom {
+            border-radius: 15px !important;
+            padding: 10px 25px !important;
+            font-weight: 600 !important;
+        }
+    </style>
 </body>
 </html>

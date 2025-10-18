@@ -112,15 +112,6 @@ try {
           <div class="nav-indicator"></div>
           <div class="nav-badge">Live</div>
         </a>
-        <?php if ($userHasModulePermissions && hasModuleAccess($pdo, 'inventory')): ?>
-        <a href="inventory.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'inventory.php' ? 'active' : ''; ?>">
-          <div class="nav-icon">
-            <i class="fas fa-warehouse"></i>
-          </div>
-          <span>Inventory Overview</span>
-          <div class="nav-indicator"></div>
-        </a>
-        <?php endif; ?>
       </div>
     </div>
     <?php endif; ?>
@@ -218,7 +209,7 @@ try {
           <div class="nav-icon">
             <i class="fas fa-box"></i>
           </div>
-          <span>All Products</span>
+          <span>Products</span>
           <div class="nav-indicator"></div>
           <?php if ($sidebar_counts['products'] > 0): ?>
           <div class="nav-badge"><?= $sidebar_counts['products'] ?></div>
@@ -251,7 +242,7 @@ try {
           <div class="nav-badge"><?= $sidebar_counts['brands'] ?></div>
           <?php endif; ?>
         </a>
-        <a href="manage_uom.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'manage_uom.php' ? 'active' : ''; ?>">
+        <a href="manage_uom.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'manage_uom.php' ? 'active' : ''; ?>" style="display: none;">
           <div class="nav-icon">
             <i class="fas fa-ruler"></i>
           </div>

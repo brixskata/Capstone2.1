@@ -38,66 +38,44 @@ if ($rop_count == 0) {
     }
 }
 
-// Handle AJAX request for recalculating reorder points
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'recalculate_rop') {
-    header('Content-Type: application/json');
-    
-    try {
-        $result = $ropCalculator->calculateAllReorderPoints();
-        
-        if ($result['success']) {
-            logHistory($pdo, 'Reorder Points Recalculated', "Recalculated {$result['count']} brand-product reorder points", $_SESSION['username']);
-        }
-        
-        echo json_encode($result);
-    } catch (Exception $e) {
-        echo json_encode([
-            'success' => false,
-            'message' => $e->getMessage(),
-            'count' => 0
-        ]);
-    }
-    exit;
-}
-
 // Get analysis period
 $period = $_GET['period'] ?? '30'; // days
 $period_days = (int)$period;
 
-// Get brand-product stock data with ADS and reorder points
-$brand_product_data = $ropCalculator->getBrandProductStockData();
+// Get brand-product stock data with ADS and reorder points (grouped by brand)
+$brand_data = $ropCalculator->getBrandStockData();
 
 // Group data by movement type for display
 $fast_moving = [];
 $slow_moving = [];
 $non_moving = [];
 
-foreach ($brand_product_data as $item) {
-    $movement_type = $item['movement_type'];
-    $ads = (float)$item['ads'];
+foreach ($brand_data as $brand) {
+    $movement_type = $brand['movement_type'];
+    $ads = (float)$brand['avg_ads']; // Fixed: use avg_ads instead of ads
     
     // Add stock status
-    $item['stock_status'] = $ropCalculator->getStockStatus($item['current_stock'], $item['reorder_point']);
+    $brand['stock_status'] = $ropCalculator->getStockStatus($brand['total_stock'], $brand['avg_reorder_point']);
     
     if ($movement_type === 'Fast-Moving') {
-        $fast_moving[] = $item;
+        $fast_moving[] = $brand;
     } elseif ($movement_type === 'Slow-Moving') {
-        $slow_moving[] = $item;
+        $slow_moving[] = $brand;
     } else {
-        $non_moving[] = $item;
+        $non_moving[] = $brand;
     }
 }
 
 // Calculate summary statistics
-$total_items = count($brand_product_data);
+$total_items = count($brand_data);
 $fast_count = count($fast_moving);
 $slow_count = count($slow_moving);
 $non_count = count($non_moving);
 
 // Calculate inventory value by movement category
-$fast_value = array_sum(array_map(function($item) { return $item['current_stock'] * 100; }, $fast_moving)); // Assuming 100 as base value
-$slow_value = array_sum(array_map(function($item) { return $item['current_stock'] * 100; }, $slow_moving));
-$non_value = array_sum(array_map(function($item) { return $item['current_stock'] * 100; }, $non_moving));
+$fast_value = array_sum(array_map(function($brand) { return $brand['total_stock'] * 100; }, $fast_moving)); // Assuming 100 as base value
+$slow_value = array_sum(array_map(function($brand) { return $brand['total_stock'] * 100; }, $slow_moving));
+$non_value = array_sum(array_map(function($brand) { return $brand['total_stock'] * 100; }, $non_moving));
 ?>
 
 <!DOCTYPE html>
@@ -316,14 +294,11 @@ $non_value = array_sum(array_map(function($item) { return $item['current_stock']
                         <h2>
                             <i class="fa fa-chart-bar me-3"></i>Brand Movement Analysis
                         </h2>
-                        <p class="mb-0 opacity-75">Analyze brand performance and identify movement patterns</p>
+                        <p class="mb-0 opacity-75">Analyze brand performance and identify movement patterns by brand</p>
                     </div>
-                    <button class="btn text-white fw-bold px-4" 
-                            style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); cursor: pointer; border-radius: 10px;" 
-                            onclick="recalculateReorderPoints()"
-                            id="recalculateBtn">
-                        <i class="fa fa-calculator me-2"></i>Recalculate Reorder Points
-                    </button>
+                    <div class="text-white opacity-75">
+                        <small><i class="fa fa-info-circle me-1"></i>Reorder points are automatically calculated based on sales data</small>
+                    </div>
                 </div>
             </div>
 
@@ -398,28 +373,30 @@ $non_value = array_sum(array_map(function($item) { return $item['current_stock']
                         <thead class="table-light">
                             <tr>
                                 <th class="fw-semibold">Brand</th>
-                                <th class="fw-semibold">Product</th>
+                                <th class="fw-semibold">Products</th>
                                 <th class="fw-semibold">Average Sales Per Day</th>
-                                <th class="fw-semibold">Current Stock</th>
-                                <th class="fw-semibold">Reorder Point</th>
+                                <th class="fw-semibold">Total Stock</th>
+                                <th class="fw-semibold">Avg Reorder Point</th>
                                 <th class="fw-semibold">Stock Status</th>
                                 <th class="fw-semibold">Last Calculated</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($fast_moving as $item): ?>
+                            <?php foreach ($fast_moving as $brand): ?>
                                 <tr>
-                                    <td class="fw-semibold"><?= htmlspecialchars($item['brand_name']) ?></td>
-                                    <td><?= htmlspecialchars($item['product_name']) ?></td>
+                                    <td class="fw-semibold"><?= htmlspecialchars($brand['brand_name']) ?></td>
                                     <td>
-                                        <span class="fw-semibold"><?= number_format($item['ads'], 2) ?></span>
-                                        <br><small class="text-muted">(<?= $item['total_sales_7d'] ?> sold)</small>
+                                        <span class="badge" style="background: #cce5ff; color: #004085; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= $brand['product_count'] ?> products</span>
                                     </td>
-                                    <td><?= number_format($item['current_stock'], 2) ?></td>
-                                    <td><?= number_format($item['reorder_point'], 2) ?></td>
+                                    <td>
+                                        <span class="fw-semibold"><?= number_format($brand['avg_ads'], 2) ?></span>
+                                        <br><small class="text-muted">(<?= $brand['total_sales_7d'] ?> sold)</small>
+                                    </td>
+                                    <td><?= number_format($brand['total_stock'], 2) ?></td>
+                                    <td><?= number_format($brand['avg_reorder_point'], 2) ?></td>
                                     <td>
                                         <?php 
-                                        $status = $item['stock_status'];
+                                        $status = $brand['stock_status'];
                                         $status_colors = [
                                             'In Stock' => ['bg' => '#d4edda', 'color' => '#155724'],
                                             'Low Stock' => ['bg' => '#fff3cd', 'color' => '#856404'],
@@ -432,8 +409,8 @@ $non_value = array_sum(array_map(function($item) { return $item['current_stock']
                                         </span>
                                     </td>
                                     <td>
-                                        <?php if ($item['last_calculated']): ?>
-                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($item['last_calculated'])) ?></small>
+                                        <?php if ($brand['last_calculated']): ?>
+                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($brand['last_calculated'])) ?></small>
                                         <?php else: ?>
                                             <span class="text-warning">Not Calculated</span>
                                         <?php endif; ?>
@@ -461,28 +438,30 @@ $non_value = array_sum(array_map(function($item) { return $item['current_stock']
                         <thead class="table-light">
                             <tr>
                                 <th class="fw-semibold">Brand</th>
-                                <th class="fw-semibold">Product</th>
+                                <th class="fw-semibold">Products</th>
                                 <th class="fw-semibold">Average Sales Per Day</th>
-                                <th class="fw-semibold">Current Stock</th>
-                                <th class="fw-semibold">Reorder Point</th>
+                                <th class="fw-semibold">Total Stock</th>
+                                <th class="fw-semibold">Avg Reorder Point</th>
                                 <th class="fw-semibold">Stock Status</th>
                                 <th class="fw-semibold">Last Calculated</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($slow_moving as $item): ?>
+                            <?php foreach ($slow_moving as $brand): ?>
                                 <tr>
-                                    <td class="fw-semibold"><?= htmlspecialchars($item['brand_name']) ?></td>
-                                    <td><?= htmlspecialchars($item['product_name']) ?></td>
+                                    <td class="fw-semibold"><?= htmlspecialchars($brand['brand_name']) ?></td>
                                     <td>
-                                        <span class="fw-semibold"><?= number_format($item['ads'], 2) ?></span>
-                                        <br><small class="text-muted">(<?= $item['total_sales_7d'] ?> sold)</small>
+                                        <span class="badge" style="background: #cce5ff; color: #004085; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= $brand['product_count'] ?> products</span>
                                     </td>
-                                    <td><?= number_format($item['current_stock'], 2) ?></td>
-                                    <td><?= number_format($item['reorder_point'], 2) ?></td>
+                                    <td>
+                                        <span class="fw-semibold"><?= number_format($brand['avg_ads'], 2) ?></span>
+                                        <br><small class="text-muted">(<?= $brand['total_sales_7d'] ?> sold)</small>
+                                    </td>
+                                    <td><?= number_format($brand['total_stock'], 2) ?></td>
+                                    <td><?= number_format($brand['avg_reorder_point'], 2) ?></td>
                                     <td>
                                         <?php 
-                                        $status = $item['stock_status'];
+                                        $status = $brand['stock_status'];
                                         $status_colors = [
                                             'In Stock' => ['bg' => '#d4edda', 'color' => '#155724'],
                                             'Low Stock' => ['bg' => '#fff3cd', 'color' => '#856404'],
@@ -495,8 +474,8 @@ $non_value = array_sum(array_map(function($item) { return $item['current_stock']
                                         </span>
                                     </td>
                                     <td>
-                                        <?php if ($item['last_calculated']): ?>
-                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($item['last_calculated'])) ?></small>
+                                        <?php if ($brand['last_calculated']): ?>
+                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($brand['last_calculated'])) ?></small>
                                         <?php else: ?>
                                             <span class="text-warning">Not Calculated</span>
                                         <?php endif; ?>
@@ -523,28 +502,30 @@ $non_value = array_sum(array_map(function($item) { return $item['current_stock']
                         <thead class="table-light">
                             <tr>
                                 <th class="fw-semibold">Brand</th>
-                                <th class="fw-semibold">Product</th>
+                                <th class="fw-semibold">Products</th>
                                 <th class="fw-semibold">Average Sales Per Day</th>
-                                <th class="fw-semibold">Current Stock</th>
-                                <th class="fw-semibold">Reorder Point</th>
+                                <th class="fw-semibold">Total Stock</th>
+                                <th class="fw-semibold">Avg Reorder Point</th>
                                 <th class="fw-semibold">Stock Status</th>
                                 <th class="fw-semibold">Last Calculated</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($non_moving as $item): ?>
+                            <?php foreach ($non_moving as $brand): ?>
                                 <tr>
-                                    <td class="fw-semibold"><?= htmlspecialchars($item['brand_name']) ?></td>
-                                    <td><?= htmlspecialchars($item['product_name']) ?></td>
+                                    <td class="fw-semibold"><?= htmlspecialchars($brand['brand_name']) ?></td>
                                     <td>
-                                        <span class="fw-semibold"><?= number_format($item['ads'], 2) ?></span>
-                                        <br><small class="text-muted">(<?= $item['total_sales_7d'] ?> sold)</small>
+                                        <span class="badge" style="background: #cce5ff; color: #004085; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= $brand['product_count'] ?> products</span>
                                     </td>
-                                    <td><?= number_format($item['current_stock'], 2) ?></td>
-                                    <td><?= number_format($item['reorder_point'], 2) ?></td>
+                                    <td>
+                                        <span class="fw-semibold"><?= number_format($brand['avg_ads'], 2) ?></span>
+                                        <br><small class="text-muted">(<?= $brand['total_sales_7d'] ?> sold)</small>
+                                    </td>
+                                    <td><?= number_format($brand['total_stock'], 2) ?></td>
+                                    <td><?= number_format($brand['avg_reorder_point'], 2) ?></td>
                                     <td>
                                         <?php 
-                                        $status = $item['stock_status'];
+                                        $status = $brand['stock_status'];
                                         $status_colors = [
                                             'In Stock' => ['bg' => '#d4edda', 'color' => '#155724'],
                                             'Low Stock' => ['bg' => '#fff3cd', 'color' => '#856404'],
@@ -557,8 +538,8 @@ $non_value = array_sum(array_map(function($item) { return $item['current_stock']
                                         </span>
                                     </td>
                                     <td>
-                                        <?php if ($item['last_calculated']): ?>
-                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($item['last_calculated'])) ?></small>
+                                        <?php if ($brand['last_calculated']): ?>
+                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($brand['last_calculated'])) ?></small>
                                         <?php else: ?>
                                             <span class="text-warning">Not Calculated</span>
                                         <?php endif; ?>
@@ -578,110 +559,8 @@ $non_value = array_sum(array_map(function($item) { return $item['current_stock']
     <script>
         // Test button click
         document.addEventListener('DOMContentLoaded', function() {
-            const btn = document.getElementById('recalculateBtn');
-            if (btn) {
-                console.log('Recalculate button found:', btn);
-                btn.addEventListener('click', function(e) {
-                    console.log('Button click event triggered');
-                });
-            } else {
-                console.log('Recalculate button not found');
-            }
+            console.log('Product Movement Analysis page loaded - reorder points are now automatic');
         });
-        
-        function recalculateReorderPoints() {
-            console.log('Button clicked - recalculateReorderPoints function called');
-            
-            // Check if SweetAlert2 is loaded
-            if (typeof Swal === 'undefined') {
-                alert('SweetAlert2 is not loaded. Please refresh the page.');
-                return;
-            }
-            
-            Swal.fire({
-                title: 'Recalculate Reorder Points?',
-                text: 'This will recalculate reorder points for all brand-product combinations based on current sales data. This may take a moment.',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#7F1734',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Yes, Recalculate',
-                cancelButtonText: 'Cancel',
-                allowOutsideClick: false,
-                customClass: {
-                    popup: 'swal2-popup-rounded',
-                    confirmButton: 'swal2-confirm-rounded',
-                    cancelButton: 'swal2-cancel-rounded'
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Show loading state
-                    Swal.fire({
-                        title: 'Calculating...',
-                        text: 'Please wait while we recalculate reorder points',
-                        icon: 'info',
-                        allowOutsideClick: false,
-                        showConfirmButton: false,
-                        customClass: {
-                            popup: 'swal2-popup-rounded'
-                        },
-                        didOpen: () => {
-                            Swal.showLoading();
-                        }
-                    });
-                    
-                    fetch('product_movement_analysis.php', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                        body: 'action=recalculate_rop'
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            Swal.fire({
-                                title: 'Success!',
-                                text: `Successfully recalculated ${data.count} reorder points!`,
-                                icon: 'success',
-                                confirmButtonColor: '#7F1734',
-                                confirmButtonText: 'OK',
-                                customClass: {
-                                    popup: 'swal2-popup-rounded',
-                                    confirmButton: 'swal2-confirm-rounded'
-                                }
-                            }).then(() => {
-                                location.reload();
-                            });
-                        } else {
-                            Swal.fire({
-                                title: 'Error',
-                                text: data.message || 'Failed to recalculate reorder points',
-                                icon: 'error',
-                                confirmButtonColor: '#7F1734',
-                                confirmButtonText: 'OK',
-                                customClass: {
-                                    popup: 'swal2-popup-rounded',
-                                    confirmButton: 'swal2-confirm-rounded'
-                                }
-                            });
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        Swal.fire({
-                            title: 'Error',
-                            text: 'Failed to recalculate reorder points. Please try again.',
-                            icon: 'error',
-                            confirmButtonColor: '#7F1734',
-                            confirmButtonText: 'OK',
-                            customClass: {
-                                popup: 'swal2-popup-rounded',
-                                confirmButton: 'swal2-confirm-rounded'
-                            }
-                        });
-                    });
-                }
-            });
-        }
     </script>
 </body>
 </html>

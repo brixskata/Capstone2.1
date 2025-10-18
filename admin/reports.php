@@ -57,7 +57,7 @@ $customTo = $_GET['custom_to'] ?? null;
 $isCustomRange = $customFrom && $customTo;
 
 // Validate report type
-$validTypes = ['sales', 'inventory', 'orders', 'returns'];
+$validTypes = ['sales', 'inventory', 'pullout', 'supplier_returns', 'returns'];
 if (!in_array($reportType, $validTypes)) {
     $reportType = 'sales';
 }
@@ -140,7 +140,8 @@ try {
 $salesData = [];
 $inventoryData = [];
 $returnData = [];
-$ordersData = [];
+$pulloutData = [];
+$supplierReturnsData = [];
 
 if ($reportType === 'sales') {
     if ($isCustomRange) {
@@ -150,12 +151,20 @@ if ($reportType === 'sales') {
         list($start, $end) = getDateRange($period);
     }
     $stmt = $pdo->prepare("
-        SELECT o.orders_id as id, u.username as customer, o.total_price, o.created_at as delivered_at
+        SELECT 
+            COALESCE(b.name, 'No Brand') as brand_name,
+            p.product_name,
+            SUM(oi.quantity) as total_quantity,
+            SUM(oi.quantity * oi.price) as total_amount,
+            o.created_at as order_date
         FROM orders o
-        INNER JOIN users u ON o.user_id = u.user_id
         INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
+        INNER JOIN order_items oi ON o.orders_id = oi.order_id
+        INNER JOIN products p ON oi.product_id = p.product_id
+        LEFT JOIN brands b ON oi.brand_id = b.id
         WHERE os.status_name = 'Completed' AND o.created_at BETWEEN ? AND ?
-        ORDER BY o.created_at DESC
+        GROUP BY b.name, p.product_name, o.created_at
+        ORDER BY o.created_at DESC, p.product_name ASC
     ");
     $stmt->execute([$start, $end]);
     $salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -177,7 +186,7 @@ if ($reportType === 'sales') {
 } elseif ($reportType === 'returns') {
     // Returns functionality - create empty array since returns table doesn't exist yet
     $returnData = [];
-} elseif ($reportType === 'orders') {
+} elseif ($reportType === 'pullout') {
     if ($isCustomRange) {
         $start = $customFrom . ' 00:00:00';
         $end = $customTo . ' 23:59:59';
@@ -185,15 +194,51 @@ if ($reportType === 'sales') {
         list($start, $end) = getDateRange($period);
     }
     $stmt = $pdo->prepare("
-        SELECT o.orders_id as id, u.username as customer, o.total_price, os.status_name as status, o.created_at
-        FROM orders o
-        INNER JOIN users u ON o.user_id = u.user_id
-        INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
-        WHERE o.created_at BETWEEN ? AND ?
-        ORDER BY o.created_at DESC
+        SELECT 
+            sa.stockadjustment_id as id,
+            p.product_name as product_name,
+            COALESCE(b.name, 'N/A') as brand_name,
+            sa.quantity as quantity,
+            sa.reason as reason,
+            sa.expiration_date as expiration_date,
+            sa.created_at as created_at
+        FROM stock_adjustment sa
+        INNER JOIN products p ON sa.product_id = p.product_id
+        LEFT JOIN brands b ON p.brand_id = b.id
+        WHERE sa.adjustment_type_id = 2 
+        AND sa.reason IN ('Damaged Items', 'Theft/Loss', 'Expired')
+        AND sa.created_at BETWEEN ? AND ?
+        ORDER BY sa.created_at DESC
     ");
     $stmt->execute([$start, $end]);
-    $ordersData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $pulloutData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} elseif ($reportType === 'supplier_returns') {
+    if ($isCustomRange) {
+        $start = $customFrom . ' 00:00:00';
+        $end = $customTo . ' 23:59:59';
+    } else {
+        list($start, $end) = getDateRange($period);
+    }
+    $stmt = $pdo->prepare("
+        SELECT 
+            sa.stockadjustment_id as id,
+            p.product_name as product_name,
+            COALESCE(b.name, 'N/A') as brand_name,
+            sa.quantity as quantity,
+            sa.reason as reason,
+            sa.created_at as created_at
+        FROM stock_adjustment sa
+        INNER JOIN products p ON sa.product_id = p.product_id
+        LEFT JOIN product_batches pb ON pb.product_id = p.product_id AND pb.is_active = 1
+        LEFT JOIN brands b ON pb.brand_id = b.id
+        WHERE sa.adjustment_type_id = 2 
+        AND sa.reason = 'Supplier Return'
+        AND sa.created_at BETWEEN ? AND ?
+        GROUP BY sa.stockadjustment_id, p.product_name, b.name, sa.quantity, sa.reason, sa.created_at
+        ORDER BY sa.created_at DESC
+    ");
+    $stmt->execute([$start, $end]);
+    $supplierReturnsData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 ?>
@@ -512,8 +557,11 @@ if ($reportType === 'sales') {
           <a href="?type=sales&period=yearly" class="nav-link <?= $reportType==='sales'&&$period==='yearly'?'active':'' ?>">
             <i class="fa fa-calendar me-2"></i>Yearly Sales
           </a>
-          <a href="?type=orders&period=daily" class="nav-link <?= $reportType==='orders'?'active':'' ?>">
-            <i class="fa fa-shopping-bag me-2"></i>Orders
+          <a href="?type=pullout&period=daily" class="nav-link <?= $reportType==='pullout'?'active':'' ?>">
+            <i class="fa fa-box-open me-2"></i>Pull Out Report
+          </a>
+          <a href="?type=supplier_returns&period=daily" class="nav-link <?= $reportType==='supplier_returns'?'active':'' ?>">
+            <i class="fa fa-undo me-2"></i>Supplier Returns
           </a>
           <a href="?type=inventory" class="nav-link <?= $reportType==='inventory'?'active':'' ?>">
             <i class="fa fa-boxes me-2"></i>Inventory
@@ -537,7 +585,7 @@ if ($reportType === 'sales') {
                 </div>
                 <div class="col-md-8">
                   <div class="row g-2">
-                    <?php if (in_array($reportType, ['sales', 'orders', 'returns'])): ?>
+                    <?php if (in_array($reportType, ['sales', 'pullout', 'supplier_returns', 'returns'])): ?>
                     <div class="col-md-2">
                       <select id="datePreset" class="form-select form-select-sm">
                         <option value="">Quick Filter</option>
@@ -562,21 +610,34 @@ if ($reportType === 'sales') {
                       <select id="sortBy" class="form-select form-select-sm">
                         <option value="">Sort by...</option>
                         <?php if ($reportType === 'sales'): ?>
+                          <option value="brand_asc">Brand (A-Z)</option>
+                          <option value="brand_desc">Brand (Z-A)</option>
+                          <option value="product_asc">Product (A-Z)</option>
+                          <option value="product_desc">Product (Z-A)</option>
+                          <option value="quantity_desc">Quantity (Highest First)</option>
+                          <option value="quantity_asc">Quantity (Lowest First)</option>
+                          <option value="amount_desc">Total (Highest First)</option>
+                          <option value="amount_asc">Total (Lowest First)</option>
+                        <?php elseif ($reportType === 'pullout'): ?>
                           <option value="date_desc">Date (Newest First)</option>
                           <option value="date_asc">Date (Oldest First)</option>
-                          <option value="amount_desc">Amount (Highest First)</option>
-                          <option value="amount_asc">Amount (Lowest First)</option>
-                          <option value="customer_asc">Customer (A-Z)</option>
-                          <option value="customer_desc">Customer (Z-A)</option>
-                        <?php elseif ($reportType === 'orders'): ?>
+                          <option value="quantity_desc">Quantity (Highest First)</option>
+                          <option value="quantity_asc">Quantity (Lowest First)</option>
+                          <option value="product_asc">Product (A-Z)</option>
+                          <option value="product_desc">Product (Z-A)</option>
+                          <option value="brand_asc">Brand (A-Z)</option>
+                          <option value="brand_desc">Brand (Z-A)</option>
+                          <option value="reason_asc">Reason (A-Z)</option>
+                          <option value="reason_desc">Reason (Z-A)</option>
+                        <?php elseif ($reportType === 'supplier_returns'): ?>
                           <option value="date_desc">Date (Newest First)</option>
                           <option value="date_asc">Date (Oldest First)</option>
-                          <option value="amount_desc">Amount (Highest First)</option>
-                          <option value="amount_asc">Amount (Lowest First)</option>
-                          <option value="status_asc">Status (A-Z)</option>
-                          <option value="status_desc">Status (Z-A)</option>
-                          <option value="customer_asc">Customer (A-Z)</option>
-                          <option value="customer_desc">Customer (Z-A)</option>
+                          <option value="quantity_desc">Quantity (Highest First)</option>
+                          <option value="quantity_asc">Quantity (Lowest First)</option>
+                          <option value="product_asc">Product (A-Z)</option>
+                          <option value="product_desc">Product (Z-A)</option>
+                          <option value="brand_asc">Brand (A-Z)</option>
+                          <option value="brand_desc">Brand (Z-A)</option>
                         <?php elseif ($reportType === 'inventory'): ?>
                           <option value="name_asc">Product Name (A-Z)</option>
                           <option value="name_desc">Product Name (Z-A)</option>
@@ -614,7 +675,7 @@ if ($reportType === 'sales') {
                 <i class="fa fa-chart-line me-2"></i>
                 Sales Report (<?= $isCustomRange ? 'Custom Range: ' . $customFrom . ' to ' . $customTo : ucfirst($period) ?>)
               </h5>
-              <a href="generate_report_pdf.php?type=sales&period=<?= $period ?>" class="btn btn-danger">
+              <a href="generate_report_pdf.php?type=sales&period=<?= $period ?><?= $isCustomRange ? '&custom_from=' . $customFrom . '&custom_to=' . $customTo : '' ?>" class="btn btn-danger">
                 <i class="fa fa-file-pdf me-1"></i>Generate PDF
               </a>
             </div>
@@ -622,16 +683,17 @@ if ($reportType === 'sales') {
 
           <!-- Summary Cards -->
           <?php
-          $total = array_sum(array_column($salesData, 'total_price'));
-          $orderCount = count($salesData);
-          $avgOrder = $orderCount > 0 ? $total / $orderCount : 0;
+          $total = array_sum(array_column($salesData, 'total_amount'));
+          $totalQuantity = array_sum(array_column($salesData, 'total_quantity'));
+          $uniqueProducts = count($salesData);
+          $avgOrderValue = $uniqueProducts > 0 ? $total / $uniqueProducts : 0;
           ?>
           <div class="card-body">
             <div class="row g-3 mb-4">
               <div class="col-md-4">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold" style="color: #ffc107;"><?= $orderCount ?></div>
-                  <div class="text-muted">Total Orders</div>
+                  <div class="display-6 fw-bold" style="color: #ffc107;"><?= $uniqueProducts ?></div>
+                  <div class="text-muted">Products Sold</div>
                 </div>
               </div>
               <div class="col-md-4">
@@ -642,8 +704,8 @@ if ($reportType === 'sales') {
               </div>
               <div class="col-md-4">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold" style="color: #0dcaf0;">₱<?= number_format($avgOrder, 2) ?></div>
-                  <div class="text-muted">Average Order Value</div>
+                  <div class="display-6 fw-bold" style="color: #0dcaf0;"><?= $totalQuantity ?></div>
+                  <div class="text-muted">Total Quantity</div>
                 </div>
               </div>
             </div>
@@ -652,10 +714,10 @@ if ($reportType === 'sales') {
               <table class="table table-hover mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th class="fw-semibold">Order ID</th>
-                    <th class="fw-semibold">Customer</th>
-                    <th class="fw-semibold">Total Price</th>
-                    <th class="fw-semibold">Date</th>
+                    <th class="fw-semibold">Brand</th>
+                    <th class="fw-semibold">Product</th>
+                    <th class="fw-semibold">Quantity</th>
+                    <th class="fw-semibold">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -669,10 +731,10 @@ if ($reportType === 'sales') {
                   <?php else: ?>
                     <?php foreach ($salesData as $row): ?>
                     <tr>
-                      <td class="fw-semibold">#<?= $row['id'] ?></td>
-                      <td><?= htmlspecialchars($row['customer']) ?></td>
-                      <td class="fw-bold" style="color: #198754;">₱<?= number_format($row['total_price'],2) ?></td>
-                      <td class="text-muted"><?= date('M d, Y H:i', strtotime($row['delivered_at'])) ?></td>
+                      <td><?= htmlspecialchars($row['brand_name']) ?></td>
+                      <td><?= htmlspecialchars($row['product_name']) ?></td>
+                      <td class="fw-bold" style="color: #ffc107;"><?= number_format($row['total_quantity'], 1) ?></td>
+                      <td class="fw-bold" style="color: #198754;">₱<?= number_format($row['total_amount'], 2) ?></td>
                     </tr>
                     <?php endforeach; ?>
                   <?php endif; ?>
@@ -681,8 +743,8 @@ if ($reportType === 'sales') {
                 <tfoot class="table-light">
                   <tr class="fw-bold">
                     <td colspan="2" class="text-end">Total Sales:</td>
-                    <td style="color: #198754;">₱<?= number_format($total,2) ?></td>
-                    <td></td>
+                    <td style="color: #ffc107;"><?= number_format($totalQuantity, 1) ?></td>
+                    <td style="color: #198754;">₱<?= number_format($total, 2) ?></td>
                   </tr>
                 </tfoot>
                 <?php endif; ?>
@@ -691,16 +753,16 @@ if ($reportType === 'sales') {
           </div>
         </div>
 
-      <!-- Orders Report -->
-      <?php elseif ($reportType === 'orders'): ?>
+      <!-- Pull Out Report -->
+      <?php elseif ($reportType === 'pullout'): ?>
         <div class="table-card">
           <div class="card-header bg-transparent border-0 p-4">
             <div class="d-flex justify-content-between align-items-center">
               <h5 class="fw-bold mb-0 text-dark">
-                <i class="fa fa-shopping-bag me-2"></i>
-                Orders Report (<?= $isCustomRange ? 'Custom Range: ' . $customFrom . ' to ' . $customTo : ucfirst($period) ?>)
+                <i class="fa fa-box-open me-2"></i>
+                Pull Out Report (<?= $isCustomRange ? 'Custom Range: ' . $customFrom . ' to ' . $customTo : ucfirst($period) ?>)
               </h5>
-              <a href="generate_report_pdf.php?type=orders&period=<?= $period ?>" class="btn btn-danger">
+              <a href="generate_report_pdf.php?type=pullout&period=<?= $period ?><?= $isCustomRange ? '&custom_from=' . $customFrom . '&custom_to=' . $customTo : '' ?>" class="btn btn-danger">
                 <i class="fa fa-file-pdf me-1"></i>Generate PDF
               </a>
             </div>
@@ -708,34 +770,40 @@ if ($reportType === 'sales') {
 
           <!-- Summary Cards -->
           <?php
-          $totalRevenue = array_sum(array_column($ordersData, 'total_price'));
-          $orderCount = count($ordersData);
-          $statusCounts = array_count_values(array_column($ordersData, 'status'));
+          $totalPullouts = count($pulloutData);
+          $totalQuantity = array_sum(array_column($pulloutData, 'quantity'));
+          $reasonCounts = array_count_values(array_column($pulloutData, 'reason'));
           ?>
           <div class="card-body">
             <div class="row g-3 mb-4">
               <div class="col-lg-3 col-md-6">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold" style="color: #0dcaf0;"><?= $orderCount ?></div>
-                  <div class="text-muted">Total Orders</div>
+                  <div class="display-6 fw-bold" style="color: #dc3545;"><?= $totalPullouts ?></div>
+                  <div class="text-muted">Total Pull Outs</div>
                 </div>
               </div>
               <div class="col-lg-3 col-md-6">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold" style="color: #198754;">₱<?= number_format($totalRevenue, 2) ?></div>
-                  <div class="text-muted">Total Revenue</div>
+                  <div class="display-6 fw-bold" style="color: #ffc107;"><?= $totalQuantity ?></div>
+                  <div class="text-muted">Total Quantity</div>
                 </div>
               </div>
               <div class="col-lg-3 col-md-6">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold" style="color: #ffc107;"><?= $statusCounts['Pending'] ?? 0 ?></div>
-                  <div class="text-muted">Pending Orders</div>
+                  <div class="display-6 fw-bold" style="color: #7F1734;"><?= $reasonCounts['Damaged Items'] ?? 0 ?></div>
+                  <div class="text-muted">Damaged Items</div>
                 </div>
               </div>
               <div class="col-lg-3 col-md-6">
                 <div class="stat-card text-center">
-                  <div class="display-6 fw-bold" style="color: #7F1734;"><?= $statusCounts['Completed'] ?? 0 ?></div>
-                  <div class="text-muted">Completed Orders</div>
+                  <div class="display-6 fw-bold" style="color: #0dcaf0;"><?= $reasonCounts['Theft/Loss'] ?? 0 ?></div>
+                  <div class="text-muted">Theft/Loss</div>
+                </div>
+              </div>
+              <div class="col-lg-3 col-md-6">
+                <div class="stat-card text-center">
+                  <div class="display-6 fw-bold" style="color: #6c757d;"><?= $reasonCounts['Expired'] ?? 0 ?></div>
+                  <div class="text-muted">Expired</div>
                 </div>
               </div>
             </div>
@@ -744,35 +812,134 @@ if ($reportType === 'sales') {
               <table class="table table-hover mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th class="fw-semibold">Order ID</th>
-                    <th class="fw-semibold">Customer</th>
-                    <th class="fw-semibold">Total Price</th>
-                    <th class="fw-semibold">Status</th>
+                    <th class="fw-semibold">Adjustment ID</th>
+                    <th class="fw-semibold">Product</th>
+                    <th class="fw-semibold">Brand</th>
+                    <th class="fw-semibold">Quantity</th>
+                    <th class="fw-semibold">Reason</th>
+                    <th class="fw-semibold">Expiration Date</th>
                     <th class="fw-semibold">Date</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <?php if (empty($ordersData)): ?>
+                  <?php if (empty($pulloutData)): ?>
                     <tr>
-                      <td colspan="5" class="text-center py-5">
-                        <i class="fa fa-inbox display-4 text-muted mb-3"></i>
-                        <div class="text-muted">No orders found for this period.</div>
+                      <td colspan="7" class="text-center py-5">
+                        <i class="fa fa-box-open display-4 text-muted mb-3"></i>
+                        <div class="text-muted">No pull out data found for this period.</div>
                       </td>
                     </tr>
                   <?php else: ?>
-                    <?php foreach ($ordersData as $row): ?>
+                    <?php foreach ($pulloutData as $row): ?>
                     <tr>
                       <td class="fw-semibold">#<?= $row['id'] ?></td>
-                      <td><?= htmlspecialchars($row['customer']) ?></td>
-                      <td class="fw-bold" style="color: #198754;">₱<?= number_format($row['total_price'],2) ?></td>
+                      <td><?= htmlspecialchars($row['product_name']) ?></td>
+                      <td><?= htmlspecialchars($row['brand_name']) ?></td>
+                      <td class="fw-bold" style="color: #dc3545;"><?= $row['quantity'] ?></td>
                       <td>
                         <span class="badge
-                          <?= $row['status'] === 'Pending' ? 'bg-warning text-dark' : '' ?>
-                          <?= $row['status'] === 'To Ship' ? 'bg-info' : '' ?>
-                          <?= $row['status'] === 'Out for delivery' ? 'bg-secondary' : '' ?>
-                          <?= $row['status'] === 'Completed' ? 'bg-success' : '' ?>
-                          <?= $row['status'] === 'Cancelled' ? 'bg-danger' : '' ?>">
-                          <?= htmlspecialchars($row['status']) ?>
+                          <?= $row['reason'] === 'Damaged Items' ? 'bg-warning text-dark' : '' ?>
+                          <?= $row['reason'] === 'Theft/Loss' ? 'bg-danger' : '' ?>
+                          <?= $row['reason'] === 'Expired' ? 'bg-secondary' : '' ?>">
+                          <?= htmlspecialchars($row['reason']) ?>
+                        </span>
+                      </td>
+                      <td class="text-muted">
+                        <?php if ($row['reason'] === 'Expired' && $row['expiration_date']): ?>
+                          <?= date('M d, Y', strtotime($row['expiration_date'])) ?>
+                        <?php else: ?>
+                          <span class="text-muted">-</span>
+                        <?php endif; ?>
+                      </td>
+                      <td class="text-muted"><?= date('M d, Y H:i', strtotime($row['created_at'])) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                  <?php endif; ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      <!-- Supplier Returns Report -->
+      <?php elseif ($reportType === 'supplier_returns'): ?>
+        <div class="table-card">
+          <div class="card-header bg-transparent border-0 p-4">
+            <div class="d-flex justify-content-between align-items-center">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fa fa-undo me-2"></i>
+                Supplier Returns Report (<?= $isCustomRange ? 'Custom Range: ' . $customFrom . ' to ' . $customTo : ucfirst($period) ?>)
+              </h5>
+              <a href="generate_report_pdf.php?type=supplier_returns&period=<?= $period ?><?= $isCustomRange ? '&custom_from=' . $customFrom . '&custom_to=' . $customTo : '' ?>" class="btn btn-danger">
+                <i class="fa fa-file-pdf me-1"></i>Generate PDF
+              </a>
+            </div>
+          </div>
+
+          <!-- Summary Cards -->
+          <?php
+          $totalSupplierReturns = count($supplierReturnsData);
+          $totalReturnQuantity = array_sum(array_column($supplierReturnsData, 'quantity'));
+          $reasonCounts = array_count_values(array_column($supplierReturnsData, 'reason'));
+          ?>
+          <div class="card-body">
+            <div class="row g-3 mb-4">
+              <div class="col-lg-3 col-md-6">
+                <div class="stat-card text-center">
+                  <div class="display-6 fw-bold" style="color: #dc3545;"><?= $totalSupplierReturns ?></div>
+                  <div class="text-muted">Total Returns</div>
+                </div>
+              </div>
+              <div class="col-lg-3 col-md-6">
+                <div class="stat-card text-center">
+                  <div class="display-6 fw-bold" style="color: #ffc107;"><?= $totalReturnQuantity ?></div>
+                  <div class="text-muted">Total Quantity</div>
+                </div>
+              </div>
+              <div class="col-lg-3 col-md-6">
+                <div class="stat-card text-center">
+                  <div class="display-6 fw-bold" style="color: #7F1734;"><?= $reasonCounts['Supplier Return'] ?? 0 ?></div>
+                  <div class="text-muted">Supplier Returns</div>
+                </div>
+              </div>
+              <div class="col-lg-3 col-md-6">
+                <div class="stat-card text-center">
+                  <div class="display-6 fw-bold" style="color: #0dcaf0;">₱<?= number_format($totalReturnQuantity * 100, 2) ?></div>
+                  <div class="text-muted">Estimated Value</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th class="fw-semibold">Adjustment ID</th>
+                    <th class="fw-semibold">Product</th>
+                    <th class="fw-semibold">Brand</th>
+                    <th class="fw-semibold">Quantity</th>
+                    <th class="fw-semibold">Reason</th>
+                    <th class="fw-semibold">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php if (empty($supplierReturnsData)): ?>
+                    <tr>
+                      <td colspan="6" class="text-center py-5">
+                        <i class="fa fa-undo display-4 text-muted mb-3"></i>
+                        <div class="text-muted">No supplier returns found for this period.</div>
+                      </td>
+                    </tr>
+                  <?php else: ?>
+                    <?php foreach ($supplierReturnsData as $row): ?>
+                    <tr>
+                      <td class="fw-semibold">#<?= $row['id'] ?></td>
+                      <td><?= htmlspecialchars($row['product_name']) ?></td>
+                      <td><?= htmlspecialchars($row['brand_name']) ?></td>
+                      <td class="fw-bold" style="color: #dc3545;"><?= $row['quantity'] ?></td>
+                      <td>
+                        <span class="badge bg-info">
+                          <?= htmlspecialchars($row['reason']) ?>
                         </span>
                       </td>
                       <td class="text-muted"><?= date('M d, Y H:i', strtotime($row['created_at'])) ?></td>
@@ -1045,37 +1212,69 @@ if ($reportType === 'sales') {
           let aVal, bVal;
           
           switch (sortBy) {
-            case 'date_desc':
-              aVal = parseDate(a.cells[<?= $reportType === 'sales' ? '3' : ($reportType === 'orders' ? '4' : '4') ?>].textContent);
-              bVal = parseDate(b.cells[<?= $reportType === 'sales' ? '3' : ($reportType === 'orders' ? '4' : '4') ?>].textContent);
-              return bVal - aVal;
-            case 'date_asc':
-              aVal = parseDate(a.cells[<?= $reportType === 'sales' ? '3' : ($reportType === 'orders' ? '4' : '4') ?>].textContent);
-              bVal = parseDate(b.cells[<?= $reportType === 'sales' ? '3' : ($reportType === 'orders' ? '4' : '4') ?>].textContent);
-              return aVal - bVal;
-            case 'amount_desc':
-              aVal = parseFloat(a.cells[2].textContent.replace(/[₱,]/g, ''));
-              bVal = parseFloat(b.cells[2].textContent.replace(/[₱,]/g, ''));
-              return bVal - aVal;
-            case 'amount_asc':
-              aVal = parseFloat(a.cells[2].textContent.replace(/[₱,]/g, ''));
-              bVal = parseFloat(b.cells[2].textContent.replace(/[₱,]/g, ''));
-              return aVal - bVal;
-            case 'customer_asc':
+            case 'brand_asc':
+              aVal = a.cells[0].textContent.toLowerCase();
+              bVal = b.cells[0].textContent.toLowerCase();
+              return aVal.localeCompare(bVal);
+            case 'brand_desc':
+              aVal = a.cells[0].textContent.toLowerCase();
+              bVal = b.cells[0].textContent.toLowerCase();
+              return bVal.localeCompare(aVal);
+            case 'product_asc':
               aVal = a.cells[1].textContent.toLowerCase();
               bVal = b.cells[1].textContent.toLowerCase();
               return aVal.localeCompare(bVal);
-            case 'customer_desc':
+            case 'product_desc':
               aVal = a.cells[1].textContent.toLowerCase();
               bVal = b.cells[1].textContent.toLowerCase();
               return bVal.localeCompare(aVal);
-            case 'status_asc':
-              aVal = a.cells[3].textContent.toLowerCase();
-              bVal = b.cells[3].textContent.toLowerCase();
+            case 'quantity_desc':
+              aVal = parseFloat(a.cells[2].textContent.replace(/,/g, ''));
+              bVal = parseFloat(b.cells[2].textContent.replace(/,/g, ''));
+              return bVal - aVal;
+            case 'quantity_asc':
+              aVal = parseFloat(a.cells[2].textContent.replace(/,/g, ''));
+              bVal = parseFloat(b.cells[2].textContent.replace(/,/g, ''));
+              return aVal - bVal;
+            case 'amount_desc':
+              aVal = parseFloat(a.cells[3].textContent.replace(/[₱,]/g, ''));
+              bVal = parseFloat(b.cells[3].textContent.replace(/[₱,]/g, ''));
+              return bVal - aVal;
+            case 'amount_asc':
+              aVal = parseFloat(a.cells[3].textContent.replace(/[₱,]/g, ''));
+              bVal = parseFloat(b.cells[3].textContent.replace(/[₱,]/g, ''));
+              return aVal - bVal;
+            case 'date_desc':
+              aVal = parseDate(a.cells[<?= $reportType === 'pullout' ? '5' : ($reportType === 'supplier_returns' ? '5' : '4') ?>].textContent);
+              bVal = parseDate(b.cells[<?= $reportType === 'pullout' ? '5' : ($reportType === 'supplier_returns' ? '5' : '4') ?>].textContent);
+              return bVal - aVal;
+            case 'date_asc':
+              aVal = parseDate(a.cells[<?= $reportType === 'pullout' ? '5' : ($reportType === 'supplier_returns' ? '5' : '4') ?>].textContent);
+              bVal = parseDate(b.cells[<?= $reportType === 'pullout' ? '5' : ($reportType === 'supplier_returns' ? '5' : '4') ?>].textContent);
+              return aVal - bVal;
+            case 'quantity_desc':
+              aVal = parseInt(a.cells[3].textContent);
+              bVal = parseInt(b.cells[3].textContent);
+              return bVal - aVal;
+            case 'quantity_asc':
+              aVal = parseInt(a.cells[3].textContent);
+              bVal = parseInt(b.cells[3].textContent);
+              return aVal - bVal;
+            case 'product_asc':
+              aVal = a.cells[1].textContent.toLowerCase();
+              bVal = b.cells[1].textContent.toLowerCase();
               return aVal.localeCompare(bVal);
-            case 'status_desc':
-              aVal = a.cells[3].textContent.toLowerCase();
-              bVal = b.cells[3].textContent.toLowerCase();
+            case 'product_desc':
+              aVal = a.cells[1].textContent.toLowerCase();
+              bVal = b.cells[1].textContent.toLowerCase();
+              return bVal.localeCompare(aVal);
+            case 'brand_asc':
+              aVal = a.cells[2].textContent.toLowerCase();
+              bVal = b.cells[2].textContent.toLowerCase();
+              return aVal.localeCompare(bVal);
+            case 'brand_desc':
+              aVal = a.cells[2].textContent.toLowerCase();
+              bVal = b.cells[2].textContent.toLowerCase();
               return bVal.localeCompare(aVal);
             case 'name_asc':
               aVal = a.cells[1].textContent.toLowerCase();
@@ -1144,13 +1343,13 @@ if ($reportType === 'sales') {
           }
           
           // Date range filter (only for reports with dates)
-          if (shouldShow && (dateFrom || dateTo) && in_array(reportType, ['sales', 'orders', 'returns'])) {
+          if (shouldShow && (dateFrom || dateTo) && in_array(reportType, ['pullout', 'supplier_returns', 'returns'])) {
             // Determine the correct date column index based on report type
             let dateColumnIndex;
-            if (reportType === 'sales') {
-              dateColumnIndex = 3; // Date column for sales report
-            } else if (reportType === 'orders') {
-              dateColumnIndex = 4; // Date column for orders report
+            if (reportType === 'pullout') {
+              dateColumnIndex = 5; // Date column for pullout report
+            } else if (reportType === 'supplier_returns') {
+              dateColumnIndex = 5; // Date column for supplier returns report
             } else if (reportType === 'returns') {
               dateColumnIndex = 4; // Date column for returns report
             }

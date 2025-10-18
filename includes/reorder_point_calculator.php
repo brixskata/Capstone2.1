@@ -167,6 +167,40 @@ class ReorderPointCalculator {
     }
     
     /**
+     * Get brand stock data grouped by brand (same as stock_levels.php)
+     */
+    public function getBrandStockData() {
+        $stmt = $this->pdo->query("
+            SELECT 
+                b.id as brand_id,
+                b.name as brand_name,
+                COUNT(DISTINCT pb.product_id) as product_count,
+                COALESCE(SUM(pb.quantity_remaining), 0) as total_stock,
+                COALESCE(AVG(bps.reorder_point), 0) as avg_reorder_point,
+                COALESCE(AVG(bps.average_daily_sales), 0) as avg_ads,
+                COALESCE(SUM((SELECT COUNT(*) FROM batch_movements bm WHERE bm.batch_id = pb.batch_id AND bm.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY))), 0) as total_sales_7d,
+                COUNT(CASE WHEN bps.movement_type = 'Fast-Moving' THEN 1 END) as fast_moving_products,
+                COUNT(CASE WHEN bps.movement_type = 'Slow-Moving' THEN 1 END) as slow_moving_products,
+                COUNT(CASE WHEN bps.movement_type = 'Non-Moving' THEN 1 END) as non_moving_products,
+                CASE 
+                    WHEN AVG(bps.average_daily_sales) > 10 THEN 'Fast-Moving'
+                    WHEN AVG(bps.average_daily_sales) >= 1 THEN 'Slow-Moving'
+                    ELSE 'Non-Moving'
+                END as movement_type,
+                MAX(bps.last_calculated) as last_calculated
+            FROM brands b
+            LEFT JOIN product_batches pb ON b.id = pb.brand_id AND pb.is_active = 1
+            LEFT JOIN products p ON pb.product_id = p.product_id AND p.is_archive = 0
+            LEFT JOIN brand_product_stock bps ON bps.product_id = pb.product_id AND bps.brand_id = pb.brand_id
+            WHERE b.is_archived = 0
+            GROUP BY b.id, b.name
+            ORDER BY total_stock ASC, b.name
+        ");
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
      * Get brand-product stock data for display
      */
     public function getBrandProductStockData() {
@@ -215,6 +249,81 @@ class ReorderPointCalculator {
     }
     
     /**
+     * Validate and sync reorder point data between tables
+     */
+    public function validateAndSyncReorderPoints() {
+        try {
+            $this->pdo->beginTransaction();
+            
+            // Get all brand-product combinations
+            $stmt = $this->pdo->query("
+                SELECT DISTINCT pb.product_id, pb.brand_id
+                FROM product_batches pb
+                WHERE pb.is_active = 1
+            ");
+            $combinations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $synced_count = 0;
+            
+            foreach ($combinations as $combo) {
+                $product_id = $combo['product_id'];
+                $brand_id = $combo['brand_id'];
+                
+                // Get current reorder point from brand_product_stock
+                $stmt = $this->pdo->prepare("
+                    SELECT reorder_point FROM brand_product_stock 
+                    WHERE product_id = ? AND brand_id = ?
+                ");
+                $stmt->execute([$product_id, $brand_id]);
+                $brand_rop = $stmt->fetchColumn();
+                
+                // Get current reorder point from product_stock
+                $stmt = $this->pdo->prepare("
+                    SELECT reorder_point FROM product_stock 
+                    WHERE product_id = ?
+                ");
+                $stmt->execute([$product_id]);
+                $product_rop = $stmt->fetchColumn();
+                
+                // If brand_product_stock has a value but product_stock doesn't, sync it
+                if ($brand_rop !== false && $product_rop === false) {
+                    $stmt = $this->pdo->prepare("
+                        INSERT INTO product_stock (product_id, reorder_point, current_stock, last_restock_date)
+                        VALUES (?, ?, 0, NOW())
+                        ON DUPLICATE KEY UPDATE reorder_point = VALUES(reorder_point)
+                    ");
+                    $stmt->execute([$product_id, $brand_rop]);
+                    $synced_count++;
+                }
+                // If both exist but are different, prioritize brand_product_stock
+                elseif ($brand_rop !== false && $product_rop !== false && $brand_rop != $product_rop) {
+                    $stmt = $this->pdo->prepare("
+                        UPDATE product_stock SET reorder_point = ? WHERE product_id = ?
+                    ");
+                    $stmt->execute([$brand_rop, $product_id]);
+                    $synced_count++;
+                }
+            }
+            
+            $this->pdo->commit();
+            
+            return [
+                'success' => true,
+                'message' => "Successfully synced $synced_count reorder points",
+                'count' => $synced_count
+            ];
+            
+        } catch (Exception $e) {
+            $this->pdo->rollBack();
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'count' => 0
+            ];
+        }
+    }
+    
+    /**
      * Get stock status based on current stock vs reorder point
      */
     public function getStockStatus($current_stock, $reorder_point) {
@@ -223,7 +332,7 @@ class ReorderPointCalculator {
         } elseif ($current_stock <= $reorder_point) {
             return 'Low Stock';
         } else {
-            return 'In Stock';
+            return 'Sufficient';
         }
     }
 }

@@ -13,10 +13,11 @@
 
        .promo-marquee {
            display: flex;
-           animation: marquee-scroll 20s linear infinite;
+           animation: marquee-scroll 15s linear infinite;
            white-space: nowrap;
-           gap: 3rem;
+           /* gap: 2rem; */
        }
+
 
        .promo-marquee:hover {
            animation-play-state: paused;
@@ -27,6 +28,11 @@
            align-items: center;
            flex-shrink: 0;
            font-size: 0.9rem;
+           margin-right: 2rem;
+       }
+
+       .promo-item:last-child {
+           margin-right: 0;
        }
 
        .promo-item i {
@@ -45,14 +51,14 @@
 
        @media (max-width: 768px) {
            .promo-marquee {
-               gap: 2rem;
+               gap: 1.5rem;
                font-size: 0.8rem;
            }
        }
 
        @media (max-width: 576px) {
            .promo-marquee {
-               gap: 1.5rem;
+               gap: 1rem;
                font-size: 0.75rem;
            }
        }

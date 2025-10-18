@@ -53,6 +53,10 @@ $query = "
            COALESCE(pay.method, '') as payment_method,
            COALESCE(pay.proof, '') as payment_proof,
            COALESCE(pay.transaction_id, '') as gcash_transaction_id,
+           oc.reason AS cancel_reason,
+           oc.receipt_path,
+           oc.receipt_filename,
+           oc.receipt_uploaded_at,
            GROUP_CONCAT(CONCAT(p.product_name, ' (', oi.quantity, ')') SEPARATOR ', ') as items
     FROM orders o
     INNER JOIN users u ON o.user_id = u.user_id
@@ -62,6 +66,15 @@ $query = "
     LEFT JOIN order_items oi ON o.orders_id = oi.order_id
     LEFT JOIN products p ON oi.product_id = p.product_id
     LEFT JOIN payments pay ON pay.orders_id = o.orders_id
+    LEFT JOIN (
+        SELECT oc1.order_id, oc1.reason, oc1.receipt_path, oc1.receipt_filename, oc1.receipt_uploaded_at
+        FROM order_cancellations oc1
+        INNER JOIN (
+            SELECT order_id, MAX(id) AS max_id
+            FROM order_cancellations
+            GROUP BY order_id
+        ) latest ON latest.order_id = oc1.order_id AND latest.max_id = oc1.id
+    ) oc ON oc.order_id = o.orders_id
     WHERE os.status_name IS NOT NULL
 ";
 
@@ -70,7 +83,7 @@ if ($status_filter && $status_filter !== 'all') {
     $query .= " AND os.status_name = '" . str_replace("'", "''", $status_filter) . "'";
 }
 
-$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof, pay.transaction_id ORDER BY o.created_at DESC";
+$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at DESC";
 
 try {
     $orders = $pdo->query($query)->fetchAll(PDO::FETCH_ASSOC);

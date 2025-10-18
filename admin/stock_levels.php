@@ -22,22 +22,34 @@ if (isCustomer($pdo)) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_reorder_point'])) {
     try {
         $product_id = (int)$_POST['product_id'];
+        $brand_id = (int)$_POST['brand_id'];
         $reorder_point = (int)$_POST['reorder_point'];
         
         if ($reorder_point < 0) {
             throw new Exception("Reorder point cannot be negative.");
         }
 
-        // Update reorder point
+        // Update reorder point in brand_product_stock table (single source of truth)
+        $stmt = $pdo->prepare("UPDATE brand_product_stock SET reorder_point = ?, last_calculated = NOW() WHERE product_id = ? AND brand_id = ?");
+        $stmt->execute([$reorder_point, $product_id, $brand_id]);
+        
+        // Also update product_stock table for backward compatibility
         $stmt = $pdo->prepare("UPDATE product_stock SET reorder_point = ? WHERE product_id = ?");
         $stmt->execute([$reorder_point, $product_id]);
 
-        // Get product name for logging
-        $stmt = $pdo->prepare("SELECT product_name FROM products WHERE product_id = ?");
-        $stmt->execute([$product_id]);
-        $product_name = $stmt->fetchColumn();
+        // Get product and brand names for logging
+        $stmt = $pdo->prepare("
+            SELECT p.product_name, b.name as brand_name 
+            FROM products p 
+            LEFT JOIN brands b ON b.id = ? 
+            WHERE p.product_id = ?
+        ");
+        $stmt->execute([$brand_id, $product_id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $product_name = $result['product_name'];
+        $brand_name = $result['brand_name'];
 
-        logHistory($pdo, 'Reorder Point Updated', "Product: $product_name, New Reorder Point: $reorder_point", $_SESSION['username']);
+        logHistory($pdo, 'Reorder Point Updated', "Product: $product_name, Brand: $brand_name, New Reorder Point: $reorder_point", $_SESSION['username']);
         $_SESSION['success'] = "Reorder point updated successfully!";
     } catch (Exception $e) {
         $_SESSION['error'] = "Error updating reorder point: " . $e->getMessage();
@@ -48,28 +60,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_reorder_point']
 
 // Initialize reorder point calculator
 $ropCalculator = new ReorderPointCalculator($pdo);
-
-// Handle AJAX request for recalculating reorder points
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'recalculate_rop') {
-    header('Content-Type: application/json');
-    
-    try {
-        $result = $ropCalculator->calculateAllReorderPoints();
-        
-        if ($result['success']) {
-            logHistory($pdo, 'Reorder Points Recalculated', "Recalculated {$result['count']} brand-product reorder points", $_SESSION['username']);
-        }
-        
-        echo json_encode($result);
-    } catch (Exception $e) {
-        echo json_encode([
-            'success' => false,
-            'message' => $e->getMessage(),
-            'count' => 0
-        ]);
-    }
-    exit;
-}
 
 // Fetch brands with detailed stock information using new reorder point system
 $stmt = $pdo->query("
@@ -102,11 +92,25 @@ $stmt = $pdo->query("
 ");
 $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Calculate stock level statistics using ADS-based thresholds
+// Calculate stock level statistics using consistent stock status logic
 $total_brands = count($brands);
-$low_stock_brands = count(array_filter($brands, fn($b) => $b['product_count'] > 0 && $b['total_stock'] > 0 && $b['total_stock'] <= $b['avg_reorder_point']));
-$out_of_stock_brands = count(array_filter($brands, fn($b) => $b['total_stock'] == 0));
-$in_stock_brands = count(array_filter($brands, fn($b) => $b['product_count'] > 0 && $b['total_stock'] > $b['avg_reorder_point']));
+$low_stock_brands = 0;
+$out_of_stock_brands = 0;
+$in_stock_brands = 0;
+
+foreach ($brands as $brand) {
+    $avg_rop = (float)$brand['avg_reorder_point'];
+    $total_stock = (float)$brand['total_stock'];
+    $stock_status = $ropCalculator->getStockStatus($total_stock, $avg_rop);
+    
+    if ($stock_status === 'Out of Stock') {
+        $out_of_stock_brands++;
+    } elseif ($stock_status === 'Low Stock') {
+        $low_stock_brands++;
+    } else {
+        $in_stock_brands++;
+    }
+}
 
 // Calculate total inventory value
 $total_inventory_value = 0;
@@ -124,16 +128,28 @@ try {
     $total_inventory_value = 0;
 }
 
-// Filter brands based on status using ADS-based thresholds
+// Filter brands based on status using consistent stock status logic
 $filter = $_GET['filter'] ?? 'all';
 $filtered_brands = $brands;
 
 if ($filter === 'low_stock') {
-    $filtered_brands = array_filter($brands, fn($b) => $b['product_count'] > 0 && $b['total_stock'] > 0 && $b['total_stock'] <= $b['avg_reorder_point']);
+    $filtered_brands = array_filter($brands, function($b) use ($ropCalculator) {
+        $avg_rop = (float)$b['avg_reorder_point'];
+        $total_stock = (float)$b['total_stock'];
+        return $ropCalculator->getStockStatus($total_stock, $avg_rop) === 'Low Stock';
+    });
 } elseif ($filter === 'out_of_stock') {
-    $filtered_brands = array_filter($brands, fn($b) => $b['total_stock'] == 0);
+    $filtered_brands = array_filter($brands, function($b) use ($ropCalculator) {
+        $avg_rop = (float)$b['avg_reorder_point'];
+        $total_stock = (float)$b['total_stock'];
+        return $ropCalculator->getStockStatus($total_stock, $avg_rop) === 'Out of Stock';
+    });
 } elseif ($filter === 'in_stock') {
-    $filtered_brands = array_filter($brands, fn($b) => $b['product_count'] > 0 && $b['total_stock'] > $b['avg_reorder_point']);
+    $filtered_brands = array_filter($brands, function($b) use ($ropCalculator) {
+        $avg_rop = (float)$b['avg_reorder_point'];
+        $total_stock = (float)$b['total_stock'];
+        return $ropCalculator->getStockStatus($total_stock, $avg_rop) === 'Sufficient';
+    });
 }
 ?>
 
@@ -370,12 +386,9 @@ if ($filter === 'low_stock') {
                         </h2>
                         <p class="mb-0 opacity-75">Monitor real-time stock levels by brand and manage reorder points</p>
                     </div>
-                    <button class="btn text-white fw-bold px-4" 
-                            style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); cursor: pointer; border-radius: 10px;" 
-                            onclick="recalculateReorderPoints()"
-                            id="recalculateBtn">
-                        <i class="fa fa-calculator me-2"></i>Recalculate Reorder Points
-                    </button>
+                    <div class="text-white opacity-75">
+                        <small><i class="fa fa-info-circle me-1"></i>Reorder points are automatically calculated based on sales data</small>
+                    </div>
                 </div>
             </div>
 
@@ -400,7 +413,7 @@ if ($filter === 'low_stock') {
                         </div>
                         <div class="card-content">
                             <h3 class="card-number"><?= $in_stock_brands ?></h3>
-                            <p class="card-label">In Stock</p>
+                            <p class="card-label">Sufficient</p>
                         </div>
                     </div>
                 </div>
@@ -436,7 +449,7 @@ if ($filter === 'low_stock') {
                     All Brands (<?= $total_brands ?>)
                 </a>
                 <a href="?filter=in_stock" class="btn filter-btn <?= $filter === 'in_stock' ? 'btn-success' : 'btn-outline-success' ?>">
-                    In Stock (<?= $in_stock_brands ?>)
+                    Sufficient (<?= $in_stock_brands ?>)
                 </a>
                 <a href="?filter=low_stock" class="btn filter-btn <?= $filter === 'low_stock' ? 'btn-warning' : 'btn-outline-warning' ?>">
                     Low Stock (<?= $low_stock_brands ?>)
@@ -460,9 +473,8 @@ if ($filter === 'low_stock') {
                             <th class="fw-semibold">Brand</th>
                             <th class="fw-semibold">Products</th>
                             <th class="fw-semibold">Total Stock</th>
-                            <th class="fw-semibold">Avg ADS</th>
-                            <th class="fw-semibold">Avg ROP</th>
-                            <th class="fw-semibold">Movement Types</th>
+                            <th class="fw-semibold">Average Sales Per Day</th>
+                            <th class="fw-semibold">Reorder Point</th>
                             <th class="fw-semibold">Status</th>
                             <th class="fw-semibold">Last Restock</th>
                             <th class="fw-semibold">Actions</th>
@@ -472,8 +484,12 @@ if ($filter === 'low_stock') {
                         <?php foreach ($filtered_brands as $brand): ?>
                             <?php 
                             $avg_rop = (float)$brand['avg_reorder_point'];
-                            $is_low_stock = $brand['total_stock'] > 0 && $brand['total_stock'] <= $avg_rop;
-                            $is_out_of_stock = $brand['total_stock'] == 0;
+                            $total_stock = (float)$brand['total_stock'];
+                            
+                            // Use consistent stock status logic
+                            $stock_status = $ropCalculator->getStockStatus($total_stock, $avg_rop);
+                            $is_low_stock = $stock_status === 'Low Stock';
+                            $is_out_of_stock = $stock_status === 'Out of Stock';
                             ?>
                             <tr class="<?= $is_out_of_stock ? 'out-of-stock-item' : ($is_low_stock ? 'low-stock-item' : '') ?>">
                                 <td>
@@ -493,32 +509,17 @@ if ($filter === 'low_stock') {
                                     <span class="fw-semibold"><?= number_format($avg_rop, 2) ?></span>
                                 </td>
                                 <td>
-                                    <div class="d-flex flex-wrap gap-1">
-                                        <?php if ($brand['fast_moving_products'] > 0): ?>
-                                            <span class="badge" style="background: #d4edda; color: #155724; border-radius: 10px; padding: 2px 6px; font-size: 0.6rem;">
-                                                <?= $brand['fast_moving_products'] ?> Fast
-                                            </span>
-                                        <?php endif; ?>
-                                        <?php if ($brand['slow_moving_products'] > 0): ?>
-                                            <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 10px; padding: 2px 6px; font-size: 0.6rem;">
-                                                <?= $brand['slow_moving_products'] ?> Slow
-                                            </span>
-                                        <?php endif; ?>
-                                        <?php if ($brand['non_moving_products'] > 0): ?>
-                                            <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 10px; padding: 2px 6px; font-size: 0.6rem;">
-                                                <?= $brand['non_moving_products'] ?> Non
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                                <td>
-                                    <?php if ($is_out_of_stock): ?>
-                                        <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Out of Stock</span>
-                                    <?php elseif ($is_low_stock): ?>
-                                        <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Low Stock</span>
-                                    <?php else: ?>
-                                        <span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">In Stock</span>
-                                    <?php endif; ?>
+                                    <?php 
+                                    $status_colors = [
+                                        'Sufficient' => ['bg' => '#d4edda', 'color' => '#155724'],
+                                        'Low Stock' => ['bg' => '#fff3cd', 'color' => '#856404'],
+                                        'Out of Stock' => ['bg' => '#f5c6cb', 'color' => '#721c24']
+                                    ];
+                                    $colors = $status_colors[$stock_status] ?? $status_colors['Sufficient'];
+                                    ?>
+                                    <span class="badge" style="background: <?= $colors['bg'] ?>; color: <?= $colors['color'] ?>; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                                        <?= $stock_status ?>
+                                    </span>
                                 </td>
                                 <td class="text-muted">
                                     <?= !empty($brand['last_restock_date']) ? date('M d, Y', strtotime($brand['last_restock_date'])) : 'Never' ?>
@@ -556,6 +557,11 @@ if ($filter === 'low_stock') {
                     <div class="modal-body">
                         <input type="hidden" name="update_reorder_point" value="1">
                         <input type="hidden" name="product_id" id="reorderProductId">
+                        <input type="hidden" name="brand_id" id="reorderBrandId">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Brand</label>
+                            <input type="text" id="reorderBrandName" class="form-control" readonly>
+                        </div>
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Product</label>
                             <input type="text" id="reorderProductName" class="form-control" readonly>
@@ -580,104 +586,12 @@ if ($filter === 'low_stock') {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <?php include 'includes/admin_scripts.php'; ?>
     <script>
-        function recalculateReorderPoints() {
-            console.log('Button clicked - recalculateReorderPoints function called');
-            
-            // Check if SweetAlert2 is loaded
-            if (typeof Swal === 'undefined') {
-                alert('SweetAlert2 is not loaded. Please refresh the page.');
-                return;
-            }
-            
-            Swal.fire({
-                title: 'Recalculate Reorder Points?',
-                text: 'This will recalculate reorder points for all brand-product combinations based on current sales data. This may take a moment.',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#7F1734',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Yes, Recalculate',
-                cancelButtonText: 'Cancel',
-                allowOutsideClick: false,
-                customClass: {
-                    popup: 'swal2-popup-rounded',
-                    confirmButton: 'swal2-confirm-rounded',
-                    cancelButton: 'swal2-cancel-rounded'
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Show loading state
-                    Swal.fire({
-                        title: 'Calculating...',
-                        text: 'Please wait while we recalculate reorder points',
-                        icon: 'info',
-                        allowOutsideClick: false,
-                        showConfirmButton: false,
-                        customClass: {
-                            popup: 'swal2-popup-rounded'
-                        },
-                        didOpen: () => {
-                            Swal.showLoading();
-                        }
-                    });
-                    
-                    fetch('stock_levels.php', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                        body: 'action=recalculate_rop'
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            Swal.fire({
-                                title: 'Success!',
-                                text: `Successfully recalculated ${data.count} reorder points!`,
-                                icon: 'success',
-                                confirmButtonColor: '#7F1734',
-                                confirmButtonText: 'OK',
-                                customClass: {
-                                    popup: 'swal2-popup-rounded',
-                                    confirmButton: 'swal2-confirm-rounded'
-                                }
-                            }).then(() => {
-                                location.reload();
-                            });
-                        } else {
-                            Swal.fire({
-                                title: 'Error',
-                                text: data.message || 'Failed to recalculate reorder points',
-                                icon: 'error',
-                                confirmButtonColor: '#7F1734',
-                                confirmButtonText: 'OK',
-                                customClass: {
-                                    popup: 'swal2-popup-rounded',
-                                    confirmButton: 'swal2-confirm-rounded'
-                                }
-                            });
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        Swal.fire({
-                            title: 'Error',
-                            text: 'Failed to recalculate reorder points. Please try again.',
-                            icon: 'error',
-                            confirmButtonColor: '#7F1734',
-                            confirmButtonText: 'OK',
-                            customClass: {
-                                popup: 'swal2-popup-rounded',
-                                confirmButton: 'swal2-confirm-rounded'
-                            }
-                        });
-                    });
-                }
-            });
-        }
-        
-        function openReorderModal(productId, productName, currentReorderPoint) {
+        function openReorderModal(productId, productName, brandId, brandName, currentReorderPoint) {
             const modal = new bootstrap.Modal(document.getElementById('reorderModal'));
             document.getElementById('reorderProductId').value = productId;
+            document.getElementById('reorderBrandId').value = brandId;
             document.getElementById('reorderProductName').value = productName;
+            document.getElementById('reorderBrandName').value = brandName;
             document.getElementById('reorderPointInput').value = currentReorderPoint;
             modal.show();
         }

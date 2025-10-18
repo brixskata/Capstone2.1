@@ -191,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['address_action'])) {
 // Fetch all orders (current and completed)
 $sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price,
                oi.quantity, p.product_name, COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) as price,
-               oc.reason AS cancel_reason,
+               oc.reason AS cancel_reason, oc.receipt_path, oc.receipt_filename,
                a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country
         FROM orders o
         LEFT JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
@@ -200,7 +200,7 @@ $sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_pric
         LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
         LEFT JOIN addresses a ON a.address_id = o.address_id
         LEFT JOIN (
-            SELECT oc1.order_id, oc1.reason
+            SELECT oc1.order_id, oc1.reason, oc1.receipt_path, oc1.receipt_filename
             FROM order_cancellations oc1
             INNER JOIN (
                 SELECT order_id, MAX(id) AS max_id
@@ -225,6 +225,8 @@ foreach ($rawOrders as $row) {
             'status' => $row['status'],
             'total_price' => $row['total_price'],
             'cancel_reason' => $row['cancel_reason'] ?? null,
+            'receipt_path' => $row['receipt_path'] ?? null,
+            'receipt_filename' => $row['receipt_filename'] ?? null,
             'address' => [
                 'address_line' => $row['address_line'] ?? '',
                 'address_line2' => $row['address_line2'] ?? '',
@@ -1726,6 +1728,20 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <div class="alert alert-danger mb-2 py-2">
                                                 <small><i class="fas fa-info-circle me-1"></i>This order has been cancelled.</small>
                                             </div>
+                                            
+                                            <?php if (!empty($order['receipt_path']) && !empty($order['receipt_filename'])): ?>
+                                                <div class="mt-2">
+                                                    <?php if ($order['cancel_reason'] === 'Insufficient Payment'): ?>
+                                                        <button class="btn btn-success btn-sm" onclick="viewRefundReceipt(<?= $order['id'] ?>, '<?= htmlspecialchars($order['receipt_path']) ?>', '<?= htmlspecialchars($order['receipt_filename']) ?>')">
+                                                            <i class="fas fa-receipt me-1"></i>Refund Receipt
+                                                        </button>
+                                                    <?php else: ?>
+                                                        <button class="btn btn-info btn-sm" onclick="viewRefundReceipt(<?= $order['id'] ?>, '<?= htmlspecialchars($order['receipt_path']) ?>', '<?= htmlspecialchars($order['receipt_filename']) ?>')">
+                                                            <i class="fas fa-file-alt me-1"></i>View Receipt
+                                                        </button>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
@@ -3428,6 +3444,85 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             // Check for auto-confirmation every hour
             setInterval(checkAutoConfirmation, 60 * 60 * 1000);
         });
+
+        // Function to view refund receipt
+        function viewRefundReceipt(orderId, receiptPath, receiptFilename) {
+            // Try multiple possible paths for the receipt
+            const possiblePaths = [
+                'admin/' + receiptPath,
+                '../admin/' + receiptPath,
+                receiptPath
+            ];
+            
+            // Test each path until one works
+            let currentPathIndex = 0;
+            
+            function tryNextPath() {
+                if (currentPathIndex >= possiblePaths.length) {
+                    // All paths failed
+                    Swal.fire({
+                        title: 'Receipt Not Found',
+                        html: `
+                            <div class="text-center">
+                                <i class="fas fa-exclamation-triangle text-warning" style="font-size: 4rem;"></i>
+                                <p class="text-muted mt-3">Receipt file not found for Order #${orderId}</p>
+                                <p class="text-muted small">File: ${receiptFilename}</p>
+                            </div>
+                        `,
+                        confirmButtonColor: '#7F1734',
+                        confirmButtonText: 'OK'
+                    });
+                    return;
+                }
+                
+                const imagePath = possiblePaths[currentPathIndex];
+                
+                // Create image element to test if file exists
+                const testImage = new Image();
+                testImage.onload = function() {
+                    // File loaded successfully
+                    showReceiptModal(orderId, imagePath, receiptFilename);
+                };
+                testImage.onerror = function() {
+                    // This path failed, try the next one
+                    currentPathIndex++;
+                    tryNextPath();
+                };
+                testImage.src = imagePath;
+            }
+            
+            // Start trying paths
+            tryNextPath();
+        }
+
+        function showReceiptModal(orderId, imagePath, receiptFilename) {
+            Swal.fire({
+                title: `Receipt - Order #${orderId}`,
+                html: `
+                    <div class="text-center">
+                        <img src="${imagePath}" alt="Receipt" class="img-fluid rounded" style="max-height: 400px; max-width: 100%; border: 2px solid #e9ecef;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <div style="display: none; padding: 2rem; background: #f8f9fa; border-radius: 10px; border: 2px dashed #dee2e6;">
+                            <i class="fas fa-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                            <p class="text-muted mt-2">Failed to load receipt</p>
+                            <p class="text-muted small">Path: ${imagePath}</p>
+                        </div>
+                        <div class="mt-3">
+                            <a href="${imagePath}" download="${receiptFilename}" class="btn btn-primary me-2" style="background: #7F1734; border: none;">
+                                <i class="fas fa-download me-1"></i>Download Receipt
+                            </a>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">File: ${receiptFilename}</small>
+                        </div>
+                    </div>
+                `,
+                showConfirmButton: false,
+                showCancelButton: true,
+                cancelButtonText: 'Close',
+                cancelButtonColor: '#6c757d',
+                width: '600px'
+            });
+        }
     </script>
     
     <!-- Validation Script -->

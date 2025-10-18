@@ -45,8 +45,28 @@ if (isset($_POST['cancel_order'])) {
                 reason TEXT NOT NULL,
                 cancelled_by VARCHAR(255) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                receipt_path VARCHAR(255) NULL,
+                receipt_filename VARCHAR(255) NULL,
+                receipt_uploaded_at TIMESTAMP NULL,
                 INDEX (order_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            // Add receipt columns if they don't exist (migration)
+            try {
+                $pdo->exec("ALTER TABLE order_cancellations ADD COLUMN receipt_path VARCHAR(255) NULL");
+            } catch (PDOException $e) {
+                // Column already exists, ignore error
+            }
+            try {
+                $pdo->exec("ALTER TABLE order_cancellations ADD COLUMN receipt_filename VARCHAR(255) NULL");
+            } catch (PDOException $e) {
+                // Column already exists, ignore error
+            }
+            try {
+                $pdo->exec("ALTER TABLE order_cancellations ADD COLUMN receipt_uploaded_at TIMESTAMP NULL");
+            } catch (PDOException $e) {
+                // Column already exists, ignore error
+            }
 
             $pdo->beginTransaction();
 
@@ -103,6 +123,10 @@ $query = "
            COALESCE(pay.method, '') as payment_method,
            COALESCE(pay.proof, '') as payment_proof,
            COALESCE(pay.transaction_id, '') as gcash_transaction_id,
+           oc.reason AS cancel_reason,
+           oc.receipt_path,
+           oc.receipt_filename,
+           oc.receipt_uploaded_at,
            GROUP_CONCAT(CONCAT(p.product_name, ' (', oi.quantity, ')') SEPARATOR ', ') as items
     FROM orders o
     INNER JOIN users u ON o.user_id = u.user_id
@@ -112,6 +136,15 @@ $query = "
     LEFT JOIN order_items oi ON o.orders_id = oi.order_id
     LEFT JOIN products p ON oi.product_id = p.product_id
     LEFT JOIN payments pay ON pay.orders_id = o.orders_id
+    LEFT JOIN (
+        SELECT oc1.order_id, oc1.reason, oc1.receipt_path, oc1.receipt_filename, oc1.receipt_uploaded_at
+        FROM order_cancellations oc1
+        INNER JOIN (
+            SELECT order_id, MAX(id) AS max_id
+            FROM order_cancellations
+            GROUP BY order_id
+        ) latest ON latest.order_id = oc1.order_id AND latest.max_id = oc1.id
+    ) oc ON oc.order_id = o.orders_id
     WHERE os.status_name IS NOT NULL
 ";
 
@@ -126,22 +159,12 @@ if ($search) {
     $query .= " AND (u.username LIKE '%$s%' OR o.orders_id LIKE '%$s%')";
 }
 
-$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof, pay.transaction_id ORDER BY o.created_at ASC";
-
-// Debug: Check the query
-echo "<!-- Debug Query: " . htmlspecialchars($query) . " -->\n";
+$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at DESC";
 
 try {
     $orders = $pdo->query($query)->fetchAll();
 } catch (PDOException $e) {
-    echo "<!-- SQL Error: " . htmlspecialchars($e->getMessage()) . " -->\n";
     $orders = [];
-}
-
-// Debug: Check what payment data we're getting
-echo "<!-- Debug: Payment data -->\n";
-foreach ($orders as $order) {
-    echo "<!-- Order {$order['id']}: method='" . ($order['payment_method'] ?? 'NULL') . "', proof='" . ($order['payment_proof'] ?? 'NULL') . "' -->\n";
 }
 
 $stats = $pdo->query("
@@ -180,6 +203,10 @@ foreach ($statuses as $status) {
                COALESCE(pay.method, '') as payment_method,
                COALESCE(pay.proof, '') as payment_proof,
                COALESCE(pay.transaction_id, '') as gcash_transaction_id,
+               oc.reason AS cancel_reason,
+               oc.receipt_path,
+               oc.receipt_filename,
+               oc.receipt_uploaded_at,
                GROUP_CONCAT(CONCAT(p.product_name, ' (', oi.quantity, ')') SEPARATOR ', ') as items
         FROM orders o
         INNER JOIN users u ON o.user_id = u.user_id
@@ -189,9 +216,18 @@ foreach ($statuses as $status) {
         LEFT JOIN order_items oi ON o.orders_id = oi.order_id
         LEFT JOIN products p ON oi.product_id = p.product_id
         LEFT JOIN payments pay ON pay.orders_id = o.orders_id
+        LEFT JOIN (
+            SELECT oc1.order_id, oc1.reason, oc1.receipt_path, oc1.receipt_filename, oc1.receipt_uploaded_at
+            FROM order_cancellations oc1
+            INNER JOIN (
+                SELECT order_id, MAX(id) AS max_id
+                FROM order_cancellations
+                GROUP BY order_id
+            ) latest ON latest.order_id = oc1.order_id AND latest.max_id = oc1.id
+        ) oc ON oc.order_id = o.orders_id
         WHERE os.status_name = :status
-        GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof, pay.transaction_id 
-        ORDER BY o.created_at ASC
+        GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at 
+        ORDER BY o.created_at DESC
     ";
     
     $stmt = $pdo->prepare($statusQuery);
@@ -1376,8 +1412,30 @@ foreach ($statuses as $status) {
       });
     }
 
-    function cancelOrder(orderId) {
-          Swal.fire({
+    function cancelOrder(orderId, deliveryOption) {
+      // Define cancellation reasons based on delivery type
+      const pickupReasons = {
+        'customer_unable': 'Customer unable to visit the store',
+        'payment_not_received': 'Payment not received',
+        'invalid_proof': 'Invalid proof of payment',
+        'insufficient_payment': 'Insufficient Payment',
+        'other': 'Other'
+      };
+
+      const deliveryReasons = {
+        'customer_unable': 'Customer unable to visit the store',
+        'payment_not_received': 'Payment not received',
+        'invalid_proof': 'Invalid proof of payment',
+        'insufficient_payment': 'Insufficient Payment',
+        'ride_no_show': 'Ride did not show up',
+        'other': 'Other'
+      };
+
+      // Normalize delivery option to lowercase for comparison
+      const normalizedDeliveryOption = (deliveryOption || 'delivery').toLowerCase();
+      const reasons = normalizedDeliveryOption === 'pickup' ? pickupReasons : deliveryReasons;
+
+      Swal.fire({
         title: 'Cancel Order?',
         html: `
           <div class="text-start">
@@ -1387,12 +1445,10 @@ foreach ($statuses as $status) {
           </div>
         `,
         icon: 'question',
-        input: 'textarea',
+        input: 'select',
+        inputOptions: reasons,
         inputLabel: 'Cancellation Reason',
-        inputPlaceholder: 'Enter reason for cancellation...',
-        inputAttributes: {
-          'aria-label': 'Cancellation reason'
-        },
+        inputPlaceholder: 'Select a reason...',
         showCancelButton: true,
         confirmButtonColor: '#dc3545',
         cancelButtonColor: '#6c757d',
@@ -1400,7 +1456,7 @@ foreach ($statuses as $status) {
         cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
         inputValidator: (value) => {
           if (!value) {
-            return 'You need to provide a cancellation reason!';
+            return 'Please select a cancellation reason!';
           }
         },
         customClass: {
@@ -1412,17 +1468,201 @@ foreach ($statuses as $status) {
         }
       }).then((result) => {
         if (result.isConfirmed) {
-          // Create and submit form
-          const form = document.createElement('form');
-          form.method = 'POST';
-          form.innerHTML = `
-            <input type="hidden" name="order_id" value="${orderId}">
-            <input type="hidden" name="cancel_reason" value="${result.value}">
-            <input type="hidden" name="cancel_order" value="1">
-          `;
-          document.body.appendChild(form);
-          form.submit();
+          let finalReason = reasons[result.value];
+          
+          // If "Other" is selected, ask for custom reason
+          if (result.value === 'other') {
+            Swal.fire({
+              title: 'Specify Reason',
+              input: 'textarea',
+              inputLabel: 'Cancellation Reason',
+              inputPlaceholder: 'Please specify the cancellation reason...',
+              showCancelButton: true,
+              confirmButtonColor: '#dc3545',
+              cancelButtonColor: '#6c757d',
+              confirmButtonText: '<i class="fas fa-check me-2"></i>Confirm',
+              cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+              inputValidator: (value) => {
+                if (!value.trim()) {
+                  return 'Please provide a reason!';
+                }
+              },
+              customClass: {
+                popup: 'swal2-popup-custom',
+                title: 'swal2-title-custom',
+                htmlContainer: 'swal2-html-container-custom',
+                confirmButton: 'swal2-confirm-button-custom',
+                cancelButton: 'swal2-cancel-button-custom'
+              }
+            }).then((customResult) => {
+              if (customResult.isConfirmed) {
+                finalReason = customResult.value;
+                handleCancellationWithReceipt(orderId, finalReason);
+              }
+            });
+          } else {
+            handleCancellationWithReceipt(orderId, finalReason);
+          }
         }
+      });
+    }
+
+    function handleCancellationWithReceipt(orderId, reason) {
+      // If reason is "Insufficient Payment", ask for receipt upload
+      if (reason === 'Insufficient Payment') {
+        Swal.fire({
+          title: 'Upload Refund Receipt',
+          html: `
+            <div class="text-start">
+              <p><strong>Order #${orderId}</strong></p>
+              <p>Please upload the refund receipt for this cancellation.</p>
+              <p class="text-muted small">Accepted formats: JPG, PNG, PDF (Max 5MB)</p>
+            </div>
+          `,
+          input: 'file',
+          inputLabel: 'Receipt File',
+          inputAttributes: {
+            accept: '.jpg,.jpeg,.png,.pdf',
+            'aria-label': 'Upload receipt file'
+          },
+          showCancelButton: true,
+          confirmButtonColor: '#dc3545',
+          cancelButtonColor: '#6c757d',
+          confirmButtonText: '<i class="fas fa-upload me-2"></i>Upload & Cancel',
+          cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+          inputValidator: (value) => {
+            if (!value) {
+              return 'Please select a receipt file!';
+            }
+            // Check file size (5MB max)
+            if (value.size > 5 * 1024 * 1024) {
+              return 'File size must be less than 5MB!';
+            }
+            // Check file type
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+            if (!allowedTypes.includes(value.type)) {
+              return 'Only JPG, PNG, and PDF files are allowed!';
+            }
+          },
+          customClass: {
+            popup: 'swal2-popup-custom',
+            title: 'swal2-title-custom',
+            htmlContainer: 'swal2-html-container-custom',
+            confirmButton: 'swal2-confirm-button-custom',
+            cancelButton: 'swal2-cancel-button-custom'
+          }
+        }).then((result) => {
+          if (result.isConfirmed) {
+            uploadReceiptAndCancel(orderId, reason, result.value);
+          }
+        });
+      } else {
+        // For other reasons, proceed directly to cancellation
+        submitCancellation(orderId, reason);
+      }
+    }
+
+    function uploadReceiptAndCancel(orderId, reason, file) {
+      // Show loading state
+      Swal.fire({
+        title: 'Processing Cancellation...',
+        text: 'Please wait while we cancel the order and upload the receipt',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      // First cancel the order
+      submitCancellation(orderId, reason).then(() => {
+        // Wait a moment for the cancellation to complete
+        setTimeout(() => {
+          // Now upload the receipt
+          const formData = new FormData();
+          formData.append('receipt', file);
+          formData.append('order_id', orderId);
+
+          // Upload receipt
+          fetch('upload_cancellation_receipt.php', {
+            method: 'POST',
+            body: formData
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              Swal.fire({
+                icon: 'success',
+                title: 'Success!',
+                text: 'Order cancelled and receipt uploaded successfully',
+                confirmButtonColor: '#7F1734',
+                timer: 2000,
+                timerProgressBar: true,
+                customClass: {
+                  popup: 'swal2-popup-custom',
+                  title: 'swal2-title-custom',
+                  htmlContainer: 'swal2-html-container-custom',
+                  confirmButton: 'swal2-confirm-button-custom'
+                }
+              }).then(() => {
+                location.reload();
+              });
+            } else {
+              Swal.fire({
+                icon: 'error',
+                title: 'Upload Failed',
+                text: data.message || 'Failed to upload receipt',
+                confirmButtonColor: '#7F1734',
+                customClass: {
+                  popup: 'swal2-popup-custom',
+                  title: 'swal2-title-custom',
+                  htmlContainer: 'swal2-html-container-custom',
+                  confirmButton: 'swal2-confirm-button-custom'
+                }
+              });
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            Swal.fire({
+              icon: 'error',
+              title: 'Upload Error',
+              text: 'An error occurred while uploading the receipt',
+              confirmButtonColor: '#7F1734',
+              customClass: {
+                popup: 'swal2-popup-custom',
+                title: 'swal2-title-custom',
+                htmlContainer: 'swal2-html-container-custom',
+                confirmButton: 'swal2-confirm-button-custom'
+              }
+            });
+          });
+        }, 1000); // Wait 1 second for cancellation to complete
+      });
+    }
+
+    function submitCancellation(orderId, reason) {
+      return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('order_id', orderId);
+        formData.append('cancel_reason', reason);
+        formData.append('cancel_order', '1');
+
+        fetch('transaction_logs.php', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => {
+          if (response.ok) {
+            resolve();
+          } else {
+            reject(new Error('Cancellation failed'));
+          }
+        })
+        .catch(error => {
+          reject(error);
+        });
       });
     }
 
@@ -2189,7 +2429,7 @@ foreach ($statuses as $status) {
             <i class="fas fa-cog me-1"></i>Process
           </button>`;
         }
-        buttons += `<button type="button" class="action-btn" style="background: #f5c6cb; color: #721c24;" onclick="event.stopPropagation(); cancelOrder(${order.id})">
+        buttons += `<button type="button" class="action-btn" style="background: #f5c6cb; color: #721c24;" onclick="event.stopPropagation(); cancelOrder(${order.id}, '${(order.delivery_option || 'delivery').toLowerCase()}')">
           <i class="fas fa-ban me-1"></i>Cancel
         </button>`;
       } else if (order.status === 'To Ship') {
@@ -2259,6 +2499,97 @@ foreach ($statuses as $status) {
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // Function to view refund receipt (admin side)
+    function viewRefundReceipt(orderId, receiptPath, receiptFilename) {
+      // Try multiple possible paths for the receipt
+      const possiblePaths = [
+        receiptPath,
+        '../' + receiptPath,
+        'uploads/cancellation_receipts/' + receiptFilename
+      ];
+      
+      // Test each path until one works
+      let currentPathIndex = 0;
+      
+      function tryNextPath() {
+        if (currentPathIndex >= possiblePaths.length) {
+          // All paths failed
+          Swal.fire({
+            title: 'Receipt Not Found',
+            html: `
+              <div class="text-center">
+                <i class="fas fa-exclamation-triangle text-warning" style="font-size: 4rem;"></i>
+                <p class="text-muted mt-3">Receipt file not found for Order #${orderId}</p>
+                <p class="text-muted small">File: ${receiptFilename}</p>
+              </div>
+            `,
+            confirmButtonColor: '#7F1734',
+            confirmButtonText: 'OK',
+            customClass: {
+              popup: 'swal2-popup-custom',
+              title: 'swal2-title-custom',
+              htmlContainer: 'swal2-html-container-custom',
+              confirmButton: 'swal2-confirm-button-custom'
+            }
+          });
+          return;
+        }
+        
+        const imagePath = possiblePaths[currentPathIndex];
+        
+        // Create image element to test if file exists
+        const testImage = new Image();
+        testImage.onload = function() {
+          // File loaded successfully
+          showAdminReceiptModal(orderId, imagePath, receiptFilename);
+        };
+        testImage.onerror = function() {
+          // This path failed, try the next one
+          currentPathIndex++;
+          tryNextPath();
+        };
+        testImage.src = imagePath;
+      }
+      
+      // Start trying paths
+      tryNextPath();
+    }
+
+    function showAdminReceiptModal(orderId, imagePath, receiptFilename) {
+      Swal.fire({
+        title: `Receipt - Order #${orderId}`,
+        html: `
+          <div class="text-center">
+            <img src="${imagePath}" alt="Receipt" class="img-fluid rounded" style="max-height: 400px; max-width: 100%; border: 2px solid #e9ecef;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div style="display: none; padding: 2rem; background: #f8f9fa; border-radius: 10px; border: 2px dashed #dee2e6;">
+              <i class="fas fa-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+              <p class="text-muted mt-2">Failed to load receipt</p>
+              <p class="text-muted small">Path: ${imagePath}</p>
+            </div>
+            <div class="mt-3">
+              <a href="${imagePath}" download="${receiptFilename}" class="btn btn-primary me-2" style="background: #7F1734; border: none;">
+                <i class="fas fa-download me-1"></i>Download Receipt
+              </a>
+            </div>
+            <div class="mt-2">
+              <small class="text-muted">File: ${receiptFilename}</small>
+            </div>
+          </div>
+        `,
+        showConfirmButton: false,
+        showCancelButton: true,
+        cancelButtonText: 'Close',
+        cancelButtonColor: '#6c757d',
+        width: '600px',
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          htmlContainer: 'swal2-html-container-custom',
+          cancelButton: 'swal2-cancel-button-custom'
+        }
+      });
     }
 
     // Add CSS animations

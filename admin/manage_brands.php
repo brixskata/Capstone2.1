@@ -52,20 +52,43 @@ if (isset($_GET['archive'])) {
     $brand_id = (int)$_GET['archive'];
     
     try {
-        // Get brand name for logging
-        $stmt = $pdo->prepare("SELECT name FROM brands WHERE id = ?");
+        // Check if brand has active products
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM products WHERE brand_id = ? AND is_archive = 0");
         $stmt->execute([$brand_id]);
-        $brand = $stmt->fetch();
+        $activeProductCount = $stmt->fetchColumn();
         
-        if ($brand) {
-            // Archive brand (soft delete)
-            $stmt = $pdo->prepare("UPDATE brands SET is_archived = 1 WHERE id = ?");
-            $stmt->execute([$brand_id]);
-            
-            $_SESSION['success'] = "Brand '{$brand['name']}' archived successfully";
-            logHistory($pdo, 'Brand Archived', "Archived brand: {$brand['name']}", $_SESSION['username']);
+        // Check if brand has active batches with stock
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM product_batches WHERE brand_id = ? AND is_active = 1 AND quantity_remaining > 0");
+        $stmt->execute([$brand_id]);
+        $activeBatchCount = $stmt->fetchColumn();
+        
+        // Check if brand has any batches (even with zero stock)
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM product_batches WHERE brand_id = ? AND is_active = 1");
+        $stmt->execute([$brand_id]);
+        $totalBatchCount = $stmt->fetchColumn();
+        
+        if ($activeProductCount > 0) {
+            $_SESSION['error'] = "Cannot archive brand: $activeProductCount active product(s) are using this brand";
+        } elseif ($activeBatchCount > 0) {
+            $_SESSION['error'] = "Cannot archive brand: $activeBatchCount active batch(es) with stock are using this brand";
+        } elseif ($totalBatchCount > 0) {
+            $_SESSION['error'] = "Cannot archive brand: $totalBatchCount active batch(es) are using this brand";
         } else {
-            $_SESSION['error'] = "Brand not found";
+            // Get brand name for logging
+            $stmt = $pdo->prepare("SELECT name FROM brands WHERE id = ?");
+            $stmt->execute([$brand_id]);
+            $brand = $stmt->fetch();
+            
+            if ($brand) {
+                // Archive brand (soft delete)
+                $stmt = $pdo->prepare("UPDATE brands SET is_archived = 1 WHERE id = ?");
+                $stmt->execute([$brand_id]);
+                
+                $_SESSION['success'] = "Brand '{$brand['name']}' archived successfully";
+                logHistory($pdo, 'Brand Archived', "Archived brand: {$brand['name']}", $_SESSION['username']);
+            } else {
+                $_SESSION['error'] = "Brand not found";
+            }
         }
     } catch (Exception $e) {
         $_SESSION['error'] = "Error archiving brand: " . $e->getMessage();

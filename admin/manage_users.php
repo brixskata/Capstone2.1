@@ -47,7 +47,6 @@ if (isset($_POST['create_user'])) {
     }
 
     $new_username = trim($_POST['new_username']);
-    $new_email = trim($_POST['new_email']);
     $new_password = $_POST['new_password'];
     $new_role = $_POST['new_role'];
 
@@ -59,15 +58,12 @@ if (isset($_POST['create_user'])) {
     }
 
     // Proceed with user creation
-        // Check if username or email exists
+        // Check if username exists
         $stmt = $pdo->prepare("SELECT 1 FROM users WHERE username = ?");
         $stmt->execute([$new_username]);
         $existsUser = (bool)$stmt->fetch();
-        $stmt = $pdo->prepare("SELECT 1 FROM user_info WHERE email = ?");
-        $stmt->execute([$new_email]);
-        $existsEmail = (bool)$stmt->fetch();
-        if ($existsUser || $existsEmail) {
-            $_SESSION['error'] = "Username or email already exists.";
+        if ($existsUser) {
+            $_SESSION['error'] = "Username already exists.";
         } else {
             $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
             $usertypeId = getUsertypeId($pdo, $new_role);
@@ -80,12 +76,13 @@ if (isset($_POST['create_user'])) {
                     $stmt->execute([$new_username, $hashed_password, $usertypeId]);
                     $newUserId = (int)$pdo->lastInsertId();
 
-                    $stmt = $pdo->prepare("INSERT INTO user_info (user_id, email) VALUES (?, ?)");
-                    $stmt->execute([$newUserId, $new_email]);
+                    // Insert user_info record without email
+                    $stmt = $pdo->prepare("INSERT INTO user_info (user_id) VALUES (?)");
+                    $stmt->execute([$newUserId]);
 
                     $pdo->commit();
                     $_SESSION['success'] = "User created successfully.";
-                    logHistory($pdo, 'User Created', "Username: $new_username, Email: $new_email, Role: $new_role", $_SESSION['username']);
+                    logHistory($pdo, 'User Created', "Username: $new_username, Role: $new_role", $_SESSION['username']);
                 } catch (Exception $e) {
                     $pdo->rollBack();
                     $_SESSION['error'] = "Error creating user.";
@@ -111,7 +108,7 @@ if (isset($_POST['deactivate_user'])) {
         $stmt = $pdo->prepare("SELECT u.username, ui.email FROM users u LEFT JOIN user_info ui ON ui.user_id = u.user_id WHERE u.user_id = ?");
         $stmt->execute([$user_id]);
         $user = $stmt->fetch();
-        logHistory($pdo, 'User Deactivated', "Username: {$user['username']}, Email: {$user['email']}", $_SESSION['username']);
+        logHistory($pdo, 'User Deactivated', "Username: {$user['username']}", $_SESSION['username']);
     header("Location: manage_users.php");
     exit;
 }
@@ -132,7 +129,7 @@ if (isset($_POST['reactivate_user'])) {
         $stmt = $pdo->prepare("SELECT u.username, ui.email FROM users u LEFT JOIN user_info ui ON ui.user_id = u.user_id WHERE u.user_id = ?");
         $stmt->execute([$user_id]);
         $user = $stmt->fetch();
-        logHistory($pdo, 'User Reactivated', "Username: {$user['username']}, Email: {$user['email']}", $_SESSION['username']);
+        logHistory($pdo, 'User Reactivated', "Username: {$user['username']}", $_SESSION['username']);
     header("Location: manage_users.php");
     exit;
 }
@@ -147,12 +144,12 @@ $query = "SELECT u.user_id AS id, u.username, ui.email, ut.role, (CASE WHEN u.is
           FROM users u
           LEFT JOIN user_info ui ON ui.user_id = u.user_id
           LEFT JOIN user_type ut ON ut.usertype_id = u.usertype_id
-          WHERE u.username != ?";
+          WHERE u.username != ? 
+          AND (u.usertype_id IS NOT NULL AND u.usertype_id != 2 OR u.email_verified = 1)";
 $params = [$_SESSION['username']];
 
 if ($search) {
-    $query .= " AND (u.username LIKE ? OR ui.email LIKE ?)";
-    $params[] = "%$search%";
+    $query .= " AND u.username LIKE ?";
     $params[] = "%$search%";
 }
 
@@ -420,7 +417,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <i class="fas fa-user"></i>
             </div>
             <div class="card-content">
-              <h3 class="card-number"><?php echo count(array_filter($users, function($user) { return ($user['role'] ?? '') === 'customer'; })); ?></h3>
+              <h3 class="card-number"><?php echo count(array_filter($users, function($user) { return ($user['role'] ?? '') === 'customer' && !empty($user['email']); })); ?></h3>
               <p class="card-label">Customers</p>
             </div>
           </div>
@@ -447,7 +444,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <label class="form-label">Search Users</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="fa fa-search"></i></span>
-                <input type="text" class="form-control" placeholder="Search by username or email" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                <input type="text" class="form-control" placeholder="Search by username" name="search" value="<?php echo htmlspecialchars($search); ?>">
               </div>
             </div>
             <div class="col-md-3">
@@ -509,7 +506,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                       <span class="badge ms-2" style="<?php echo $role_badge_style; ?>"><?php echo ucfirst(str_replace('_', ' ', $user['role'])); ?></span>
                     <?php endif; ?>
                   </h5>
-                  <small class="text-muted"><?php echo htmlspecialchars($user['email'] ?? ''); ?></small>
+                  <small class="text-muted"><?php echo htmlspecialchars($user['email'] ?? 'No email'); ?></small>
                 </div>
               </div>
               
@@ -554,10 +551,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <input type="text" class="form-control" name="new_username" required>
             </div>
             <div class="mb-3">
-              <label class="form-label">Email</label>
-              <input type="email" class="form-control" name="new_email" required>
-            </div>
-            <div class="mb-3">
               <label class="form-label">Password</label>
               <div class="position-relative">
                 <input type="password" class="form-control pe-4" name="new_password" id="new_password" required>
@@ -576,11 +569,11 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $all_roles = $roles_stmt->fetchAll(PDO::FETCH_ASSOC);
                 
                 foreach ($all_roles as $role): 
-                  // Super Admin can assign any role, other admins can assign any role except super_admin
+                  // Super Admin can assign any role except customer, other admins can assign any role except super_admin and customer
                   $canAssign = false;
                   if (isSuperAdmin($pdo)) {
-                    $canAssign = true;
-                  } elseif ($role['role'] !== 'super_admin') {
+                    $canAssign = ($role['role'] !== 'customer');
+                  } elseif ($role['role'] !== 'super_admin' && $role['role'] !== 'customer') {
                     $canAssign = true;
                   }
                   

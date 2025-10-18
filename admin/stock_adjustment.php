@@ -973,11 +973,8 @@ $total_decreased = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM stock_adj
                                 <select name="reason" class="form-select" required>
                                     <option value="">Select Reason</option>
                                     <option value="Damaged Items">Damaged Items</option>
-                                    <option value="Counting Error">Counting Error</option>
                                     <option value="Theft/Loss">Theft/Loss</option>
-                                    <option value="Quality Control">Quality Control</option>
                                     <option value="Supplier Return">Supplier Return</option>
-                                    <option value="Manual Correction">Manual Correction</option>
                                     <option value="Other">Other</option>
                                 </select>
                             </div>

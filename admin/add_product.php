@@ -303,10 +303,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_product'])) {
                         <h2><i class="fas fa-plus-circle me-2"></i>Add New Product</h2>
                         <p class="mb-0 opacity-75">Create a new product for your inventory</p>
                     </div>
-                    <a href="products.php" class="btn text-white fw-bold px-4 text-decoration-none" 
-                       style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);">
-                        <i class="fa fa-arrow-left me-2"></i>Back to Products
-                    </a>
                 </div>
             </div>
 

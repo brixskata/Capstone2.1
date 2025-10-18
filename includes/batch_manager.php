@@ -57,6 +57,11 @@ class BatchManager {
                 $this->pdo->commit();
             }
             
+            // Trigger automatic reorder point calculation for new batches
+            if ($data['brand_id']) {
+                $this->triggerAutomaticROPCalculation($data['product_id'], $data['brand_id']);
+            }
+            
             return $batch_id;
             
         } catch (Exception $e) {
@@ -189,6 +194,11 @@ class BatchManager {
                 $this->pdo->commit();
             }
             
+            // Trigger automatic reorder point calculation for sales
+            if ($movement_type === 'sale' && $brand_id) {
+                $this->triggerAutomaticROPCalculation($product_id, $brand_id);
+            }
+            
             return $batches_used;
             
         } catch (Exception $e) {
@@ -197,6 +207,45 @@ class BatchManager {
                 $this->pdo->rollBack();
             }
             throw $e;
+        }
+    }
+    
+    /**
+     * Trigger automatic reorder point calculation for a specific product-brand combination
+     */
+    private function triggerAutomaticROPCalculation($product_id, $brand_id) {
+        try {
+            // Include the reorder point calculator
+            require_once __DIR__ . '/reorder_point_calculator.php';
+            
+            $ropCalculator = new ReorderPointCalculator($this->pdo);
+            
+            // Calculate ADS for this specific product-brand combination
+            $sales_data = $ropCalculator->calculateADS($product_id, $brand_id);
+            $ads = $sales_data['ads'];
+            
+            // Classify movement
+            $movement_type = $ropCalculator->classifyMovement($ads);
+            
+            // Calculate reorder point
+            $rop = $ropCalculator->calculateReorderPoint($ads, $movement_type);
+            
+            // Update the brand-product stock record
+            $ropCalculator->updateBrandProductStock($product_id, $brand_id, $ads, $rop, $movement_type);
+            
+            // Also update product_stock table for backward compatibility
+            $stmt = $this->pdo->prepare("
+                UPDATE product_stock 
+                SET reorder_point = ? 
+                WHERE product_id = ?
+            ");
+            $stmt->execute([$rop, $product_id]);
+            
+            error_log("Automatic ROP calculation completed for product_id=$product_id, brand_id=$brand_id: ADS=$ads, ROP=$rop, Type=$movement_type");
+            
+        } catch (Exception $e) {
+            // Log error but don't fail the main operation
+            error_log("Automatic ROP calculation failed for product_id=$product_id, brand_id=$brand_id: " . $e->getMessage());
         }
     }
     

@@ -26,6 +26,11 @@ date_default_timezone_set('Asia/Manila');
 $type = $_GET['type'] ?? 'sales';
 $period = $_GET['period'] ?? 'daily';
 
+// Check for custom date range
+$customFrom = $_GET['custom_from'] ?? null;
+$customTo = $_GET['custom_to'] ?? null;
+$isCustomRange = $customFrom && $customTo;
+
 function getDateRange($period) {
     switch ($period) {
         case 'daily':
@@ -45,7 +50,13 @@ function formatCurrency($amount) {
     return '₱ ' . number_format($amount, 2);
 }
 
-function getPeriodText($period) {
+function getPeriodText($period, $customFrom = null, $customTo = null) {
+    global $isCustomRange;
+    
+    if ($isCustomRange && $customFrom && $customTo) {
+        return 'Custom Range Report - ' . date('M d, Y', strtotime($customFrom)) . ' to ' . date('M d, Y', strtotime($customTo));
+    }
+    
     switch ($period) {
         case 'daily':
             return 'Daily Report - ' . date('F d, Y');
@@ -76,127 +87,62 @@ ob_start();
         body {
             font-family: 'DejaVu Sans', sans-serif;
             margin: 0;
-            padding: 20px;
-            background-color: #ffffff;
+            padding: 10px;
+            font-size: 10px;
         }
         .header {
             text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 3px solid #7F1734;
-            padding-bottom: 20px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 10px;
         }
         .company-name {
-            font-size: 24px;
+            font-size: 14px;
             font-weight: bold;
-            color: #7F1734;
-            margin: 5px 0;
+            margin: 2px 0;
         }
         .report-title {
-            font-size: 20px;
-            color: #7F1734;
-            margin: 5px 0;
+            font-size: 12px;
+            margin: 2px 0;
         }
         .report-period {
-            font-size: 14px;
-            color: #6c757d;
-            margin: 5px 0;
+            font-size: 10px;
+            margin: 2px 0;
         }
         .generated-date {
-            font-size: 12px;
-            color: #6c757d;
-            margin: 5px 0;
+            font-size: 8px;
+            margin: 2px 0;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin: 20px 0;
-            background-color: #ffffff;
-            border: 1px solid #dee2e6;
+            margin: 10px 0;
+            border: 1px solid #000;
         }
         th {
-            background: #7F1734;
-            color: white;
-            padding: 12px 8px;
+            background: #f0f0f0;
+            border: 1px solid #000;
+            padding: 6px 4px;
             text-align: left;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 9px;
         }
         td {
-            padding: 10px 8px;
-            border-bottom: 1px solid #dee2e6;
-            font-size: 13px;
-            color: #212529;
-        }
-        tr:nth-child(even) {
-            background-color: #f8f9fa;
-        }
-        tr:hover {
-            background-color: #e9ecef;
+            border: 1px solid #000;
+            padding: 4px;
+            font-size: 9px;
+            vertical-align: top;
         }
         .total-row {
-            background: #7F1734 !important;
-            color: white;
+            background: #f0f0f0 !important;
             font-weight: bold;
-        }
-        .status-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-        }
-        .status-pending { background-color: #ffc107; color: #000; }
-        .status-processing { background-color: #0dcaf0; color: #000; }
-        .status-shipped { background-color: #7F1734; color: #fff; }
-        .status-delivered { background-color: #198754; color: #fff; }
-        .status-return { background-color: #dc3545; color: #fff; }
-        .status-active { background-color: #198754; color: #fff; }
-        .status-archived { background-color: #dc3545; color: #fff; }
-        .summary-section {
-            margin: 20px 0;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border-left: 4px solid #7F1734;
-        }
-        .summary-title {
-            font-size: 16px;
-            font-weight: bold;
-            color: #7F1734;
-            margin-bottom: 10px;
-        }
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-        .summary-item {
-            text-align: center;
-            padding: 10px;
-            background: #ffffff;
-            border-radius: 6px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            border: 1px solid #dee2e6;
-        }
-        .summary-number {
-            font-size: 24px;
-            font-weight: bold;
-            color: #7F1734;
-        }
-        .summary-label {
-            font-size: 12px;
-            color: #6c757d;
-            margin-top: 5px;
         }
         .footer {
-            margin-top: 30px;
+            margin-top: 15px;
             text-align: center;
-            font-size: 12px;
-            color: #6c757d;
-            border-top: 1px solid #dee2e6;
-            padding-top: 20px;
-        }
-        .page-break {
-            page-break-before: always;
+            font-size: 8px;
+            border-top: 1px solid #000;
+            padding-top: 10px;
         }
     </style>
 </head>
@@ -204,69 +150,68 @@ ob_start();
     <div class="header">
         <div class="company-name">MikeMadz</div>
         <div class="report-title"><?= ucfirst($type) ?> Report</div>
-        <div class="report-period"><?= getPeriodText($period) ?></div>
+        <div class="report-period"><?= getPeriodText($period, $customFrom, $customTo) ?></div>
         <div class="generated-date">Generated on: <?= date('F d, Y \a\t g:i A') ?></div>
     </div>
 
 <?php
 try {
     if ($type === 'sales') {
-        list($start, $end) = getDateRange($period);
+        if ($isCustomRange) {
+            $start = $customFrom . ' 00:00:00';
+            $end = $customTo . ' 23:59:59';
+        } else {
+            list($start, $end) = getDateRange($period);
+        }
         
         // Get sales data
         $stmt = $pdo->prepare("
-            SELECT o.orders_id as id, u.username as customer, o.total_price, o.created_at, os.status_name as status
+            SELECT 
+                COALESCE(b.name, 'No Brand') as brand_name,
+                p.product_name,
+                SUM(oi.quantity) as total_quantity,
+                SUM(oi.quantity * oi.price) as total_amount,
+                o.created_at as order_date
             FROM orders o
-            INNER JOIN users u ON o.user_id = u.user_id
             INNER JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
-            WHERE o.created_at BETWEEN ? AND ? AND os.status_name = 'Completed'
-            ORDER BY o.created_at DESC
+            INNER JOIN order_items oi ON o.orders_id = oi.order_id
+            INNER JOIN products p ON oi.product_id = p.product_id
+            LEFT JOIN brands b ON oi.brand_id = b.id
+            WHERE os.status_name = 'Completed' AND o.created_at BETWEEN ? AND ?
+            GROUP BY b.name, p.product_name, o.created_at
+            ORDER BY o.created_at DESC, p.product_name ASC
         ");
         $stmt->execute([$start, $end]);
         $sales = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Calculate totals
-        $totalSales = array_sum(array_column($sales, 'total_price'));
-        $totalOrders = count($sales);
-        
-        // Summary section
-        echo '<div class="summary-section">';
-        echo '<div class="summary-title">Sales Summary</div>';
-        echo '<div class="summary-grid">';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . $totalOrders . '</div>';
-        echo '<div class="summary-label">Total Orders</div>';
-        echo '</div>';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . formatCurrency($totalSales) . '</div>';
-        echo '<div class="summary-label">Total Revenue</div>';
-        echo '</div>';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . formatCurrency($totalOrders > 0 ? $totalSales / $totalOrders : 0) . '</div>';
-        echo '<div class="summary-label">Average Order Value</div>';
-        echo '</div>';
-        echo '</div>';
-        echo '</div>';
-        
         // Sales table
         echo '<table>';
-        echo '<thead><tr><th>Order ID</th><th>Customer</th><th>Total Amount</th><th>Order Date</th></tr></thead>';
+        echo '<thead><tr><th>Brand</th><th>Product</th><th>Quantity</th><th>Total</th></tr></thead>';
         echo '<tbody>';
         
         if (empty($sales)) {
-            echo '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #666;">No sales data found for this period.</td></tr>';
+            echo '<tr><td colspan="4">No sales data found for this period.</td></tr>';
         } else {
+            $totalQuantity = 0;
+            $totalAmount = 0;
+            
             foreach ($sales as $row) {
                 echo '<tr>';
-                echo '<td>#' . $row['id'] . '</td>';
-                echo '<td>' . htmlspecialchars($row['customer']) . '</td>';
-                echo '<td>' . formatCurrency($row['total_price']) . '</td>';
-                echo '<td>' . date('M d, Y H:i', strtotime($row['created_at'])) . '</td>';
+                echo '<td>' . htmlspecialchars($row['brand_name']) . '</td>';
+                echo '<td>' . htmlspecialchars($row['product_name']) . '</td>';
+                echo '<td>' . number_format($row['total_quantity'], 1) . '</td>';
+                echo '<td>' . formatCurrency($row['total_amount']) . '</td>';
                 echo '</tr>';
+                
+                $totalQuantity += $row['total_quantity'];
+                $totalAmount += $row['total_amount'];
             }
+            
+            // Add total row
             echo '<tr class="total-row">';
-            echo '<td colspan="2"><strong>Total Sales</strong></td>';
-            echo '<td colspan="2"><strong>' . formatCurrency($totalSales) . '</strong></td>';
+            echo '<td colspan="2"><strong>TOTAL</strong></td>';
+            echo '<td><strong>' . number_format($totalQuantity, 1) . '</strong></td>';
+            echo '<td><strong>' . formatCurrency($totalAmount) . '</strong></td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
@@ -288,37 +233,13 @@ try {
         ");
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Calculate totals
-        $totalProducts = count($products);
-        $totalValue = array_sum(array_map(fn($p) => $p['stock'] * $p['price'], $products));
-        $avgPrice = $totalProducts > 0 ? $totalValue / $totalProducts : 0;
-        
-        // Summary section
-        echo '<div class="summary-section">';
-        echo '<div class="summary-title">Inventory Summary</div>';
-        echo '<div class="summary-grid">';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . $totalProducts . '</div>';
-        echo '<div class="summary-label">Active Products</div>';
-        echo '</div>';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . formatCurrency($totalValue) . '</div>';
-        echo '<div class="summary-label">Total Inventory Value</div>';
-        echo '</div>';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . formatCurrency($avgPrice) . '</div>';
-        echo '<div class="summary-label">Average Product Value</div>';
-        echo '</div>';
-        echo '</div>';
-        echo '</div>';
-        
         // Inventory table
         echo '<table>';
         echo '<thead><tr><th>ID</th><th>Product Name</th><th>Category</th><th>Stock</th><th>Price</th><th>Total Value</th></tr></thead>';
         echo '<tbody>';
         
         if (empty($products)) {
-            echo '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">No active products found.</td></tr>';
+            echo '<tr><td colspan="6">No active products found.</td></tr>';
         } else {
             foreach ($products as $row) {
                 $totalValue = $row['stock'] * $row['price'];
@@ -336,7 +257,12 @@ try {
         echo '</tbody></table>';
         
     } elseif ($type === 'orders') {
-        list($start, $end) = getDateRange($period);
+        if ($isCustomRange) {
+            $start = $customFrom . ' 00:00:00';
+            $end = $customTo . ' 23:59:59';
+        } else {
+            list($start, $end) = getDateRange($period);
+        }
         
         // Get orders data
         $stmt = $pdo->prepare("
@@ -354,51 +280,123 @@ try {
         $stmt->execute([$start, $end]);
         $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Calculate totals
-        $totalOrders = count($orders);
-        $totalRevenue = array_sum(array_column($orders, 'total_price'));
-        $statusCounts = array_count_values(array_column($orders, 'status'));
-        
-        // Summary section
-        echo '<div class="summary-section">';
-        echo '<div class="summary-title">Orders Summary</div>';
-        echo '<div class="summary-grid">';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . $totalOrders . '</div>';
-        echo '<div class="summary-label">Total Orders</div>';
-        echo '</div>';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . formatCurrency($totalRevenue) . '</div>';
-        echo '<div class="summary-label">Total Revenue</div>';
-        echo '</div>';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . ($statusCounts['Pending'] ?? 0) . '</div>';
-        echo '<div class="summary-label">Pending Orders</div>';
-        echo '</div>';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">' . ($statusCounts['Delivered'] ?? 0) . '</div>';
-        echo '<div class="summary-label">Delivered Orders</div>';
-        echo '</div>';
-        echo '</div>';
-        echo '</div>';
-        
         // Orders table
         echo '<table>';
         echo '<thead><tr><th>Order ID</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>';
         echo '<tbody>';
         
         if (empty($orders)) {
-            echo '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">No orders found for this period.</td></tr>';
+            echo '<tr><td colspan="6">No orders found for this period.</td></tr>';
         } else {
             foreach ($orders as $row) {
-                $statusClass = 'status-' . strtolower($row['status']);
-                
                 echo '<tr>';
                 echo '<td>#' . $row['id'] . '</td>';
                 echo '<td>' . htmlspecialchars($row['customer']) . '</td>';
-                echo '<td style="max-width: 200px; font-size: 11px;">' . htmlspecialchars($row['items']) . '</td>';
+                echo '<td>' . htmlspecialchars($row['items']) . '</td>';
                 echo '<td>' . formatCurrency($row['total_price']) . '</td>';
-                echo '<td><span class="status-badge ' . $statusClass . '">' . htmlspecialchars($row['status']) . '</span></td>';
+                echo '<td>' . htmlspecialchars($row['status']) . '</td>';
+                echo '<td>' . date('M d, Y H:i', strtotime($row['created_at'])) . '</td>';
+                echo '</tr>';
+            }
+        }
+        echo '</tbody></table>';
+        
+    } elseif ($type === 'pullout') {
+        if ($isCustomRange) {
+            $start = $customFrom . ' 00:00:00';
+            $end = $customTo . ' 23:59:59';
+        } else {
+            list($start, $end) = getDateRange($period);
+        }
+        
+        // Get pullout data
+        $stmt = $pdo->prepare("
+            SELECT 
+                sa.stockadjustment_id as id,
+                p.product_name as product_name,
+                COALESCE(b.name, 'N/A') as brand_name,
+                sa.quantity as quantity,
+                sa.reason as reason,
+                sa.created_at as created_at
+            FROM stock_adjustment sa
+            INNER JOIN products p ON sa.product_id = p.product_id
+            LEFT JOIN product_batches pb ON pb.product_id = p.product_id AND pb.is_active = 1
+            LEFT JOIN brands b ON pb.brand_id = b.id
+            WHERE sa.adjustment_type_id = 2 
+            AND sa.reason IN ('Damaged Items', 'Theft/Loss')
+            AND sa.created_at BETWEEN ? AND ?
+            GROUP BY sa.stockadjustment_id, p.product_name, b.name, sa.quantity, sa.reason, sa.created_at
+            ORDER BY sa.created_at DESC
+        ");
+        $stmt->execute([$start, $end]);
+        $pulloutData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Pullout table
+        echo '<table>';
+        echo '<thead><tr><th>Adjustment ID</th><th>Product</th><th>Brand</th><th>Quantity</th><th>Reason</th><th>Date</th></tr></thead>';
+        echo '<tbody>';
+        
+        if (empty($pulloutData)) {
+            echo '<tr><td colspan="6">No pull out data found for this period.</td></tr>';
+        } else {
+            foreach ($pulloutData as $row) {
+                echo '<tr>';
+                echo '<td>#' . $row['id'] . '</td>';
+                echo '<td>' . htmlspecialchars($row['product_name']) . '</td>';
+                echo '<td>' . htmlspecialchars($row['brand_name']) . '</td>';
+                echo '<td>' . $row['quantity'] . '</td>';
+                echo '<td>' . htmlspecialchars($row['reason']) . '</td>';
+                echo '<td>' . date('M d, Y H:i', strtotime($row['created_at'])) . '</td>';
+                echo '</tr>';
+            }
+        }
+        echo '</tbody></table>';
+        
+    } elseif ($type === 'supplier_returns') {
+        if ($isCustomRange) {
+            $start = $customFrom . ' 00:00:00';
+            $end = $customTo . ' 23:59:59';
+        } else {
+            list($start, $end) = getDateRange($period);
+        }
+        
+        // Get supplier returns data
+        $stmt = $pdo->prepare("
+            SELECT 
+                sa.stockadjustment_id as id,
+                p.product_name as product_name,
+                COALESCE(b.name, 'N/A') as brand_name,
+                sa.quantity as quantity,
+                sa.reason as reason,
+                sa.created_at as created_at
+            FROM stock_adjustment sa
+            INNER JOIN products p ON sa.product_id = p.product_id
+            LEFT JOIN product_batches pb ON pb.product_id = p.product_id AND pb.is_active = 1
+            LEFT JOIN brands b ON pb.brand_id = b.id
+            WHERE sa.adjustment_type_id = 2 
+            AND sa.reason = 'Supplier Return'
+            AND sa.created_at BETWEEN ? AND ?
+            GROUP BY sa.stockadjustment_id, p.product_name, b.name, sa.quantity, sa.reason, sa.created_at
+            ORDER BY sa.created_at DESC
+        ");
+        $stmt->execute([$start, $end]);
+        $supplierReturnsData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Supplier returns table
+        echo '<table>';
+        echo '<thead><tr><th>Adjustment ID</th><th>Product</th><th>Brand</th><th>Quantity</th><th>Reason</th><th>Date</th></tr></thead>';
+        echo '<tbody>';
+        
+        if (empty($supplierReturnsData)) {
+            echo '<tr><td colspan="6">No supplier returns found for this period.</td></tr>';
+        } else {
+            foreach ($supplierReturnsData as $row) {
+                echo '<tr>';
+                echo '<td>#' . $row['id'] . '</td>';
+                echo '<td>' . htmlspecialchars($row['product_name']) . '</td>';
+                echo '<td>' . htmlspecialchars($row['brand_name']) . '</td>';
+                echo '<td>' . $row['quantity'] . '</td>';
+                echo '<td>' . htmlspecialchars($row['reason']) . '</td>';
                 echo '<td>' . date('M d, Y H:i', strtotime($row['created_at'])) . '</td>';
                 echo '</tr>';
             }
@@ -407,24 +405,10 @@ try {
         
     } elseif ($type === 'returns') {
         // Returns functionality not implemented yet
-        $returns = [];
-        
-        // Summary section
-        echo '<div class="summary-section">';
-        echo '<div class="summary-title">Returns Summary</div>';
-        echo '<div class="summary-grid">';
-        echo '<div class="summary-item">';
-        echo '<div class="summary-number">0</div>';
-        echo '<div class="summary-label">Total Returns</div>';
-        echo '</div>';
-        echo '</div>';
-        echo '</div>';
-        
-        // Returns table
         echo '<table>';
         echo '<thead><tr><th>Return ID</th><th>Order ID</th><th>Customer</th><th>Product</th><th>Reason</th><th>Date</th></tr></thead>';
         echo '<tbody>';
-        echo '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">Returns functionality not implemented yet.</td></tr>';
+        echo '<tr><td colspan="6">Returns functionality not implemented yet.</td></tr>';
         echo '</tbody></table>';
     }
     
