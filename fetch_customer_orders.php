@@ -12,6 +12,7 @@ $user_id = $_SESSION['user_id'];
 
 // Fetch all orders for the current user
 $sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price,
+               o.plate_number, o.transaction_number,
                oi.quantity, p.product_name, COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) as price,
                oc.reason AS cancel_reason, oc.receipt_path, oc.receipt_filename,
                a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country
@@ -47,6 +48,8 @@ foreach ($rawOrders as $row) {
             'created_at' => $row['created_at'],
             'status' => $row['status'],
             'total_price' => $row['total_price'],
+            'plate_number' => $row['plate_number'] ?? null,
+            'transaction_number' => $row['transaction_number'] ?? null,
             'cancel_reason' => $row['cancel_reason'] ?? null,
             'receipt_path' => $row['receipt_path'] ?? null,
             'receipt_filename' => $row['receipt_filename'] ?? null,

@@ -77,7 +77,15 @@ $stmt = $pdo->prepare("
       u.name as uom_name,
       COALESCE(ps.current_stock,0) AS stock,
       COALESCE(pp.markup_price,0) AS markup_value,
-      COALESCE(pp.markup_price,0) + COALESCE(pp.cost_price,0) AS price,
+      COALESCE(pp.markup_price,0) + COALESCE((
+        SELECT pb.unit_cost 
+        FROM product_batches pb 
+        WHERE pb.product_id = p.product_id 
+        AND pb.quantity_remaining > 0 
+        AND pb.is_active = 1
+        ORDER BY pb.received_date DESC 
+        LIMIT 1
+      ), pp.cost_price, 0) AS price,
       (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 ORDER BY pi.product_image_id DESC LIMIT 1) AS image1,
       ps.expiration_date,
       COALESCE(pp.cost_price,0) AS cost_per_unit,
@@ -394,23 +402,6 @@ $archived_count = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 
     }
 
     /* Action Buttons - Pastel Colors */
-    .btn-edit {
-      background-color: #A8D5BA;
-      color: #2E7D32;
-      border: 1px solid rgba(168, 213, 186, 0.3);
-      border-radius: 8px;
-      padding: 0.5rem 1rem;
-      font-weight: 500;
-      transition: all 0.2s ease;
-    }
-
-    .btn-edit:hover {
-      background-color: #81C784;
-      color: #1B5E20;
-      border-color: rgba(129, 199, 132, 0.4);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(168, 213, 186, 0.4);
-    }
 
     .btn-archive {
       background-color: #F9E79F;
@@ -679,7 +670,7 @@ $archived_count = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 
           <div class="col-md-3">
             <select class="form-select" id="stockFilter">
               <option value="">All Stock Levels</option>
-              <option value="in_stock">In Stock</option>
+              <option value="in_stock">Sufficient</option>
               <option value="low_stock">Low Stock</option>
               <option value="out_of_stock">Out of Stock</option>
             </select>
@@ -765,7 +756,7 @@ $archived_count = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 
                     <span class="badge" style="background-color: #F9E79F; color: #F57F17;">Archived</span>
                   <?php else: ?>
                     <span class="badge" style="background-color: <?= $product['stock'] > 10 ? '#198754' : ($product['stock'] > 0 ? '#ffc107' : '#db3030') ?>; color: <?= $product['stock'] > 0 && $product['stock'] <= 10 ? 'black' : 'white' ?>;">
-                      <?= $product['stock'] > 10 ? 'In Stock' : ($product['stock'] > 0 ? 'Low Stock' : 'Out of Stock') ?>
+                      <?= $product['stock'] > 10 ? 'Sufficient' : ($product['stock'] > 0 ? 'Low Stock' : 'Out of Stock') ?>
                     </span>
                   <?php endif; ?>
                 </div>
@@ -789,10 +780,7 @@ $archived_count = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 
               
               <div class="d-flex gap-2">
                 <?php if ($current_tab === 'active'): ?>
-                  <a href="edit_product.php?id=<?= $product['id'] ?>" class="btn btn-sm flex-fill btn-edit">
-                    <i class="fa fa-edit me-1"></i> Edit
-                  </a>
-                  <a href="archive_product.php?id=<?= $product['id'] ?>" class="btn btn-sm flex-fill btn-archive archive-btn" onclick="return confirmArchive(event, this.href)">
+                  <a href="archive_product.php?id=<?= $product['id'] ?>" class="btn btn-sm w-100 btn-archive archive-btn" onclick="return confirmArchive(event, this.href)">
                     <i class="fa fa-archive me-1"></i> Archive
                   </a>
                 <?php else: ?>

@@ -128,7 +128,7 @@ if (!empty($_SESSION['cart'])) {
             <button class="btn btn-outline-secondary" onclick="closeCart(); window.location.href='cart.php'">
                 <i class="fas fa-shopping-cart me-2"></i>View Full Cart
             </button>
-            <button class="btn btn-success" onclick="closeCart(); window.location.href='checkout.php'">
+            <button class="btn btn-success" onclick="proceedToCheckoutFromSlidingCart()">
                 <i class="fas fa-credit-card me-2"></i>Proceed to Checkout
             </button>
         </div>
@@ -147,9 +147,11 @@ if (!empty($_SESSION['cart'])) {
 
     <!-- Desktop Icons -->
     <div class="d-none d-lg-flex align-items-center gap-4">
-      <a class="text-dark <?php if ($current == 'favorites.php') echo 'fw-bold'; ?>" href="favorites.php">
-        <i class="fas fa-heart fs-5"></i>
-      </a>
+      <?php if (isset($_SESSION['user_id'])): ?>
+        <a class="text-dark <?php if ($current == 'favorites.php') echo 'fw-bold'; ?>" href="favorites.php">
+          <i class="fas fa-heart fs-5"></i>
+        </a>
+      <?php endif; ?>
       <?php if (isset($_SESSION['user_id'])): ?>
         <a class="text-dark <?php if ($current == 'orders.php') echo 'fw-bold'; ?>" href="orders.php">
           <i class="fas fa-user fs-5"></i>
@@ -159,14 +161,34 @@ if (!empty($_SESSION['cart'])) {
           <i class="fas fa-user fs-5"></i>
         </a>
       <?php endif; ?>
-      <button class="btn p-0 text-dark position-relative" onclick="toggleCart()">
-        <i class="fas fa-shopping-cart fs-5"></i>
-        <?php if (!empty($_SESSION['cart'])): ?>
-          <span class="cart-badge">
-            <?php echo count($_SESSION['cart']); ?>
-          </span>
-        <?php endif; ?>
-      </button>
+      <?php if ($current == 'cart.php'): ?>
+        <a class="btn p-0 text-dark position-relative" href="cart.php" title="View Full Cart">
+          <i class="fas fa-shopping-cart fs-5"></i>
+          <?php if (!empty($_SESSION['cart'])): ?>
+            <span class="cart-badge">
+              <?php echo count($_SESSION['cart']); ?>
+            </span>
+          <?php endif; ?>
+        </a>
+      <?php elseif ($current == 'checkout.php'): ?>
+        <a class="btn p-0 text-dark position-relative" href="checkout.php" title="View Checkout">
+          <i class="fas fa-shopping-cart fs-5"></i>
+          <?php if (!empty($_SESSION['cart'])): ?>
+            <span class="cart-badge">
+              <?php echo count($_SESSION['cart']); ?>
+            </span>
+          <?php endif; ?>
+        </a>
+      <?php else: ?>
+        <button class="btn p-0 text-dark position-relative" onclick="toggleCart()" title="Open Cart">
+          <i class="fas fa-shopping-cart fs-5"></i>
+          <?php if (!empty($_SESSION['cart'])): ?>
+            <span class="cart-badge">
+              <?php echo count($_SESSION['cart']); ?>
+            </span>
+          <?php endif; ?>
+        </button>
+      <?php endif; ?>
     </div>
   </div>
 </nav>
@@ -178,9 +200,11 @@ if (!empty($_SESSION['cart'])) {
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
   </div>
   <div class="offcanvas-body d-flex flex-column gap-4">
-    <a class="text-dark <?php if ($current == 'favorites.php') echo 'fw-bold'; ?>" href="favorites.php">
-      <i class="fas fa-heart me-2"></i> Favorites
-    </a>
+    <?php if (isset($_SESSION['user_id'])): ?>
+      <a class="text-dark <?php if ($current == 'favorites.php') echo 'fw-bold'; ?>" href="favorites.php">
+        <i class="fas fa-heart me-2"></i> Favorites
+      </a>
+    <?php endif; ?>
     <?php if (isset($_SESSION['user_id'])): ?>
       <a class="text-dark <?php if ($current == 'orders.php') echo 'fw-bold'; ?>" href="orders.php">
         <i class="fas fa-user me-2"></i> Orders
@@ -190,14 +214,34 @@ if (!empty($_SESSION['cart'])) {
         <i class="fas fa-user me-2"></i> Login
       </a>
     <?php endif; ?>
-    <button class="btn p-0 text-start text-dark position-relative" onclick="toggleCart()">
-      <i class="fas fa-shopping-cart me-2"></i> Cart
-      <?php if (!empty($_SESSION['cart'])): ?>
-        <span class="cart-badge ms-2">
-          <?php echo count($_SESSION['cart']); ?>
-        </span>
-      <?php endif; ?>
-    </button>
+    <?php if ($current == 'cart.php'): ?>
+      <a class="text-dark text-start position-relative" href="cart.php">
+        <i class="fas fa-shopping-cart me-2"></i> View Cart
+        <?php if (!empty($_SESSION['cart'])): ?>
+          <span class="cart-badge ms-2">
+            <?php echo count($_SESSION['cart']); ?>
+          </span>
+        <?php endif; ?>
+      </a>
+    <?php elseif ($current == 'checkout.php'): ?>
+      <a class="text-dark text-start position-relative" href="checkout.php">
+        <i class="fas fa-shopping-cart me-2"></i> View Checkout
+        <?php if (!empty($_SESSION['cart'])): ?>
+          <span class="cart-badge ms-2">
+            <?php echo count($_SESSION['cart']); ?>
+          </span>
+        <?php endif; ?>
+      </a>
+    <?php else: ?>
+      <button class="btn p-0 text-start text-dark position-relative" onclick="toggleCart()">
+        <i class="fas fa-shopping-cart me-2"></i> Cart
+        <?php if (!empty($_SESSION['cart'])): ?>
+          <span class="cart-badge ms-2">
+            <?php echo count($_SESSION['cart']); ?>
+          </span>
+        <?php endif; ?>
+      </button>
+    <?php endif; ?>
   </div>
 </div>
 
@@ -261,6 +305,22 @@ if (!empty($_SESSION['cart'])) {
 <script>
   // Cart functionality
   function toggleCart() {
+    // Check if we're on the cart page or checkout page
+    if (window.location.pathname.includes('cart.php')) {
+      console.log('🚫 Sliding cart disabled on cart page - redirecting to cart.php');
+      // Instead of opening sliding cart, redirect to cart page
+      window.location.href = 'cart.php';
+      return;
+    }
+    
+    if (window.location.pathname.includes('checkout.php')) {
+      console.log('🚫 Sliding cart disabled on checkout page - redirecting to checkout.php');
+      // Instead of opening sliding cart, redirect to checkout page
+      window.location.href = 'checkout.php';
+      return;
+    }
+    
+    console.log('🛒 Opening sliding cart...');
     const cart = document.getElementById('slidingCart');
     const overlay = document.getElementById('cartOverlay');
 
@@ -476,6 +536,16 @@ if (!empty($_SESSION['cart'])) {
       if (data.success) {
         // Check if we're on the cart page
         if (window.location.pathname.includes('cart.php')) {
+          // Preserve selection state before reload
+          const selectedItems = [];
+          const checkedBoxes = document.querySelectorAll('.cart-item-checkbox:checked');
+          checkedBoxes.forEach(checkbox => {
+            selectedItems.push(checkbox.dataset.cartKey);
+          });
+          
+          // Store selection state in sessionStorage
+          sessionStorage.setItem('cart_selection_state', JSON.stringify(selectedItems));
+          
           // Refresh the page to show updated cart content
           location.reload();
         } else {
@@ -538,6 +608,16 @@ if (!empty($_SESSION['cart'])) {
       if (data.success) {
         // Check if we're on the cart page
         if (window.location.pathname.includes('cart.php')) {
+          // Preserve selection state before reload
+          const selectedItems = [];
+          const checkedBoxes = document.querySelectorAll('.cart-item-checkbox:checked');
+          checkedBoxes.forEach(checkbox => {
+            selectedItems.push(checkbox.dataset.cartKey);
+          });
+          
+          // Store selection state in sessionStorage
+          sessionStorage.setItem('cart_selection_state', JSON.stringify(selectedItems));
+          
           // Refresh the page to show updated cart content
           location.reload();
         } else {
@@ -608,38 +688,142 @@ if (!empty($_SESSION['cart'])) {
       
       // Debounce the loading
       cartContentTimeout = setTimeout(() => {
+          console.log('📡 Loading cart content from cart_content.php...');
           fetch('cart_content.php')
               .then(response => response.text())
               .then(html => {
+                  console.log('📄 Cart content HTML received, length:', html.length);
+                  
+                  // Insert HTML content
                   document.getElementById('cartContent').innerHTML = html;
+                  
+                  // Extract and execute JavaScript from the loaded content
+                  const scriptTags = document.querySelectorAll('#cartContent script');
+                  console.log('🔧 Found', scriptTags.length, 'script tags in cart content');
+                  
+                  // Execute scripts after a small delay to ensure DOM is ready
+                  setTimeout(() => {
+                      scriptTags.forEach((script, index) => {
+                          console.log(`📜 Executing script ${index + 1}...`);
+                          try {
+                              // Create a new script element and execute it
+                              const newScript = document.createElement('script');
+                              newScript.textContent = script.textContent;
+                              document.head.appendChild(newScript);
+                              document.head.removeChild(newScript);
+                              console.log(`✅ Script ${index + 1} executed successfully`);
+                          } catch (error) {
+                              console.error(`❌ Error executing script ${index + 1}:`, error);
+                          }
+                      });
+                  }, 100); // Small delay to ensure DOM is ready
+                  
                   // Only update footer - badge is updated separately
+                  // Always update footer on non-cart pages, or on cart page without selection functionality
                   updateCartFooter();
               })
               .catch(error => {
-                  console.error('Error loading cart content:', error);
+                  console.error('❌ Error loading cart content:', error);
               });
       }, 100); // 100ms debounce
   }
 
+  // Function to proceed to checkout from sliding cart with selected items
+  function proceedToCheckoutFromSlidingCart() {
+    console.log('🛒 Proceeding to checkout from sliding cart...');
+    
+    // Get selected cart items
+    const selectedItems = [];
+    const checkedBoxes = document.querySelectorAll('.cart-item-checkbox:checked');
+    
+    console.log('🔍 Found', checkedBoxes.length, 'selected items');
+    
+    checkedBoxes.forEach(checkbox => {
+      const cartKey = checkbox.dataset.cartKey;
+      if (cartKey) {
+        selectedItems.push(cartKey);
+        console.log('✅ Selected item:', cartKey);
+      }
+    });
+    
+    if (selectedItems.length === 0) {
+      // No items selected, show warning
+      Swal.fire({
+        title: 'No Items Selected',
+        text: 'Please select at least one item to checkout.',
+        icon: 'warning',
+        confirmButtonColor: '#7F1734',
+        confirmButtonText: 'OK'
+      });
+      return;
+    }
+    
+    console.log('📋 Proceeding with', selectedItems.length, 'selected items:', selectedItems);
+    
+    // Close the sliding cart
+    closeCart();
+    
+    // Create a form to submit selected items to checkout
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'checkout.php';
+    form.style.display = 'none';
+    
+    const selectedItemsInput = document.createElement('input');
+    selectedItemsInput.type = 'hidden';
+    selectedItemsInput.name = 'selected_items';
+    selectedItemsInput.value = JSON.stringify(selectedItems);
+    
+    form.appendChild(selectedItemsInput);
+    document.body.appendChild(form);
+    
+    // Submit the form
+    form.submit();
+  }
+
   // Function to update cart footer with totals
   function updateCartFooter() {
+      console.log('🔄 updateCartFooter() called from user_navbar.php');
+      console.log('📍 Current page:', window.location.pathname);
+      
+      // Check if we're on the cart page or checkout page with selection functionality
+      if (window.location.pathname.includes('cart.php') || window.location.pathname.includes('checkout.php')) {
+          console.log('⏭️ Skipping footer update (on cart/checkout page)');
+          // Don't override selection-based totals on cart/checkout page
+          return;
+      }
+      
+      console.log('📡 Fetching cart total from server...');
       fetch('cart_total.php')
           .then(response => response.json())
           .then(data => {
+              console.log('📊 Server response:', data);
               const cartFooter = document.getElementById('cartFooter');
               const cartSubtotal = document.querySelector('.cart-subtotal');
               const cartTotal = document.querySelector('.cart-total');
               
+              console.log('🔍 Footer elements found:');
+              console.log('  - #cartFooter:', cartFooter ? 'YES' : 'NO');
+              console.log('  - .cart-subtotal:', cartSubtotal ? 'YES' : 'NO');
+              console.log('  - .cart-total:', cartTotal ? 'YES' : 'NO');
+              
               if (data.total > 0) {
                   cartFooter.style.display = 'block';
-                  if (cartSubtotal) cartSubtotal.textContent = '₱' + data.total.toFixed(2);
-                  if (cartTotal) cartTotal.textContent = '₱' + data.total.toFixed(2);
+                  if (cartSubtotal) {
+                      cartSubtotal.textContent = '₱' + data.total.toFixed(2);
+                      console.log('✅ Updated .cart-subtotal:', cartSubtotal.textContent);
+                  }
+                  if (cartTotal) {
+                      cartTotal.textContent = '₱' + data.total.toFixed(2);
+                      console.log('✅ Updated .cart-total:', cartTotal.textContent);
+                  }
               } else {
                   cartFooter.style.display = 'none';
+                  console.log('🙈 Footer hidden (server total = 0)');
               }
           })
           .catch(error => {
-              console.error('Error updating cart footer:', error);
+              console.error('❌ Error updating cart footer:', error);
           });
   }
 

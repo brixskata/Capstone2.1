@@ -47,31 +47,71 @@ try {
 	$stmt = $pdo->query("SELECT COUNT(*) FROM users");
 	$totalUsers = $stmt->fetchColumn();
 
-	// Sum current stock from product_stock for active products
-	$stmt = $pdo->query("SELECT COALESCE(SUM(ps.current_stock),0)
-		FROM products p
-		LEFT JOIN product_stock ps ON ps.product_id = p.product_id
-		WHERE p.is_archive = 0");
-	$totalStock = $stmt->fetchColumn();
+	// Fetch brand-based stock levels (matching stock_levels.php logic)
+	$stmt = $pdo->query("
+		SELECT
+			COUNT(CASE WHEN b.product_count > 0 AND b.total_stock > b.avg_reorder_point THEN 1 END) as in_stock_brands,
+			COUNT(CASE WHEN b.product_count > 0 AND b.total_stock > 0 AND b.total_stock <= b.avg_reorder_point THEN 1 END) as low_stock_brands,
+			COUNT(*) as total_brands
+		FROM (
+			SELECT
+				b.id as brand_id,
+				COUNT(DISTINCT pb.product_id) as product_count,
+				COALESCE(SUM(pb.quantity_remaining), 0) as total_stock,
+				COALESCE(AVG(bps.reorder_point), 0) as avg_reorder_point
+			FROM brands b
+			LEFT JOIN product_batches pb ON b.id = pb.brand_id AND pb.is_active = 1
+			LEFT JOIN products p ON pb.product_id = p.product_id AND p.is_archive = 0
+			LEFT JOIN brand_product_stock bps ON bps.product_id = pb.product_id AND bps.brand_id = pb.brand_id
+			WHERE b.is_archived = 0
+			GROUP BY b.id
+		) b
+	");
+	$brandStockStats = $stmt->fetch(PDO::FETCH_ASSOC);
+	$inStockBrands = $brandStockStats['in_stock_brands'] ?? 0;
+	$lowStockBrands = $brandStockStats['low_stock_brands'] ?? 0;
+	$totalBrands = $brandStockStats['total_brands'] ?? 0;
 
-	// Order status counts
-	$stmt = $pdo->query("SELECT COUNT(*)
-		FROM orders o
-		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		WHERE os.status_name = 'Pending'");
-	$pendingOrders = $stmt->fetchColumn();
+  // Order status counts
+  $stmt = $pdo->query("SELECT COUNT(*)
+    FROM orders o
+    JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+    WHERE os.status_name = 'Pending'");
+  $pendingOrders = $stmt->fetchColumn();
 
-	$stmt = $pdo->query("SELECT COUNT(*)
-		FROM orders o
-		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		WHERE os.status_name = 'To Ship'");
-	$processingOrders = $stmt->fetchColumn();
+  // Pickup orders: match common pickup status names (case-insensitive)
+  $stmt = $pdo->query("SELECT COUNT(*)
+    FROM orders o
+    JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+    WHERE LOWER(os.status_name) LIKE '%pick%'");
+  $pickupOrders = $stmt->fetchColumn();
 
-	$stmt = $pdo->query("SELECT COUNT(*)
-		FROM orders o
-		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		WHERE os.status_name = 'Out for delivery'");
-	$shippedOrders = $stmt->fetchColumn();
+  $stmt = $pdo->query("SELECT COUNT(*)
+    FROM orders o
+    JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
+    WHERE os.status_name = 'Out for delivery'");
+  $shippedOrders = $stmt->fetchColumn();
+
+  // Total stock (sum of product_stock.current_stock for active products)
+  $stmt = $pdo->query("SELECT COALESCE(SUM(ps.current_stock),0) as total_stock
+    FROM products p
+    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+    WHERE p.is_archive = 0");
+  $ts = $stmt->fetch(PDO::FETCH_ASSOC);
+  $totalStock = $ts['total_stock'] ?? 0;
+
+  // Low stock count: products where current_stock <= reorder_point (use product_stock.reorder_point or default 10)
+  $stmt = $pdo->query("SELECT COUNT(DISTINCT p.product_id) as low_count
+    FROM products p
+    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+    WHERE p.is_archive = 0
+    AND COALESCE(ps.current_stock, 0) <= COALESCE(ps.reorder_point, 10)");
+  $lc = $stmt->fetch(PDO::FETCH_ASSOC);
+  $lowStockCount = $lc['low_count'] ?? 0;
+
+	// Number of orders today
+	$stmt = $pdo->query("SELECT COUNT(*) FROM orders WHERE DATE(created_at) = CURDATE()");
+	$ordersToday = $stmt->fetchColumn();
 
 	// Recent orders
 	$stmt = $pdo->query("SELECT o.orders_id AS id, u.username, os.status_name AS status, o.created_at 
@@ -117,16 +157,7 @@ try {
 		ORDER BY product_count DESC");
 	$categoriesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-	// Order status data for bar chart
-	$stmt = $pdo->query("SELECT 
-		os.status_name AS status,
-		COUNT(*) as order_count,
-		SUM(o.total_price) as total_amount
-		FROM orders o
-		JOIN order_status os ON os.orderstatus_id = o.orderstatus_id
-		GROUP BY os.status_name 
-		ORDER BY order_count DESC");
-	$orderStatusData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  // Order status data removed — chart omitted from dashboard
 
 	// Product movement analysis (last 30 days)
 	$stmt = $pdo->query("SELECT 
@@ -195,30 +226,9 @@ try {
 	");
 	$dailySalesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-	// Customer registration trend (last 12 months)
-	$stmt = $pdo->query("SELECT 
-		DATE_FORMAT(date_created, '%Y-%m') as month,
-		COUNT(*) as new_users
-		FROM users
-		WHERE date_created >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-		GROUP BY DATE_FORMAT(date_created, '%Y-%m')
-		ORDER BY month ASC
-	");
-	$userRegistrationData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  // Customer registration trend removed — chart omitted from dashboard
 
-	// Inventory value by category
-	$stmt = $pdo->query("SELECT 
-		c.category_name,
-		SUM(COALESCE(ps.current_stock, 0) * COALESCE(pp.cost_price, 0)) as category_value
-		FROM categories c
-		LEFT JOIN products p ON c.category_id = p.category_id AND p.is_archive = 0
-		LEFT JOIN product_stock ps ON p.product_id = ps.product_id
-		LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
-		GROUP BY c.category_id, c.category_name
-		HAVING category_value > 0
-		ORDER BY category_value DESC
-	");
-	$inventoryValueData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  // Inventory value data removed — chart omitted from dashboard
 
 } catch (Exception $e) {
 	echo "Error: " . $e->getMessage();
@@ -404,99 +414,102 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
         <h2><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h2>
       </div>
 
-      <!-- Analytics Cards -->
+      <!-- TOP Analytics Cards -->
       <div class="row g-4 mb-4">
         <div class="col-md-3">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-box"></i>
+          <a href="transaction_logs.php?status=pending" class="text-decoration-none">
+            <div class="analytics-card">
+              <div class="card-icon">
+                <i class="fas fa-clock"></i>
+              </div>
+              <div class="card-content">
+                <h3 class="card-number"><?php echo $pendingOrders; ?></h3>
+                <p class="card-label">Pendings</p>
+              </div>
             </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo number_format($totalProducts); ?></h3>
-              <p class="card-label">Active Products</p>
-            </div>
-          </div>
+          </a>
         </div>
         <div class="col-md-3">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-peso-sign"></i>
+          <a href="transaction_logs.php?status=pickup" class="text-decoration-none">
+            <div class="analytics-card">
+              <div class="card-icon">
+                <i class="fas fa-cog"></i>
+              </div>
+              <div class="card-content">
+                <h3 class="card-number"><?php echo $pickupOrders; ?></h3>
+                <p class="card-label">Pickup</p>
+              </div>
             </div>
-            <div class="card-content">
-              <h3 class="card-number">₱<?php echo number_format($totalCompletedSales, 0); ?></h3>
-              <p class="card-label">Total Revenue</p>
-            </div>
-          </div>
+          </a>
         </div>
         <div class="col-md-3">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-users"></i>
+          <a href="reports.php?section=orders" class="text-decoration-none">
+            <div class="analytics-card">
+              <div class="card-icon">
+                <i class="fas fa-shopping-cart"></i>
+              </div>
+              <div class="card-content">
+                <h3 class="card-number"><?php echo $ordersToday; ?></h3>
+                <p class="card-label">Number of Orders Today</p>
+              </div>
             </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo number_format($totalUsers); ?></h3>
-              <p class="card-label">Total Users</p>
-            </div>
-          </div>
+          </a>
         </div>
         <div class="col-md-3">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-warehouse"></i>
+          <a href="reports.php?section=yearly_sales" class="text-decoration-none">
+            <div class="analytics-card">
+              <div class="card-icon">
+                <i class="fas fa-peso-sign"></i>
+              </div>
+              <div class="card-content">
+                <h3 class="card-number">₱<?php echo number_format($totalCompletedSales, 0); ?></h3>
+                <p class="card-label">Total Sales</p>
+              </div>
             </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo number_format($totalStock); ?></h3>
-              <p class="card-label">In Stock</p>
-            </div>
-          </div>
+          </a>
         </div>
       </div>
 
-      <!-- Order Status Analytics Cards -->
+      <!-- BOTTOM Analytics Cards -->
       <div class="row g-4 mb-4">
-        <div class="col-md-3">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-clock"></i>
+        <div class="col-md-4">
+          <a href="products.php" class="text-decoration-none">
+            <div class="analytics-card">
+              <div class="card-icon">
+                <i class="fas fa-box"></i>
+              </div>
+              <div class="card-content">
+                <h3 class="card-number"><?php echo number_format($totalProducts); ?></h3>
+                <p class="card-label">Active products</p>
+              </div>
             </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo $pendingOrders; ?></h3>
-              <p class="card-label">Pending Orders</p>
-            </div>
-          </div>
+          </a>
         </div>
-        <div class="col-md-3">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-cog"></i>
+        <div class="col-md-4">
+          <a href="stock_levels.php" class="text-decoration-none">
+            <div class="analytics-card">
+              <div class="card-icon">
+                <i class="fas fa-warehouse"></i>
+              </div>
+              <div class="card-content">
+                <h3 class="card-number"><?php echo $inStockBrands; ?></h3>
+                <p class="card-label">In stock (brands)</p>
+              </div>
             </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo $processingOrders; ?></h3>
-              <p class="card-label">Processing</p>
-            </div>
-          </div>
+          </a>
         </div>
-        <div class="col-md-3">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-truck"></i>
+        <div class="col-md-4">
+          <a href="stock_levels.php" class="text-decoration-none">
+            <div class="analytics-card">
+              <div class="card-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+              </div>
+              <div class="card-content">
+                <h3 class="card-number"><?php echo $lowStockBrands; ?></h3>
+                <p class="card-label">Low stock (brands)</p>
+              </div>
             </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo $shippedOrders; ?></h3>
-              <p class="card-label">Out for delivery</p>
-            </div>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-exclamation-triangle"></i>
-            </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo $lowStockProducts ? count($lowStockProducts) : 0; ?></h3>
-              <p class="card-label">Low Stock</p>
-            </div>
-          </div>
+          </a>
         </div>
       </div>
 
@@ -534,20 +547,7 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
           </div>
         </div>
 
-        <!-- User Registration Trend -->
-        <div class="col-lg-8">
-          <div class="table-card">
-            <div class="card-header bg-transparent border-0 p-4">
-              <h5 class="fw-bold mb-0 text-dark">
-                <i class="fas fa-user-plus me-2"></i>User Registration Trend
-              </h5>
-              <small class="text-muted">New users per month (last 12 months)</small>
-            </div>
-            <div class="card-body" style="height: 300px;">
-              <canvas id="userRegistrationChart"></canvas>
-            </div>
-          </div>
-        </div>
+        <!-- User Registration Trend removed -->
       </div>
 
       <!-- Top Selling Products and Product Movement Analysis -->
@@ -583,39 +583,9 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
         </div>
       </div>
 
-      <!-- Order Status Bar Chart -->
-      <div class="row g-4 mb-4">
-        <div class="col-12">
-          <div class="table-card">
-            <div class="card-header bg-transparent border-0 p-4">
-              <h5 class="fw-bold mb-0 text-dark">
-                <i class="fas fa-chart-bar me-2"></i>Order Status Overview
-              </h5>
-              <small class="text-muted">Distribution of orders by current status</small>
-            </div>
-            <div class="card-body">
-              <canvas id="orderStatusChart" height="100"></canvas>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Order Status Overview removed -->
 
-      <!-- Inventory Value by Category -->
-      <div class="row g-4 mb-4">
-        <div class="col-12">
-          <div class="table-card">
-            <div class="card-header bg-transparent border-0 p-4">
-              <h5 class="fw-bold mb-0 text-dark">
-                <i class="fas fa-chart-bar me-2"></i>Inventory Value by Category
-              </h5>
-              <small class="text-muted">Total inventory value distribution across categories</small>
-            </div>
-            <div class="card-body">
-              <canvas id="inventoryValueChart" height="200"></canvas>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Inventory Value by Category removed -->
 
 
 
@@ -792,119 +762,7 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
         }
     });
 
-    // Order Status Bar Chart
-    const orderStatusCtx = document.getElementById('orderStatusChart').getContext('2d');
-    new Chart(orderStatusCtx, {
-        type: 'bar',
-        data: {
-            labels: [
-                <?php 
-                $statusLabels = [];
-                $statusCounts = [];
-                $statusAmounts = [];
-                foreach ($orderStatusData as $data) {
-                    $statusLabels[] = "'" . ucwords($data['status']) . "'";
-                    $statusCounts[] = intval($data['order_count']);
-                    $statusAmounts[] = floatval($data['total_amount']);
-                }
-                echo implode(', ', $statusLabels);
-                ?>
-            ],
-            datasets: [{
-                label: 'Number of Orders',
-                data: [<?php echo implode(', ', $statusCounts); ?>],
-                backgroundColor: [
-                    'rgba(255, 243, 205, 0.8)',   // Pending - Light yellow
-                    'rgba(209, 236, 241, 0.8)',   // To Ship / Processing - Light blue
-                    'rgba(204, 229, 255, 0.8)',   // Out for delivery - Light blue
-                    'rgba(212, 237, 218, 0.8)',   // Completed/Delivered - Light green
-                    'rgba(245, 198, 203, 0.8)',   // Cancelled - Light red
-                ],
-                borderColor: [
-                    '#856404',
-                    '#0c5460', 
-                    '#004085',
-                    '#155724',
-                    '#721c24',
-                ],
-                borderWidth: 2,
-                borderRadius: 8,
-                borderSkipped: false,
-                hoverBackgroundColor: [
-                    'rgba(255, 234, 167, 1)',   // Pending - Darker yellow
-                    'rgba(190, 229, 235, 1)',   // To Ship - Darker blue
-                    'rgba(179, 205, 255, 1)',   // Out for delivery - Darker blue
-                    'rgba(195, 230, 203, 1)',   // Completed - Darker green
-                    'rgba(240, 162, 169, 1)',   // Cancelled - Darker red
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        font: {
-                            size: 13,
-                            weight: 'bold'
-                        },
-                        padding: 20
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#ffffff',
-                    cornerRadius: 8,
-                    padding: 12,
-                    callbacks: {
-                        afterLabel: function(context) {
-                            const amounts = [<?php echo implode(', ', $statusAmounts); ?>];
-                            if (amounts[context.dataIndex] > 0) {
-                                return 'Total Value: ₱' + new Intl.NumberFormat('en-PH').format(amounts[context.dataIndex]);
-                            }
-                            return '';
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.1)',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        stepSize: 1,
-                        font: {
-                            size: 12
-                        },
-                        padding: 10
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false,
-                        drawBorder: false
-                    },
-                    ticks: {
-                        font: {
-                            size: 12
-                        },
-                        padding: 10
-                    }
-                }
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            }
-        }
-    });
+  // Order status chart removed
 
     // Product Movement Analysis Chart (Doughnut Chart)
     const movementAnalysisCtx = document.getElementById('movementAnalysisChart').getContext('2d');
@@ -1099,152 +957,9 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
         }
     });
 
-    // User Registration Trend Chart (Bar Chart)
-    const userRegistrationCtx = document.getElementById('userRegistrationChart').getContext('2d');
-    const userRegistrationData = <?php echo json_encode($userRegistrationData); ?>;
-    
-    // Ensure we have data for the last 12 months
-    const allMonths = [];
-    for (let i = 11; i >= 0; i--) {
-        const month = new Date();
-        month.setMonth(month.getMonth() - i);
-        allMonths.push(month.toISOString().slice(0, 7));
-    }
-    
-    const monthLabels = allMonths.map(month => {
-        const date = new Date(month + '-01');
-        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-    });
-    
-    const userCounts = allMonths.map(month => {
-        const data = userRegistrationData.find(item => item.month === month);
-        return data ? parseInt(data.new_users) : 0;
-    });
+  // User registration chart removed
 
-    new Chart(userRegistrationCtx, {
-        type: 'bar',
-        data: {
-            labels: monthLabels,
-            datasets: [{
-                label: 'New Users',
-                data: userCounts,
-                backgroundColor: 'rgba(209, 236, 241, 0.8)',
-                borderColor: '#0c5460',
-                borderWidth: 2,
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.1)'
-                    },
-                    ticks: {
-                        stepSize: 1
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#ffffff',
-                    cornerRadius: 8,
-                    padding: 12
-                }
-            }
-        }
-    });
-
-    // Inventory Value by Category Chart (Bar Chart)
-    const inventoryValueCtx = document.getElementById('inventoryValueChart').getContext('2d');
-    const inventoryValueData = <?php echo json_encode($inventoryValueData); ?>;
-    const categoryNames = inventoryValueData.map(item => item.category_name);
-    const categoryValues = inventoryValueData.map(item => parseFloat(item.category_value));
-
-    new Chart(inventoryValueCtx, {
-        type: 'bar',
-        data: {
-            labels: categoryNames,
-            datasets: [{
-                label: 'Inventory Value (₱)',
-                data: categoryValues,
-                 backgroundColor: [
-                     'rgba(212, 237, 218, 0.8)',   // Light green
-                     'rgba(245, 198, 203, 0.8)',   // Light red
-                     'rgba(226, 227, 229, 0.8)',   // Light gray
-                     'rgba(255, 243, 205, 0.8)',   // Light yellow
-                     'rgba(209, 236, 241, 0.8)',   // Light blue
-                     'rgba(204, 229, 255, 0.8)',   // Light blue
-                     'rgba(248, 215, 218, 0.8)',   // Light pink
-                     'rgba(248, 249, 250, 0.8)'    // Light gray
-                 ],
-                 borderColor: [
-                     '#155724',   // Dark green
-                     '#721c24',   // Dark red
-                     '#383d41',   // Dark gray
-                     '#856404',   // Dark yellow
-                     '#0c5460',   // Dark blue
-                     '#004085',   // Dark blue
-                     '#721c24',   // Dark pink
-                     '#6c757d'    // Dark gray
-                 ],
-                borderWidth: 2,
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.1)'
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return '₱' + new Intl.NumberFormat('en-PH').format(value);
-                        }
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#ffffff',
-                    cornerRadius: 8,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'Value: ₱' + new Intl.NumberFormat('en-PH').format(context.parsed.y);
-                        }
-                    }
-                }
-            }
-        }
-    });
+  // Inventory value chart removed
   </script>
 </body>
 </html>

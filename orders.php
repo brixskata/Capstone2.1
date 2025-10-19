@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['address_action'])) {
             ':address_line' => $_POST['address_line'],
             ':address_line2' => $_POST['address_line2'] ?? '',
             ':city' => $_POST['city'],
-            ':state' => $_POST['state'] ?? '',
+            ':state' => $_POST['region'] ?? '', // Store region in state field
             ':postal_code' => $_POST['postal_code'],
             ':country' => $_POST['country'] ?? 'Philippines',
             ':is_default' => isset($_POST['is_default']) ? 1 : 0
@@ -158,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['address_action'])) {
             ':address_line' => $_POST['address_line'],
             ':address_line2' => $_POST['address_line2'] ?? '',
             ':city' => $_POST['city'],
-            ':state' => $_POST['state'] ?? '',
+            ':state' => $_POST['region'] ?? '', // Store region in state field
             ':postal_code' => $_POST['postal_code'],
             ':country' => $_POST['country'] ?? 'Philippines',
             ':is_default' => isset($_POST['is_default']) ? 1 : 0,
@@ -189,15 +189,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['address_action'])) {
 
 
 // Fetch all orders (current and completed)
-$sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price,
-               oi.quantity, p.product_name, COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) as price,
+$sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price, o.delivery_option,
+               o.plate_number, o.transaction_number,
+               oi.quantity, p.product_name, oi.price,
                oc.reason AS cancel_reason, oc.receipt_path, oc.receipt_filename,
                a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country
         FROM orders o
         LEFT JOIN order_status os ON o.orderstatus_id = os.orderstatus_id
         LEFT JOIN order_items oi ON o.orders_id = oi.order_id
         LEFT JOIN products p ON oi.product_id = p.product_id
-        LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
         LEFT JOIN addresses a ON a.address_id = o.address_id
         LEFT JOIN (
             SELECT oc1.order_id, oc1.reason, oc1.receipt_path, oc1.receipt_filename
@@ -224,6 +224,9 @@ foreach ($rawOrders as $row) {
             'created_at' => $row['created_at'],
             'status' => $row['status'],
             'total_price' => $row['total_price'],
+            'delivery_option' => $row['delivery_option'] ?? 'pickup',
+            'plate_number' => $row['plate_number'] ?? null,
+            'transaction_number' => $row['transaction_number'] ?? null,
             'cancel_reason' => $row['cancel_reason'] ?? null,
             'receipt_path' => $row['receipt_path'] ?? null,
             'receipt_filename' => $row['receipt_filename'] ?? null,
@@ -1302,6 +1305,19 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             </span>
                                         </div>
 
+                                        <!-- Delivery/Pickup Information -->
+                                        <div class="delivery-info mb-3">
+                                            <?php if ($order['delivery_option'] === 'delivery'): ?>
+                                                <span class="badge bg-primary">
+                                                    <i class="fas fa-truck me-1"></i>Delivery
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary">
+                                                    <i class="fas fa-store me-1"></i>Pickup
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+
                                         <div class="order-items">
                                             <?php foreach ($order['items'] as $item): ?>
                                                 <div class="order-item">
@@ -1315,7 +1331,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             Total: ₱<?= number_format($order['total_price'], 2) ?>
                                         </div>
 
-                                        <?php if (!empty($order['address']['address_line'])): ?>
+                                        <?php if ($order['delivery_option'] === 'delivery' && !empty($order['address']['address_line'])): ?>
                                         <div class="order-address mt-3">
                                             <div class="alert alert-light mb-2 py-2">
                                                 <small><i class="fas fa-map-marker-alt me-1"></i><strong>Delivery Address:</strong></small>
@@ -1330,6 +1346,15 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         <?= !empty($order['address']['postal_code']) ? ' ' . htmlspecialchars($order['address']['postal_code']) : '' ?>
                                                     </div>
                                                     <div><?= htmlspecialchars($order['address']['country']) ?></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php elseif ($order['delivery_option'] === 'pickup'): ?>
+                                        <div class="order-address mt-3">
+                                            <div class="alert alert-info mb-2 py-2">
+                                                <small><i class="fas fa-store me-1"></i><strong>Pickup Location:</strong></small>
+                                                <div class="mt-1">
+                                                    <div>BIR Village Block 9 Lot 5 Franchise St., Brgy. Sauyo, Quezon City</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1366,6 +1391,19 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             </span>
                                         </div>
 
+                                        <!-- Delivery/Pickup Information -->
+                                        <div class="delivery-info mb-3">
+                                            <?php if ($order['delivery_option'] === 'delivery'): ?>
+                                                <span class="badge bg-primary">
+                                                    <i class="fas fa-truck me-1"></i>Delivery
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary">
+                                                    <i class="fas fa-store me-1"></i>Pickup
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+
                                         <div class="order-items">
                                             <?php foreach ($order['items'] as $item): ?>
                                                 <div class="order-item">
@@ -1379,7 +1417,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             Total: ₱<?= number_format($order['total_price'], 2) ?>
                                         </div>
 
-                                        <?php if (!empty($order['address']['address_line'])): ?>
+                                        <?php if ($order['delivery_option'] === 'delivery' && !empty($order['address']['address_line'])): ?>
                                         <div class="order-address mt-3">
                                             <div class="alert alert-light mb-2 py-2">
                                                 <small><i class="fas fa-map-marker-alt me-1"></i><strong>Delivery Address:</strong></small>
@@ -1394,6 +1432,15 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         <?= !empty($order['address']['postal_code']) ? ' ' . htmlspecialchars($order['address']['postal_code']) : '' ?>
                                                     </div>
                                                     <div><?= htmlspecialchars($order['address']['country']) ?></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php elseif ($order['delivery_option'] === 'pickup'): ?>
+                                        <div class="order-address mt-3">
+                                            <div class="alert alert-info mb-2 py-2">
+                                                <small><i class="fas fa-store me-1"></i><strong>Pickup Location:</strong></small>
+                                                <div class="mt-1">
+                                                    <div>BIR Village Block 9 Lot 5 Franchise St., Brgy. Sauyo, Quezon City</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1430,6 +1477,36 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             </span>
                                         </div>
 
+                                        <!-- Delivery/Pickup Information -->
+                                        <div class="delivery-info mb-3">
+                                            <?php if ($order['delivery_option'] === 'delivery'): ?>
+                                                <span class="badge bg-primary">
+                                                    <i class="fas fa-truck me-1"></i>Delivery
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary">
+                                                    <i class="fas fa-store me-1"></i>Pickup
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+
+                                        <!-- Delivery Tracking Information -->
+                                        <?php if (!empty($order['plate_number']) || !empty($order['transaction_number'])): ?>
+                                        <div class="delivery-tracking mb-3">
+                                            <div class="alert alert-success py-2">
+                                                <small><i class="fas fa-truck me-1"></i><strong>Delivery Tracking:</strong></small>
+                                                <div class="mt-1">
+                                                    <?php if (!empty($order['plate_number'])): ?>
+                                                        <div><i class="fas fa-car me-1"></i><strong>Vehicle:</strong> <?= htmlspecialchars($order['plate_number']) ?></div>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($order['transaction_number'])): ?>
+                                                        <div><i class="fas fa-receipt me-1"></i><strong>Transaction:</strong> <?= htmlspecialchars($order['transaction_number']) ?></div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php endif; ?>
+
                                         <div class="order-items">
                                             <?php foreach ($order['items'] as $item): ?>
                                                 <div class="order-item">
@@ -1443,7 +1520,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             Total: ₱<?= number_format($order['total_price'], 2) ?>
                                         </div>
 
-                                        <?php if (!empty($order['address']['address_line'])): ?>
+                                        <?php if ($order['delivery_option'] === 'delivery' && !empty($order['address']['address_line'])): ?>
                                         <div class="order-address mt-3">
                                             <div class="alert alert-light mb-2 py-2">
                                                 <small><i class="fas fa-map-marker-alt me-1"></i><strong>Delivery Address:</strong></small>
@@ -1458,6 +1535,15 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         <?= !empty($order['address']['postal_code']) ? ' ' . htmlspecialchars($order['address']['postal_code']) : '' ?>
                                                     </div>
                                                     <div><?= htmlspecialchars($order['address']['country']) ?></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php elseif ($order['delivery_option'] === 'pickup'): ?>
+                                        <div class="order-address mt-3">
+                                            <div class="alert alert-info mb-2 py-2">
+                                                <small><i class="fas fa-store me-1"></i><strong>Pickup Location:</strong></small>
+                                                <div class="mt-1">
+                                                    <div>BIR Village Block 9 Lot 5 Franchise St., Brgy. Sauyo, Quezon City</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1500,6 +1586,19 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             </span>
                                         </div>
 
+                                        <!-- Delivery/Pickup Information -->
+                                        <div class="delivery-info mb-3">
+                                            <?php if ($order['delivery_option'] === 'delivery'): ?>
+                                                <span class="badge bg-primary">
+                                                    <i class="fas fa-truck me-1"></i>Delivery
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary">
+                                                    <i class="fas fa-store me-1"></i>Pickup
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+
                                         <div class="order-items">
                                             <?php foreach ($order['items'] as $item): ?>
                                                 <div class="order-item">
@@ -1513,7 +1612,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             Total: ₱<?= number_format($order['total_price'], 2) ?>
                                         </div>
 
-                                        <?php if (!empty($order['address']['address_line'])): ?>
+                                        <?php if ($order['delivery_option'] === 'delivery' && !empty($order['address']['address_line'])): ?>
                                         <div class="order-address mt-3">
                                             <div class="alert alert-light mb-2 py-2">
                                                 <small><i class="fas fa-map-marker-alt me-1"></i><strong>Delivery Address:</strong></small>
@@ -1528,6 +1627,15 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         <?= !empty($order['address']['postal_code']) ? ' ' . htmlspecialchars($order['address']['postal_code']) : '' ?>
                                                     </div>
                                                     <div><?= htmlspecialchars($order['address']['country']) ?></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php elseif ($order['delivery_option'] === 'pickup'): ?>
+                                        <div class="order-address mt-3">
+                                            <div class="alert alert-info mb-2 py-2">
+                                                <small><i class="fas fa-store me-1"></i><strong>Pickup Location:</strong></small>
+                                                <div class="mt-1">
+                                                    <div>BIR Village Block 9 Lot 5 Franchise St., Brgy. Sauyo, Quezon City</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1565,6 +1673,19 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             </span>
                                         </div>
 
+                                        <!-- Delivery/Pickup Information -->
+                                        <div class="delivery-info mb-3">
+                                            <?php if ($order['delivery_option'] === 'delivery'): ?>
+                                                <span class="badge bg-primary">
+                                                    <i class="fas fa-truck me-1"></i>Delivery
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary">
+                                                    <i class="fas fa-store me-1"></i>Pickup
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+
                                         <div class="order-items">
                                             <?php foreach ($order['items'] as $item): ?>
                                                 <div class="order-item">
@@ -1578,7 +1699,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             Total: ₱<?= number_format($order['total_price'], 2) ?>
                                         </div>
 
-                                        <?php if (!empty($order['address']['address_line'])): ?>
+                                        <?php if ($order['delivery_option'] === 'delivery' && !empty($order['address']['address_line'])): ?>
                                         <div class="order-address mt-3">
                                             <div class="alert alert-light mb-2 py-2">
                                                 <small><i class="fas fa-map-marker-alt me-1"></i><strong>Delivery Address:</strong></small>
@@ -1593,6 +1714,15 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         <?= !empty($order['address']['postal_code']) ? ' ' . htmlspecialchars($order['address']['postal_code']) : '' ?>
                                                     </div>
                                                     <div><?= htmlspecialchars($order['address']['country']) ?></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php elseif ($order['delivery_option'] === 'pickup'): ?>
+                                        <div class="order-address mt-3">
+                                            <div class="alert alert-info mb-2 py-2">
+                                                <small><i class="fas fa-store me-1"></i><strong>Pickup Location:</strong></small>
+                                                <div class="mt-1">
+                                                    <div>BIR Village Block 9 Lot 5 Franchise St., Brgy. Sauyo, Quezon City</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1685,6 +1815,19 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             </span>
                                         </div>
 
+                                        <!-- Delivery/Pickup Information -->
+                                        <div class="delivery-info mb-3">
+                                            <?php if ($order['delivery_option'] === 'delivery'): ?>
+                                                <span class="badge bg-primary">
+                                                    <i class="fas fa-truck me-1"></i>Delivery
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary">
+                                                    <i class="fas fa-store me-1"></i>Pickup
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+
                                         <div class="order-items">
                                             <?php foreach ($order['items'] as $item): ?>
                                                 <div class="order-item">
@@ -1698,7 +1841,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             Total: ₱<?= number_format($order['total_price'], 2) ?>
                                         </div>
 
-                                        <?php if (!empty($order['address']['address_line'])): ?>
+                                        <?php if ($order['delivery_option'] === 'delivery' && !empty($order['address']['address_line'])): ?>
                                         <div class="order-address mt-3">
                                             <div class="alert alert-light mb-2 py-2">
                                                 <small><i class="fas fa-map-marker-alt me-1"></i><strong>Delivery Address:</strong></small>
@@ -1713,6 +1856,15 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         <?= !empty($order['address']['postal_code']) ? ' ' . htmlspecialchars($order['address']['postal_code']) : '' ?>
                                                     </div>
                                                     <div><?= htmlspecialchars($order['address']['country']) ?></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php elseif ($order['delivery_option'] === 'pickup'): ?>
+                                        <div class="order-address mt-3">
+                                            <div class="alert alert-info mb-2 py-2">
+                                                <small><i class="fas fa-store me-1"></i><strong>Pickup Location:</strong></small>
+                                                <div class="mt-1">
+                                                    <div>BIR Village Block 9 Lot 5 Franchise St., Brgy. Sauyo, Quezon City</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -2070,22 +2222,24 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <div class="row g-3">
                             <div class="col-12">
                                 <label class="form-label">Address Line 1 *</label>
-                                <div class="position-relative">
-                                    <input type="text" name="address_line" id="add_address_line" class="form-control" placeholder="Start typing your address..." autocomplete="off" required>
-                                    <div id="add-address-suggestions" class="address-suggestions"></div>
-                                </div>
+                                <input type="text" name="address_line" class="form-control" placeholder="Enter your street address..." required>
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Landmark</label>
                                 <input type="text" name="address_line2" class="form-control" placeholder="Near landmark, building, or reference point">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">City *</label>
-                                <input type="text" name="city" class="form-control" required>
+                                <label class="form-label">Region *</label>
+                                <select name="region" id="add_region" class="form-control" required>
+                                    <option value="">Select Region</option>
+                                </select>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">State/Province</label>
-                                <input type="text" name="state" class="form-control">
+                                <label class="form-label">City/Municipality *</label>
+                                <div class="position-relative">
+                                    <input type="text" name="city" id="add_city" class="form-control" placeholder="Start typing city name..." autocomplete="off" required>
+                                    <div id="add-city-suggestions" class="address-suggestions"></div>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Postal Code *</label>
@@ -2132,22 +2286,24 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <div class="row g-3">
                             <div class="col-12">
                                 <label class="form-label">Address Line 1 *</label>
-                                <div class="position-relative">
-                                    <input type="text" name="address_line" id="editAddressLine" class="form-control" placeholder="Start typing your address..." autocomplete="off" required>
-                                    <div id="edit-address-suggestions" class="address-suggestions"></div>
-                                </div>
+                                <input type="text" name="address_line" id="editAddressLine" class="form-control" placeholder="Enter your street address..." required>
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Landmark</label>
                                 <input type="text" name="address_line2" id="editAddressLine2" class="form-control" placeholder="Near landmark, building, or reference point">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">City *</label>
-                                <input type="text" name="city" id="editCity" class="form-control" required>
+                                <label class="form-label">Region *</label>
+                                <select name="region" id="edit_region" class="form-control" required>
+                                    <option value="">Select Region</option>
+                                </select>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">State/Province</label>
-                                <input type="text" name="state" id="editState" class="form-control">
+                                <label class="form-label">City/Municipality *</label>
+                                <div class="position-relative">
+                                    <input type="text" name="city" id="edit_city" class="form-control" placeholder="Start typing city name..." autocomplete="off" required>
+                                    <div id="edit-city-suggestions" class="address-suggestions"></div>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Postal Code *</label>
@@ -2155,7 +2311,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Country</label>
-                                <input type="text" name="country" id="editCountry" class="form-control">
+                                <input type="text" name="country" id="editCountry" class="form-control" value="Philippines">
                             </div>
                             <div class="col-12">
                                 <div class="form-check">
@@ -2281,8 +2437,16 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             document.getElementById('editAddressId').value = address.address_id;
             document.getElementById('editAddressLine').value = address.address_line;
             document.getElementById('editAddressLine2').value = address.address_line2 || '';
-            document.getElementById('editCity').value = address.city;
-            document.getElementById('editState').value = address.state || '';
+            
+            // Set region if available (you may need to map this based on your data)
+            const regionSelect = document.getElementById('edit_region');
+            if (regionSelect) {
+                // You might need to map city to region or store region in your database
+                // For now, we'll leave it empty and let user select
+                regionSelect.value = '';
+            }
+            
+            document.getElementById('edit_city').value = address.city;
             document.getElementById('editPostalCode').value = address.postal_code;
             document.getElementById('editCountry').value = address.country;
             document.getElementById('editIsDefault').checked = address.is_default == 1;
@@ -2674,31 +2838,129 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }, 3000);
         }
 
-        // LocationIQ Address Autocomplete
-        const LOCATIONIQ_API_KEY = 'pk.00c9590567d539faf9a471a17f1c5bf3';
-        const LOCATIONIQ_BASE_URL = 'https://us1.locationiq.com/v1';
+        // Philippine Regions and Cities API
+        const PHILIPPINE_REGIONS = [
+            { code: 'NCR', name: 'National Capital Region (NCR)' },
+            { code: 'CAR', name: 'Cordillera Administrative Region (CAR)' },
+            { code: '01', name: 'Region I - Ilocos Region' },
+            { code: '02', name: 'Region II - Cagayan Valley' },
+            { code: '03', name: 'Region III - Central Luzon' },
+            { code: '04A', name: 'Region IV-A - CALABARZON' },
+            { code: '04B', name: 'Region IV-B - MIMAROPA' },
+            { code: '05', name: 'Region V - Bicol Region' },
+            { code: '06', name: 'Region VI - Western Visayas' },
+            { code: '07', name: 'Region VII - Central Visayas' },
+            { code: '08', name: 'Region VIII - Eastern Visayas' },
+            { code: '09', name: 'Region IX - Zamboanga Peninsula' },
+            { code: '10', name: 'Region X - Northern Mindanao' },
+            { code: '11', name: 'Region XI - Davao Region' },
+            { code: '12', name: 'Region XII - SOCCSKSARGEN' },
+            { code: '13', name: 'Region XIII - Caraga' },
+            { code: 'BARMM', name: 'Bangsamoro Autonomous Region in Muslim Mindanao (BARMM)' }
+        ];
 
-        function initAddressAutocomplete(inputId, suggestionsId) {
+        // Philippine Cities with Postal Codes (Sample data - you can expand this)
+        const PHILIPPINE_CITIES = {
+            'NCR': [
+                { name: 'Manila', postalCode: '1000' },
+                { name: 'Quezon City', postalCode: '1100' },
+                { name: 'Caloocan', postalCode: '1400' },
+                { name: 'Las Piñas', postalCode: '1740' },
+                { name: 'Makati', postalCode: '1200' },
+                { name: 'Malabon', postalCode: '1470' },
+                { name: 'Mandaluyong', postalCode: '1550' },
+                { name: 'Marikina', postalCode: '1800' },
+                { name: 'Muntinlupa', postalCode: '1770' },
+                { name: 'Navotas', postalCode: '1485' },
+                { name: 'Parañaque', postalCode: '1700' },
+                { name: 'Pasay', postalCode: '1300' },
+                { name: 'Pasig', postalCode: '1600' },
+                { name: 'Pateros', postalCode: '1620' },
+                { name: 'San Juan', postalCode: '1500' },
+                { name: 'Taguig', postalCode: '1630' },
+                { name: 'Valenzuela', postalCode: '1440' }
+            ],
+            '03': [
+                { name: 'Angeles City', postalCode: '2009' },
+                { name: 'Balanga', postalCode: '2100' },
+                { name: 'Cabanatuan', postalCode: '3100' },
+                { name: 'Gapan', postalCode: '3105' },
+                { name: 'Mabalacat', postalCode: '2010' },
+                { name: 'Malolos', postalCode: '3000' },
+                { name: 'Meycauayan', postalCode: '3020' },
+                { name: 'Muñoz', postalCode: '3119' },
+                { name: 'Olongapo', postalCode: '2200' },
+                { name: 'Palayan', postalCode: '3136' },
+                { name: 'San Fernando', postalCode: '2000' },
+                { name: 'San Jose', postalCode: '3121' },
+                { name: 'Tarlac City', postalCode: '2300' }
+            ],
+            '04A': [
+                { name: 'Antipolo', postalCode: '1870' },
+                { name: 'Bacoor', postalCode: '4102' },
+                { name: 'Batangas City', postalCode: '4200' },
+                { name: 'Biñan', postalCode: '4024' },
+                { name: 'Cabuyao', postalCode: '4025' },
+                { name: 'Cainta', postalCode: '1900' },
+                { name: 'Calamba', postalCode: '4027' },
+                { name: 'Cavite City', postalCode: '4100' },
+                { name: 'Dasmariñas', postalCode: '4114' },
+                { name: 'Imus', postalCode: '4103' },
+                { name: 'Laguna', postalCode: '4000' },
+                { name: 'Las Piñas', postalCode: '1740' },
+                { name: 'Lucena', postalCode: '4301' },
+                { name: 'San Pedro', postalCode: '4023' },
+                { name: 'Santa Rosa', postalCode: '4026' },
+                { name: 'Taytay', postalCode: '1920' }
+            ]
+            // Add more regions and cities as needed
+        };
+
+        function initializeRegionDropdown(selectId) {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+
+            // Clear existing options except the first one
+            select.innerHTML = '<option value="">Select Region</option>';
+
+            // Add region options
+            PHILIPPINE_REGIONS.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region.code;
+                option.textContent = region.name;
+                select.appendChild(option);
+            });
+        }
+
+        function initializeCityAutocomplete(inputId, suggestionsId, regionSelectId) {
             const input = document.getElementById(inputId);
             const suggestions = document.getElementById(suggestionsId);
+            const regionSelect = document.getElementById(regionSelectId);
             let currentSuggestions = [];
             let selectedIndex = -1;
             let debounceTimer;
 
-            if (!input || !suggestions) return;
+            if (!input || !suggestions || !regionSelect) return;
+
+            // Update cities when region changes
+            regionSelect.addEventListener('change', function() {
+                input.value = '';
+                suggestions.style.display = 'none';
+            });
 
             input.addEventListener('input', function() {
                 const query = this.value.trim();
+                const selectedRegion = regionSelect.value;
                 
                 clearTimeout(debounceTimer);
                 
-                if (query.length < 3) {
+                if (query.length < 2 || !selectedRegion) {
                     hideSuggestions();
                     return;
                 }
 
                 debounceTimer = setTimeout(() => {
-                    searchAddresses(query);
+                    searchCities(query, selectedRegion);
                 }, 300);
             });
 
@@ -2719,7 +2981,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     case 'Enter':
                         e.preventDefault();
                         if (selectedIndex >= 0 && currentSuggestions[selectedIndex]) {
-                            selectAddress(currentSuggestions[selectedIndex]);
+                            selectCity(currentSuggestions[selectedIndex]);
                         }
                         break;
                     case 'Escape':
@@ -2732,43 +2994,31 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 setTimeout(() => hideSuggestions(), 200);
             });
 
-            function searchAddresses(query) {
+            function searchCities(query, regionCode) {
                 showLoading();
                 
-                fetch(`${LOCATIONIQ_BASE_URL}/autocomplete?key=${LOCATIONIQ_API_KEY}&q=${encodeURIComponent(query)}&countrycodes=ph&limit=5&addressdetails=1`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data && Array.isArray(data)) {
-                            currentSuggestions = data;
-                            displaySuggestions(data);
-                        } else {
-                            hideSuggestions();
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Address search error:', error);
-                        hideSuggestions();
-                    });
+                const cities = PHILIPPINE_CITIES[regionCode] || [];
+                const filteredCities = cities.filter(city => 
+                    city.name.toLowerCase().includes(query.toLowerCase())
+                );
+
+                currentSuggestions = filteredCities;
+                displaySuggestions(filteredCities);
             }
 
-            function displaySuggestions(addresses) {
-                if (addresses.length === 0) {
+            function displaySuggestions(cities) {
+                if (cities.length === 0) {
                     hideSuggestions();
                     return;
                 }
 
-                suggestions.innerHTML = addresses.map((address, index) => {
-                    const displayName = address.display_name || '';
-                    const parts = displayName.split(', ');
-                    const mainAddress = parts[0] || '';
-                    const details = parts.slice(1, 3).join(', ') || '';
-                    
+                suggestions.innerHTML = cities.map((city, index) => {
                     return `
                         <div class="address-suggestion" data-index="${index}">
                             <i class="fas fa-map-marker-alt"></i>
                             <div class="address-text">
-                                <div class="address-main">${mainAddress}</div>
-                                <div class="address-details">${details}</div>
+                                <div class="address-main">${city.name}</div>
+                                <div class="address-details">Postal Code: ${city.postalCode}</div>
                             </div>
                         </div>
                     `;
@@ -2776,7 +3026,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                 // Add click event listeners
                 suggestions.querySelectorAll('.address-suggestion').forEach((item, index) => {
-                    item.addEventListener('click', () => selectAddress(addresses[index]));
+                    item.addEventListener('click', () => selectCity(cities[index]));
                 });
 
                 suggestions.style.display = 'block';
@@ -2787,7 +3037,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 suggestions.innerHTML = `
                     <div class="address-loading">
                         <i class="fas fa-spinner"></i>
-                        <span>Searching addresses...</span>
+                        <span>Searching cities...</span>
                     </div>
                 `;
                 suggestions.style.display = 'block';
@@ -2806,86 +3056,27 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 });
             }
 
-            function selectAddress(address) {
-                const displayName = address.display_name || '';
+            function selectCity(city) {
+                input.value = city.name;
                 
-                // Fill the address input with the full display name
-                input.value = displayName;
-                
-                // Try to auto-fill other fields using the structured address data
-                const cityInput = input.closest('form').querySelector('input[name="city"]');
-                const stateInput = input.closest('form').querySelector('input[name="state"]');
+                // Auto-fill postal code
                 const postalInput = input.closest('form').querySelector('input[name="postal_code"]');
-                
-                // Use structured address data if available
-                if (address.address) {
-                    // Try different city fields in order of preference
-                    if (cityInput) {
-                        if (address.address.city) {
-                            cityInput.value = address.address.city;
-                        } else if (address.address.town) {
-                            cityInput.value = address.address.town;
-                        } else if (address.address.village) {
-                            cityInput.value = address.address.village;
-                        } else if (address.address.municipality) {
-                            cityInput.value = address.address.municipality;
-                        } else if (address.address.county) {
-                            cityInput.value = address.address.county;
-                        } else {
-                            // Fallback: parse from display_name
-                            const parts = displayName.split(', ');
-                            for (let i = 1; i < parts.length; i++) {
-                                const part = parts[i].trim();
-                                // Skip common non-city terms
-                                if (!part.match(/^(Philippines|Metro Manila|NCR|Region|Province|Quezon City|Manila|Makati|Taguig|Pasig|Mandaluyong|San Juan|Marikina|Parañaque|Las Piñas|Muntinlupa|Caloocan|Malabon|Navotas|Valenzuela|Pateros)$/i)) {
-                                    cityInput.value = part;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Try different state/province fields
-                    if (stateInput) {
-                        if (address.address.state) {
-                            stateInput.value = address.address.state;
-                        } else if (address.address.province) {
-                            stateInput.value = address.address.province;
-                        } else if (address.address.region) {
-                            stateInput.value = address.address.region;
-                        }
-                    }
-                    
-                    if (postalInput && address.address.postcode) {
-                        postalInput.value = address.address.postcode;
-                    }
-                } else {
-                    // Fallback to parsing display name
-                    const parts = displayName.split(', ');
-                    if (cityInput && parts.length > 1) {
-                        // Try to find city from the parts
-                        for (let i = 1; i < parts.length; i++) {
-                            const part = parts[i].trim();
-                            // Skip common non-city terms
-                            if (!part.match(/^(Philippines|Metro Manila|NCR|Region|Province|Quezon City|Manila|Makati|Taguig|Pasig|Mandaluyong|San Juan|Marikina|Parañaque|Las Piñas|Muntinlupa|Caloocan|Malabon|Navotas|Valenzuela|Pateros)$/i)) {
-                                cityInput.value = part;
-                                break;
-                            }
-                        }
-                    }
+                if (postalInput) {
+                    postalInput.value = city.postalCode;
                 }
                 
                 hideSuggestions();
             }
         }
 
-        // Initialize address autocomplete when modals are shown
+        // Initialize region and city functionality when modals are shown
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize for add address modal
             const addAddressModal = document.getElementById('addAddressModal');
             if (addAddressModal) {
                 addAddressModal.addEventListener('shown.bs.modal', function() {
-                    initAddressAutocomplete('add_address_line', 'add-address-suggestions');
+                    initializeRegionDropdown('add_region');
+                    initializeCityAutocomplete('add_city', 'add-city-suggestions', 'add_region');
                 });
             }
 
@@ -2893,7 +3084,8 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             const editAddressModal = document.getElementById('editAddressModal');
             if (editAddressModal) {
                 editAddressModal.addEventListener('shown.bs.modal', function() {
-                    initAddressAutocomplete('editAddressLine', 'edit-address-suggestions');
+                    initializeRegionDropdown('edit_region');
+                    initializeCityAutocomplete('edit_city', 'edit-city-suggestions', 'edit_region');
                 });
             }
         });
@@ -3050,11 +3242,13 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         console.log(`Status changed for order ${order.id}: ${lastStatus} → ${currentStatus}`);
                         showStatusChangeNotification(order.id, lastStatus, currentStatus);
                         
-                        // Move order to correct section
-                        moveOrderToCorrectSection(orderCard, order, currentStatus);
+                        // Move order to correct section and get the new card reference
+                        const newOrderCard = moveOrderToCorrectSection(orderCard, order, currentStatus);
                         
-                        // Add highlight animation
-                        orderCard.style.animation = 'highlightStatusChange 3s ease-out';
+                        // Add highlight animation to the new card
+                        if (newOrderCard) {
+                            newOrderCard.style.animation = 'highlightStatusChange 3s ease-out';
+                        }
                     }
                     
                     // Update last known status
@@ -3063,19 +3257,27 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     console.warn(`Order card not found for order ${order.id}`);
                 }
             });
+            
+            // Force refresh empty states after all order updates
+            setTimeout(() => {
+                forceHideEmptyStates();
+            }, 200);
         }
 
         function moveOrderToCorrectSection(orderCard, order, newStatus) {
             console.log(`Moving order ${order.id} to ${newStatus} section`);
+            console.log(`Current order card:`, orderCard);
+            console.log(`Current order card parent:`, orderCard.parentElement);
             
             // Update the order card content
             updateOrderStatusDisplay(orderCard, newStatus);
             
             // Find the correct section container
             const targetSection = getSectionForStatus(newStatus);
+            console.log(`Target section for ${newStatus}:`, targetSection);
             if (!targetSection) {
                 console.warn(`No section found for status: ${newStatus}`);
-                return;
+                return null;
             }
             
             // Clone the order card
@@ -3084,16 +3286,37 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             // Remove the old order card
             orderCard.remove();
             
+            // Hide empty state if it exists in target section
+            const emptyState = targetSection.querySelector('.empty-state');
+            if (emptyState) {
+                console.log(`Hiding empty state in ${newStatus} section`);
+                emptyState.style.display = 'none';
+            }
+            
             // Add the updated order card to the correct section
             targetSection.appendChild(newOrderCard);
+            console.log(`Order ${order.id} added to target section. Target section now has ${targetSection.children.length} children`);
             
             // Update the last known status for the new card
             lastOrderStatuses.set(order.id.toString(), newStatus);
             
-            // Update tab counts
+            // Update tab counts (this will also handle empty states)
             updateTabCounts();
             
+            // Force hide empty state again after DOM update
+            setTimeout(() => {
+                const updatedEmptyState = targetSection.querySelector('.empty-state');
+                if (updatedEmptyState) {
+                    updatedEmptyState.style.display = 'none';
+                }
+                // Also force refresh all empty states
+                forceHideEmptyStates();
+            }, 100);
+            
             console.log(`Order ${order.id} moved to ${newStatus} section`);
+            
+            // Return the new order card for animation purposes
+            return newOrderCard;
         }
 
         function getSectionForStatus(status) {
@@ -3122,6 +3345,31 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             const statusConfig = getStatusConfig(newStatus);
             statusElement.className += ` ${statusConfig.class}`;
             statusElement.innerHTML = `<i class="${statusConfig.icon} me-1"></i>${newStatus}`;
+            
+            // Update order actions message based on status
+            const orderActions = orderCard.querySelector('.order-actions');
+            if (orderActions) {
+                const alertDiv = orderActions.querySelector('.alert');
+                if (alertDiv) {
+                    const statusMessages = {
+                        'Pending': '<small><i class="fas fa-info-circle me-1"></i>Your order is being processed. We\'ll notify you when it\'s ready.</small>',
+                        'To Ship': '<small><i class="fas fa-shipping-fast me-1"></i>Your order is being prepared for shipment.</small>',
+                        'Out for delivery': '<small><i class="fas fa-info-circle me-1"></i>Click below to confirm you have received your order and complete the transaction.</small>',
+                        'Ready for Pick Up': '<small><i class="fas fa-check-circle me-1"></i>Your order is ready for pickup! Please visit our store to collect your items.</small>',
+                        'Completed': '', // No message for completed orders
+                        'Cancelled': '<small><i class="fas fa-info-circle me-1"></i>This order has been cancelled.</small>'
+                    };
+                    
+                    const message = statusMessages[newStatus];
+                    if (message) {
+                        alertDiv.innerHTML = message;
+                        alertDiv.className = `alert ${getStatusAlertClass(newStatus)} mb-2 py-2`;
+                    } else {
+                        // Hide the alert for completed orders
+                        alertDiv.style.display = 'none';
+                    }
+                }
+            }
         }
 
         function getStatusConfig(status) {
@@ -3134,6 +3382,48 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 'Cancelled': { class: 'status-cancelled', icon: 'fas fa-times-circle' }
             };
             return configs[status] || { class: 'status-pending', icon: 'fas fa-clock' };
+        }
+
+        function getStatusAlertClass(status) {
+            const alertClasses = {
+                'Pending': 'alert-info',
+                'To Ship': 'alert-warning',
+                'Out for delivery': 'alert-info',
+                'Ready for Pick Up': 'alert-success',
+                'Completed': 'alert-success',
+                'Cancelled': 'alert-danger'
+            };
+            return alertClasses[status] || 'alert-info';
+        }
+
+        function forceHideEmptyStates() {
+            // Force hide all empty states that have orders
+            const sections = [
+                '#pending-orders',
+                '#to-ship-orders', 
+                '#out-for-delivery-orders',
+                '#ready-pickup-orders',
+                '#completed-orders',
+                '#cancelled-orders'
+            ];
+            
+            sections.forEach(sectionId => {
+                const section = document.querySelector(sectionId);
+                if (section) {
+                    const orderCards = section.querySelectorAll('.order-card');
+                    const emptyState = section.querySelector('.empty-state');
+                    
+                    if (emptyState) {
+                        if (orderCards.length > 0) {
+                            console.log(`Force hiding empty state in ${sectionId} (${orderCards.length} orders)`);
+                            emptyState.style.display = 'none';
+                        } else {
+                            console.log(`Showing empty state in ${sectionId} (0 orders)`);
+                            emptyState.style.display = 'block';
+                        }
+                    }
+                }
+            });
         }
 
         function updateTabCounts() {
@@ -3166,6 +3456,33 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     if (icon) {
                         console.log(`Updating tab: ${tab.text}`);
                         tabElement.innerHTML = `${icon.outerHTML} ${tab.text}`;
+                    }
+                }
+            });
+
+            // Handle empty states for each section
+            const sectionMap = {
+                'Pending': '#pending-orders',
+                'To Ship': '#to-ship-orders',
+                'Out for delivery': '#out-for-delivery-orders',
+                'Ready for Pick Up': '#ready-pickup-orders',
+                'Completed': '#completed-orders',
+                'Cancelled': '#cancelled-orders'
+            };
+
+            Object.entries(counts).forEach(([status, count]) => {
+                const sectionId = sectionMap[status];
+                if (sectionId) {
+                    const section = document.querySelector(sectionId);
+                    const emptyState = section ? section.querySelector('.empty-state') : null;
+                    
+                    if (emptyState) {
+                        console.log(`Section ${status}: ${count} orders, empty state ${count === 0 ? 'shown' : 'hidden'}`);
+                        if (count === 0) {
+                            emptyState.style.display = 'block';
+                        } else {
+                            emptyState.style.display = 'none';
+                        }
                     }
                 }
             });

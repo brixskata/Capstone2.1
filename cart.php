@@ -86,7 +86,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         pb.quantity_remaining,
                         u.name as unit_name,
                         COALESCE(pp.markup_price, 0) as markup_price,
-                        (COALESCE(pb.unit_cost, 0) + COALESCE(pp.markup_price, 0)) as price
+                        (COALESCE(pb.unit_cost, 0) + COALESCE(pp.markup_price, 0)) as price,
+                        (SELECT COALESCE(SUM(pb2.quantity_remaining), 0) 
+                         FROM product_batches pb2 
+                         WHERE pb2.product_id = pb.product_id 
+                         AND pb2.brand_id = pb.brand_id 
+                         AND pb2.quantity_remaining > 0 
+                         AND pb2.is_active = 1) as total_stock
                      FROM product_batches pb
                      JOIN brands b ON pb.brand_id = b.id
                      JOIN products p ON pb.product_id = p.product_id
@@ -96,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                      AND pb.brand_id = ?
                      AND pb.quantity_remaining > 0 
                      AND pb.is_active = 1
-                     ORDER BY pb.expiration_date ASC
+                     ORDER BY pb.received_date DESC, pb.batch_id DESC
                      LIMIT 1";
         
         $stmt = $pdo->prepare($product_sql);
@@ -112,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 WHERE pb.product_id = p.product_id 
                                 AND pb.quantity_remaining > 0 
                                 AND pb.is_active = 1
-                                ORDER BY pb.expiration_date ASC 
+                                ORDER BY pb.received_date DESC, pb.batch_id DESC 
                                 LIMIT 1
                             ), 0) AS price,
                             COALESCE(ps.current_stock, 0) AS stock
@@ -133,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             WHERE pb.product_id = p.product_id 
                             AND pb.quantity_remaining > 0 
                             AND pb.is_active = 1
-                            ORDER BY pb.expiration_date ASC 
+                            ORDER BY pb.received_date DESC, pb.batch_id DESC 
                             LIMIT 1
                         ), 0) AS price,
                         COALESCE(ps.current_stock, 0) AS stock
@@ -158,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if ($cart_key && isset($_SESSION['cart'][$cart_key])) {
                     $new_quantity = $_SESSION['cart'][$cart_key]['quantity'] + 0.1;
                     
-                    // Check stock availability
+                    // Check stock availability - need to check total cart quantity + new quantity
                     $stock_available = true;
                     if ($brand_id) {
                         $stmt = $pdo->prepare("
@@ -168,7 +174,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         ");
                         $stmt->execute([$product_id, $brand_id]);
                         $brand_stock = $stmt->fetch(PDO::FETCH_ASSOC)['stock'];
-                        $stock_available = $new_quantity <= $brand_stock;
+                        
+                        // Calculate total quantity in cart for this product+brand
+                        $cart_quantity = 0;
+                        foreach ($_SESSION['cart'] as $key => $item) {
+                            if ($item['product_id'] == $product_id && 
+                                isset($item['brand_id']) && $item['brand_id'] == $brand_id) {
+                                $cart_quantity += $item['quantity'];
+                            }
+                        }
+                        
+                        $stock_available = ($cart_quantity + 0.1) <= $brand_stock;
                     } else {
                         $stmt = $pdo->prepare("
                             SELECT COALESCE(SUM(quantity_remaining), 0) as stock 
@@ -177,7 +193,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         ");
                         $stmt->execute([$product_id]);
                         $total_stock = $stmt->fetch(PDO::FETCH_ASSOC)['stock'];
-                        $stock_available = $new_quantity <= $total_stock;
+                        
+                        // Calculate total quantity in cart for this product
+                        $cart_quantity = 0;
+                        foreach ($_SESSION['cart'] as $key => $item) {
+                            if ($item['product_id'] == $product_id) {
+                                $cart_quantity += $item['quantity'];
+                            }
+                        }
+                        
+                        $stock_available = ($cart_quantity + 0.1) <= $total_stock;
                     }
                     
                     if (!$stock_available) {
@@ -218,7 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     
                     $final_cart_key = $cart_key ?: $new_cart_key;
                     
-                    // Check stock availability
+                    // Check stock availability - need to check total cart quantity + new quantity
                     $stock_available = true;
                     if ($brand_id) {
                         $stmt = $pdo->prepare("
@@ -228,7 +253,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         ");
                         $stmt->execute([$product_id, $brand_id]);
                         $brand_stock = $stmt->fetch(PDO::FETCH_ASSOC)['stock'];
-                        $stock_available = $quantity <= $brand_stock;
+                        
+                        // Calculate total quantity in cart for this product+brand
+                        $cart_quantity = 0;
+                        foreach ($_SESSION['cart'] as $key => $item) {
+                            if ($item['product_id'] == $product_id && 
+                                isset($item['brand_id']) && $item['brand_id'] == $brand_id) {
+                                $cart_quantity += $item['quantity'];
+                            }
+                        }
+                        
+                        $stock_available = ($cart_quantity + $quantity) <= $brand_stock;
                     } else {
                         $stmt = $pdo->prepare("
                             SELECT COALESCE(SUM(quantity_remaining), 0) as stock 
@@ -237,7 +272,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         ");
                         $stmt->execute([$product_id]);
                         $total_stock = $stmt->fetch(PDO::FETCH_ASSOC)['stock'];
-                        $stock_available = $quantity <= $total_stock;
+                        
+                        // Calculate total quantity in cart for this product
+                        $cart_quantity = 0;
+                        foreach ($_SESSION['cart'] as $key => $item) {
+                            if ($item['product_id'] == $product_id) {
+                                $cart_quantity += $item['quantity'];
+                            }
+                        }
+                        
+                        $stock_available = ($cart_quantity + $quantity) <= $total_stock;
                     }
                     
                     if (!$stock_available) {
@@ -582,9 +626,12 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
             <!-- Checkout Section -->
             <div class="row mt-3">
                 <div class="col-12 text-center">
-                    <a href="checkout.php" class="btn btn-success btn-lg">
-                                <i class="fas fa-credit-card me-2"></i>Proceed to Checkout
-                    </a>
+                    <button id="checkout-selected-btn" class="btn btn-success btn-lg" onclick="proceedToCheckout()">
+                        <i class="fas fa-credit-card me-2"></i>Checkout Selected Items
+                    </button>
+                    <div class="mt-2">
+                        <small class="text-muted" id="checkout-info">All items selected</small>
+                    </div>
                 </div>
             </div>
         <?php endif; ?>
@@ -593,15 +640,159 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
     <?php include 'includes/user_footer.php'; ?>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+    // Checkout Selected Items Function
+    function proceedToCheckout() {
+        const selectedItems = getSelectedCartItems();
+        
+        if (selectedItems.length === 0) {
+            Swal.fire({
+                title: 'No Items Selected',
+                text: 'Please select at least one item to checkout.',
+                icon: 'warning',
+                confirmButtonColor: '#ffc107',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+        
+        // Create a form to submit selected items
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'checkout.php';
+        
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_items';
+        input.value = JSON.stringify(selectedItems);
+        
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+    }
+    
+    // Update checkout button info
+    function updateCheckoutInfo() {
+        const selectedItems = getSelectedCartItems();
+        const checkoutInfo = document.getElementById('checkout-info');
+        
+        if (selectedItems.length === 0) {
+            checkoutInfo.textContent = 'No items selected';
+            document.getElementById('checkout-selected-btn').disabled = true;
+        } else {
+            checkoutInfo.textContent = `${selectedItems.length} item(s) selected for checkout`;
+            document.getElementById('checkout-selected-btn').disabled = false;
+        }
+        
+        // Update cart total for selected items
+        updateCartTotalForSelected();
+    }
+    
+    // Update cart total for selected items only
+    function updateCartTotalForSelected() {
+        const checkedBoxes = document.querySelectorAll('.cart-item-checkbox:checked');
+        let selectedTotal = 0;
+        
+        checkedBoxes.forEach(checkbox => {
+            const cartKey = checkbox.dataset.cartKey;
+            const cartItem = document.querySelector(`[data-cart-key="${cartKey}"]`);
+            if (cartItem) {
+                const itemTotalElement = cartItem.querySelector('.item-total');
+                if (itemTotalElement) {
+                    const itemTotal = parseFloat(itemTotalElement.textContent.replace('₱', '').replace(',', ''));
+                    selectedTotal += itemTotal;
+                }
+            }
+        });
+        
+        // Update cart total display
+        const cartTotalElement = document.getElementById('cart-total-display');
+        if (cartTotalElement) {
+            cartTotalElement.textContent = '₱' + selectedTotal.toFixed(2);
+        }
+    }
+    
+    // Listen for selection changes
+    document.addEventListener('DOMContentLoaded', function() {
+        // Listen for custom cart selection events from cart_content.php
+        document.addEventListener('cartSelectionChanged', function(event) {
+            const { selectedTotal, selectedCount } = event.detail;
+            
+            // Update cart total display
+            const cartTotalElement = document.getElementById('cart-total-display');
+            if (cartTotalElement) {
+                cartTotalElement.textContent = '₱' + selectedTotal.toFixed(2);
+            }
+            
+            // Update checkout info
+            const checkoutInfo = document.getElementById('checkout-info');
+            const checkoutBtn = document.getElementById('checkout-selected-btn');
+            
+            if (selectedCount === 0) {
+                checkoutInfo.textContent = 'No items selected';
+                checkoutBtn.disabled = true;
+            } else {
+                checkoutInfo.textContent = `${selectedCount} item(s) selected for checkout`;
+                checkoutBtn.disabled = false;
+            }
+        });
+        
+        // Update checkout info when selections change
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList' || mutation.type === 'attributes') {
+                    setTimeout(updateCheckoutInfo, 100);
+                }
+            });
+        });
+        
+        // Observe cart content changes
+        const cartContainer = document.querySelector('.cart-items-container');
+        if (cartContainer) {
+            observer.observe(cartContainer, {
+                childList: true,
+                subtree: true,
+                attributes: true
+            });
+        }
+        
+        // Initial update
+        updateCheckoutInfo();
+    });
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
         // Load cart total from cart_total.php when page loads
         document.addEventListener('DOMContentLoaded', function() {
-            updateCartTotal();
+            // Check if we have selection functionality
+            const hasSelection = document.querySelector('.cart-item-checkbox');
+            
+            if (hasSelection) {
+                // Initialize with selection-based total
+                setTimeout(() => {
+                    if (typeof updateCartTotalForSelected === 'function') {
+                        updateCartTotalForSelected();
+                    }
+                }, 100);
+            } else {
+                // Use server-based total for non-selection carts
+                updateCartTotal();
+            }
         });
 
         function updateCartTotal() {
+            // Check if we have selection functionality active
+            const hasSelection = document.querySelector('.cart-item-checkbox');
+            
+            if (hasSelection) {
+                // If selection is active, don't override the selection-based total
+                // The selection-based total is handled by updateCartTotalForSelected()
+                return;
+            }
+            
+            // Only update from server if no selection functionality
             fetch('cart_total.php')
                 .then(response => response.json())
                 .then(data => {
@@ -639,8 +830,12 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
             })
             .then(data => {
                 if (data.success) {
-                    // Update cart total and reload the page to show updated cart
+                    console.log('✅ Cart update successful:', data);
+                    // Update cart total
                     updateCartTotal();
+                    
+                    // For now, reload the page to ensure everything updates correctly
+                    // TODO: Implement proper AJAX cart content refresh
                     setTimeout(() => location.reload(), 100);
                 } else {
                     console.error('Cart update failed:', data.message || 'Unknown error');

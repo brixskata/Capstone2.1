@@ -61,12 +61,25 @@ $checkout_cart_items = [];
 $total_price = 0;
 $stock_errors = [];
 
+// Get selected cart items from sessionStorage (passed from cart page)
+$selected_cart_items = [];
+if (isset($_POST['selected_items'])) {
+    $selected_cart_items = json_decode($_POST['selected_items'], true) ?? [];
+} else {
+    // Fallback: if no selection data, process all items (backward compatibility)
+    $selected_cart_items = null;
+}
+
 // Use CartManager to load cart data from database (same as cart_total.php)
 $cartManager = new CartManager($pdo);
 $batchManager = new BatchManager($pdo);
 $cart_data = $cartManager->loadCartFromDatabase($_SESSION['user_id']);
 
 foreach ($cart_data as $cart_key => $cart_item) {
+    // Skip if this item is not selected (when selection is active)
+    if ($selected_cart_items !== null && !in_array($cart_key, $selected_cart_items)) {
+        continue;
+    }
     // Extract product_id and brand_id from cart item
     $product_id = $cart_item['product_id'] ?? $cart_key;
     if (is_string($product_id) && strpos($product_id, '_') !== false) {
@@ -106,7 +119,7 @@ foreach ($cart_data as $cart_key => $cart_item) {
     LEFT JOIN brands b ON pb.brand_id = b.id
     LEFT JOIN uom ON p.uom_id = uom.uom_id
     WHERE p.product_id = ? AND p.is_archive = 0
-    ORDER BY pb.expiration_date ASC
+    ORDER BY pb.received_date DESC, pb.batch_id DESC
     LIMIT 1";
     
     $stmt = $pdo->prepare($price_sql);
@@ -133,7 +146,7 @@ foreach ($cart_data as $cart_key => $cart_item) {
         LEFT JOIN brands b ON pb.brand_id = b.id
         LEFT JOIN uom ON p.uom_id = uom.uom_id
         WHERE p.product_id = ? AND p.is_archive = 0
-        ORDER BY pb.expiration_date ASC
+        ORDER BY pb.received_date DESC, pb.batch_id DESC
         LIMIT 1";
         
         $stmt = $pdo->prepare($general_sql);
@@ -943,14 +956,20 @@ foreach ($gcash_defaults as $key => $default_value) {
                                     <div class="row g-3">
                                         <div class="col-12">
                                             <label class="form-label fw-bold">Full Address *</label>
-                                            <div class="position-relative">
-                                                <input type="text" name="delivery_address" id="delivery_address" class="form-control" placeholder="Start typing your address..." autocomplete="off" required>
-                                                <div id="address-suggestions" class="address-suggestions"></div>
-                                            </div>
+                                            <input type="text" name="delivery_address" class="form-control" placeholder="Enter your street address..." required>
                                         </div>
                                         <div class="col-md-6">
-                                            <label class="form-label fw-bold">City *</label>
-                                            <input type="text" name="delivery_city" class="form-control" placeholder="Enter city" required>
+                                            <label class="form-label fw-bold">Region *</label>
+                                            <select name="delivery_region" id="delivery_region" class="form-control" required>
+                                                <option value="">Select Region</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">City/Municipality *</label>
+                                            <div class="position-relative">
+                                                <input type="text" name="delivery_city" id="delivery_city" class="form-control" placeholder="Start typing city name..." autocomplete="off" required>
+                                                <div id="delivery-city-suggestions" class="address-suggestions"></div>
+                                            </div>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label fw-bold">Postal Code *</label>
@@ -1051,6 +1070,7 @@ foreach ($gcash_defaults as $key => $default_value) {
                                 <!-- Hidden fields to ensure they're always submitted -->
                                 <input type="hidden" name="gcash_transaction_id_hidden" id="gcash_transaction_id_hidden" value="">
                                 <input type="hidden" name="payment_proof_hidden" id="payment_proof_hidden" value="">
+                                <input type="hidden" name="selected_items" value="<?= htmlspecialchars(json_encode($selected_cart_items ?? [])) ?>">
                             </div>
 
                             <button type="button" class="btn place-order-btn w-100" onclick="confirmPlaceOrder(event)">
@@ -1233,7 +1253,7 @@ foreach ($gcash_defaults as $key => $default_value) {
                 } else {
                     deliveryAddressSection.style.display = 'none';
                     // Remove required attributes from all delivery address fields when pickup is selected
-                    const deliveryFields = deliveryAddressSection.querySelectorAll('input[type="text"], input[type="email"], textarea');
+                    const deliveryFields = deliveryAddressSection.querySelectorAll('input[type="text"], input[type="email"], textarea, select');
                     deliveryFields.forEach(field => {
                         field.removeAttribute('required');
                     });
@@ -1247,16 +1267,16 @@ foreach ($gcash_defaults as $key => $default_value) {
                 if (this.value === 'new') {
                     newAddressForm.style.display = 'block';
                     // Ensure all required fields are marked as required
-                    const requiredFields = newAddressForm.querySelectorAll('input[type="text"], input[type="email"], textarea');
+                    const requiredFields = newAddressForm.querySelectorAll('input[type="text"], input[type="email"], textarea, select');
                     requiredFields.forEach(field => {
-                        if (field.name === 'delivery_address' || field.name === 'delivery_city' || field.name === 'delivery_postal_code') {
+                        if (field.name === 'delivery_address' || field.name === 'delivery_region' || field.name === 'delivery_city' || field.name === 'delivery_postal_code') {
                             field.setAttribute('required', 'required');
                         }
                     });
                 } else {
                     newAddressForm.style.display = 'none';
                     // Remove required attribute from new address fields when not selected
-                    const requiredFields = newAddressForm.querySelectorAll('input[type="text"], input[type="email"], textarea');
+                    const requiredFields = newAddressForm.querySelectorAll('input[type="text"], input[type="email"], textarea, select');
                     requiredFields.forEach(field => {
                         field.removeAttribute('required');
                     });
@@ -1337,247 +1357,232 @@ foreach ($gcash_defaults as $key => $default_value) {
             }
         }
 
-        // LocationIQ Address Autocomplete Implementation
-        const LOCATIONIQ_API_KEY = 'pk.00c9590567d539faf9a471a17f1c5bf3';
-        const LOCATIONIQ_BASE_URL = 'https://us1.locationiq.com/v1';
-        
-        let addressTimeout;
-        let selectedAddress = null;
-        
-        // Initialize address autocomplete
-        function initializeAddressAutocomplete() {
-            const addressInput = document.getElementById('delivery_address');
-            const suggestionsContainer = document.getElementById('address-suggestions');
-            
-            if (!addressInput || !suggestionsContainer) return;
-            
-            // Handle input events
-            addressInput.addEventListener('input', function() {
+        // Philippine Regions and Cities API
+        const PHILIPPINE_REGIONS = [
+            { code: 'NCR', name: 'National Capital Region (NCR)' },
+            { code: 'CAR', name: 'Cordillera Administrative Region (CAR)' },
+            { code: '01', name: 'Region I - Ilocos Region' },
+            { code: '02', name: 'Region II - Cagayan Valley' },
+            { code: '03', name: 'Region III - Central Luzon' },
+            { code: '04A', name: 'Region IV-A - CALABARZON' },
+            { code: '04B', name: 'Region IV-B - MIMAROPA' },
+            { code: '05', name: 'Region V - Bicol Region' },
+            { code: '06', name: 'Region VI - Western Visayas' },
+            { code: '07', name: 'Region VII - Central Visayas' },
+            { code: '08', name: 'Region VIII - Eastern Visayas' },
+            { code: '09', name: 'Region IX - Zamboanga Peninsula' },
+            { code: '10', name: 'Region X - Northern Mindanao' },
+            { code: '11', name: 'Region XI - Davao Region' },
+            { code: '12', name: 'Region XII - SOCCSKSARGEN' },
+            { code: '13', name: 'Region XIII - Caraga' },
+            { code: 'BARMM', name: 'Bangsamoro Autonomous Region in Muslim Mindanao (BARMM)' }
+        ];
+
+        // Philippine Cities with Postal Codes
+        const PHILIPPINE_CITIES = {
+            'NCR': [
+                { name: 'Manila', postalCode: '1000' },
+                { name: 'Quezon City', postalCode: '1100' },
+                { name: 'Caloocan', postalCode: '1400' },
+                { name: 'Las Piñas', postalCode: '1740' },
+                { name: 'Makati', postalCode: '1200' },
+                { name: 'Malabon', postalCode: '1470' },
+                { name: 'Mandaluyong', postalCode: '1550' },
+                { name: 'Marikina', postalCode: '1800' },
+                { name: 'Muntinlupa', postalCode: '1770' },
+                { name: 'Navotas', postalCode: '1485' },
+                { name: 'Parañaque', postalCode: '1700' },
+                { name: 'Pasay', postalCode: '1300' },
+                { name: 'Pasig', postalCode: '1600' },
+                { name: 'Pateros', postalCode: '1620' },
+                { name: 'San Juan', postalCode: '1500' },
+                { name: 'Taguig', postalCode: '1630' },
+                { name: 'Valenzuela', postalCode: '1440' }
+            ],
+            '03': [
+                { name: 'Angeles City', postalCode: '2009' },
+                { name: 'Balanga', postalCode: '2100' },
+                { name: 'Cabanatuan', postalCode: '3100' },
+                { name: 'Gapan', postalCode: '3105' },
+                { name: 'Mabalacat', postalCode: '2010' },
+                { name: 'Malolos', postalCode: '3000' },
+                { name: 'Meycauayan', postalCode: '3020' },
+                { name: 'Muñoz', postalCode: '3119' },
+                { name: 'Olongapo', postalCode: '2200' },
+                { name: 'Palayan', postalCode: '3136' },
+                { name: 'San Fernando', postalCode: '2000' },
+                { name: 'San Jose', postalCode: '3121' },
+                { name: 'Tarlac City', postalCode: '2300' }
+            ],
+            '04A': [
+                { name: 'Antipolo', postalCode: '1870' },
+                { name: 'Bacoor', postalCode: '4102' },
+                { name: 'Batangas City', postalCode: '4200' },
+                { name: 'Biñan', postalCode: '4024' },
+                { name: 'Cabuyao', postalCode: '4025' },
+                { name: 'Cainta', postalCode: '1900' },
+                { name: 'Calamba', postalCode: '4027' },
+                { name: 'Cavite City', postalCode: '4100' },
+                { name: 'Dasmariñas', postalCode: '4114' },
+                { name: 'Imus', postalCode: '4103' },
+                { name: 'Laguna', postalCode: '4000' },
+                { name: 'Lucena', postalCode: '4301' },
+                { name: 'San Pedro', postalCode: '4023' },
+                { name: 'Santa Rosa', postalCode: '4026' },
+                { name: 'Taytay', postalCode: '1920' }
+            ]
+        };
+
+        function initializeDeliveryRegionDropdown() {
+            const select = document.getElementById('delivery_region');
+            if (!select) return;
+
+            // Clear existing options except the first one
+            select.innerHTML = '<option value="">Select Region</option>';
+
+            // Add region options
+            PHILIPPINE_REGIONS.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region.code;
+                option.textContent = region.name;
+                select.appendChild(option);
+            });
+        }
+
+        function initializeDeliveryCityAutocomplete() {
+            const input = document.getElementById('delivery_city');
+            const suggestions = document.getElementById('delivery-city-suggestions');
+            const regionSelect = document.getElementById('delivery_region');
+            let currentSuggestions = [];
+            let selectedIndex = -1;
+            let debounceTimer;
+
+            if (!input || !suggestions || !regionSelect) return;
+
+            // Update cities when region changes
+            regionSelect.addEventListener('change', function() {
+                input.value = '';
+                suggestions.style.display = 'none';
+            });
+
+            input.addEventListener('input', function() {
                 const query = this.value.trim();
+                const selectedRegion = regionSelect.value;
                 
-                // Clear previous timeout
-                clearTimeout(addressTimeout);
+                clearTimeout(debounceTimer);
                 
-                // Hide suggestions if query is too short
-                if (query.length < 3) {
+                if (query.length < 2 || !selectedRegion) {
                     hideSuggestions();
                     return;
                 }
-                
-                // Debounce the API call
-                addressTimeout = setTimeout(() => {
-                    searchAddresses(query);
+
+                debounceTimer = setTimeout(() => {
+                    searchCities(query, selectedRegion);
                 }, 300);
             });
-            
-            // Handle keyboard navigation
-            addressInput.addEventListener('keydown', function(e) {
-                const suggestions = suggestionsContainer.querySelectorAll('.address-suggestion');
-                const activeSuggestion = suggestionsContainer.querySelector('.address-suggestion.active');
+
+            input.addEventListener('keydown', function(e) {
+                if (!suggestions.style.display || suggestions.style.display === 'none') return;
+
+                switch(e.key) {
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        selectedIndex = Math.min(selectedIndex + 1, currentSuggestions.length - 1);
+                        updateSelection();
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        selectedIndex = Math.max(selectedIndex - 1, -1);
+                        updateSelection();
+                        break;
+                    case 'Enter':
+                        e.preventDefault();
+                        if (selectedIndex >= 0 && currentSuggestions[selectedIndex]) {
+                            selectCity(currentSuggestions[selectedIndex]);
+                        }
+                        break;
+                    case 'Escape':
+                        hideSuggestions();
+                        break;
+                }
+            });
+
+            input.addEventListener('blur', function() {
+                setTimeout(() => hideSuggestions(), 200);
+            });
+
+            function searchCities(query, regionCode) {
+                showLoading();
                 
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    if (activeSuggestion) {
-                        activeSuggestion.classList.remove('active');
-                        const next = activeSuggestion.nextElementSibling;
-                        if (next) {
-                            next.classList.add('active');
-                    } else {
-                            suggestions[0]?.classList.add('active');
-                        }
-                    } else {
-                        suggestions[0]?.classList.add('active');
-                    }
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    if (activeSuggestion) {
-                        activeSuggestion.classList.remove('active');
-                        const prev = activeSuggestion.previousElementSibling;
-                        if (prev) {
-                            prev.classList.add('active');
-                        } else {
-                            suggestions[suggestions.length - 1]?.classList.add('active');
-                        }
-                    }
-                } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (activeSuggestion) {
-                        selectAddress(activeSuggestion);
-                    }
-                } else if (e.key === 'Escape') {
-                    hideSuggestions();
-                }
-            });
-            
-            // Hide suggestions when clicking outside
-            document.addEventListener('click', function(e) {
-                if (!addressInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
-                    hideSuggestions();
-                }
-            });
-        }
-        
-        // Search addresses using LocationIQ API
-        async function searchAddresses(query) {
-            const suggestionsContainer = document.getElementById('address-suggestions');
-            
-            // Show loading state
-            suggestionsContainer.innerHTML = `
-                <div class="address-loading">
-                    <i class="fas fa-spinner"></i>
-                    <span>Searching addresses...</span>
-                </div>
-            `;
-            suggestionsContainer.style.display = 'block';
-            
-            try {
-                // Use LocationIQ autocomplete API
-                const response = await fetch(
-                    `${LOCATIONIQ_BASE_URL}/autocomplete?key=${LOCATIONIQ_API_KEY}&q=${encodeURIComponent(query)}&countrycodes=ph&limit=5&addressdetails=1`
+                const cities = PHILIPPINE_CITIES[regionCode] || [];
+                const filteredCities = cities.filter(city => 
+                    city.name.toLowerCase().includes(query.toLowerCase())
                 );
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+
+                currentSuggestions = filteredCities;
+                displaySuggestions(filteredCities);
+            }
+
+            function displaySuggestions(cities) {
+                if (cities.length === 0) {
+                    hideSuggestions();
+                    return;
                 }
-                
-                const data = await response.json();
-                displaySuggestions(data);
-                
-            } catch (error) {
-                console.error('Error searching addresses:', error);
-                suggestionsContainer.innerHTML = `
-                    <div class="address-suggestion">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <div class="address-text">
-                            <div class="address-main">Error loading addresses</div>
-                            <div class="address-details">Please try again or enter manually</div>
+
+                suggestions.innerHTML = cities.map((city, index) => {
+                    return `
+                        <div class="address-suggestion" data-index="${index}">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <div class="address-text">
+                                <div class="address-main">${city.name}</div>
+                                <div class="address-details">Postal Code: ${city.postalCode}</div>
+                            </div>
                         </div>
-                    </div>
-                `;
-            }
-        }
-        
-        // Display address suggestions
-        function displaySuggestions(addresses) {
-            const suggestionsContainer = document.getElementById('address-suggestions');
-            
-            if (!addresses || addresses.length === 0) {
-                suggestionsContainer.innerHTML = `
-                    <div class="address-suggestion">
-                        <i class="fas fa-search"></i>
-                        <div class="address-text">
-                            <div class="address-main">No addresses found</div>
-                            <div class="address-details">Try a different search term</div>
-                        </div>
-                    </div>
-                `;
-                return;
-            }
-            
-            const suggestionsHTML = addresses.map(address => {
-                const displayName = address.display_name || '';
-                const mainAddress = address.address?.house_number ? 
-                    `${address.address.house_number} ${address.address.road || ''}`.trim() : 
-                    address.address?.road || displayName.split(',')[0];
-                
-                const details = [
-                    address.address?.suburb,
-                    address.address?.city,
-                    address.address?.state,
-                    address.address?.postcode
-                ].filter(Boolean).join(', ');
-                
-                return `
-                    <div class="address-suggestion" data-address='${JSON.stringify(address)}'>
-                        <i class="fas fa-map-marker-alt"></i>
-                        <div class="address-text">
-                            <div class="address-main">${mainAddress}</div>
-                            <div class="address-details">${details}</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            
-            suggestionsContainer.innerHTML = suggestionsHTML;
-            
-            // Add click event listeners to suggestions
-            suggestionsContainer.querySelectorAll('.address-suggestion').forEach(suggestion => {
-                suggestion.addEventListener('click', function() {
-                    selectAddress(this);
+                    `;
+                }).join('');
+
+                // Add click event listeners
+                suggestions.querySelectorAll('.address-suggestion').forEach((item, index) => {
+                    item.addEventListener('click', () => selectCity(cities[index]));
                 });
-                
-                suggestion.addEventListener('mouseenter', function() {
-                    // Remove active class from all suggestions
-                    suggestionsContainer.querySelectorAll('.address-suggestion').forEach(s => s.classList.remove('active'));
-                    // Add active class to current suggestion
-                    this.classList.add('active');
+
+                suggestions.style.display = 'block';
+                selectedIndex = -1;
+            }
+
+            function showLoading() {
+                suggestions.innerHTML = `
+                    <div class="address-loading">
+                        <i class="fas fa-spinner"></i>
+                        <span>Searching cities...</span>
+                    </div>
+                `;
+                suggestions.style.display = 'block';
+            }
+
+            function hideSuggestions() {
+                suggestions.style.display = 'none';
+                currentSuggestions = [];
+                selectedIndex = -1;
+            }
+
+            function updateSelection() {
+                const items = suggestions.querySelectorAll('.address-suggestion');
+                items.forEach((item, index) => {
+                    item.classList.toggle('active', index === selectedIndex);
                 });
-            });
-        }
-        
-        // Select an address from suggestions
-        function selectAddress(suggestionElement) {
-            const addressData = JSON.parse(suggestionElement.dataset.address);
-            const addressInput = document.getElementById('delivery_address');
-            const cityInput = document.querySelector('input[name="delivery_city"]');
-            const postalCodeInput = document.querySelector('input[name="delivery_postal_code"]');
-            
-            // Set the full address
-            addressInput.value = addressData.display_name || '';
-            
-            // Auto-fill city and postal code if available
-            if (addressData.address) {
-                // Try different city fields in order of preference
-                if (cityInput) {
-                    if (addressData.address.city) {
-                        cityInput.value = addressData.address.city;
-                    } else if (addressData.address.town) {
-                        cityInput.value = addressData.address.town;
-                    } else if (addressData.address.village) {
-                        cityInput.value = addressData.address.village;
-                    } else if (addressData.address.municipality) {
-                        cityInput.value = addressData.address.municipality;
-                    } else if (addressData.address.county) {
-                        cityInput.value = addressData.address.county;
-                    } else {
-                        // Fallback: parse from display_name
-                        const parts = addressData.display_name.split(', ');
-                        for (let i = 1; i < parts.length; i++) {
-                            const part = parts[i].trim();
-                            // Skip common non-city terms
-                            if (!part.match(/^(Philippines|Metro Manila|NCR|Region|Province|Quezon City|Manila|Makati|Taguig|Pasig|Mandaluyong|San Juan|Marikina|Parañaque|Las Piñas|Muntinlupa|Caloocan|Malabon|Navotas|Valenzuela|Pateros)$/i)) {
-                                cityInput.value = part;
-                                break;
-                            }
-                        }
-                    }
+            }
+
+            function selectCity(city) {
+                input.value = city.name;
+                
+                // Auto-fill postal code
+                const postalInput = input.closest('form').querySelector('input[name="delivery_postal_code"]');
+                if (postalInput) {
+                    postalInput.value = city.postalCode;
                 }
                 
-                if (postalCodeInput && addressData.address.postcode) {
-                    postalCodeInput.value = addressData.address.postcode;
-                }
-            }
-            
-            // Store selected address data
-            selectedAddress = addressData;
-            
-            // Hide suggestions
-            hideSuggestions();
-            
-            // Focus on next field
-            if (cityInput && !cityInput.value) {
-                cityInput.focus();
-            } else if (postalCodeInput && !postalCodeInput.value) {
-                postalCodeInput.focus();
-            }
-        }
-        
-        // Hide address suggestions
-        function hideSuggestions() {
-            const suggestionsContainer = document.getElementById('address-suggestions');
-            if (suggestionsContainer) {
-                suggestionsContainer.style.display = 'none';
-                suggestionsContainer.innerHTML = '';
+                hideSuggestions();
             }
         }
         
@@ -1627,14 +1632,15 @@ foreach ($gcash_defaults as $key => $default_value) {
                 // If new address selected, validate the fields
                 if (addressOption.value === 'new') {
                     const deliveryAddress = document.querySelector('input[name="delivery_address"]');
+                    const deliveryRegion = document.querySelector('select[name="delivery_region"]');
                     const deliveryCity = document.querySelector('input[name="delivery_city"]');
                     const deliveryPostal = document.querySelector('input[name="delivery_postal_code"]');
                     
-                    if (!deliveryAddress.value || !deliveryCity.value || !deliveryPostal.value) {
+                    if (!deliveryAddress.value || !deliveryRegion.value || !deliveryCity.value || !deliveryPostal.value) {
                         Swal.fire({
                             icon: 'warning',
                             title: 'Missing Information',
-                            text: 'Please fill in all required address fields',
+                            text: 'Please fill in all required address fields (Address, Region, City, Postal Code)',
                             confirmButtonColor: '#7F1734'
                         });
                         return;
@@ -1806,7 +1812,8 @@ foreach ($gcash_defaults as $key => $default_value) {
 
         // Initialize address autocomplete when DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
-            initializeAddressAutocomplete();
+            initializeDeliveryRegionDropdown();
+            initializeDeliveryCityAutocomplete();
             initializeGCashValidation();
             
             // Initialize form state - ensure pickup is selected by default and address fields are not required
@@ -1814,7 +1821,7 @@ foreach ($gcash_defaults as $key => $default_value) {
             if (pickupRadio) {
                 pickupRadio.checked = true;
                 // Ensure delivery address fields are not required when pickup is selected
-                const deliveryFields = document.querySelectorAll('#delivery-address-section input[type="text"], #delivery-address-section input[type="email"], #delivery-address-section textarea');
+                const deliveryFields = document.querySelectorAll('#delivery-address-section input[type="text"], #delivery-address-section input[type="email"], #delivery-address-section textarea, #delivery-address-section select');
                 deliveryFields.forEach(field => {
                     field.removeAttribute('required');
                 });

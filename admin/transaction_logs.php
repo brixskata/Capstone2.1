@@ -20,13 +20,79 @@ if (isCustomer($pdo)) {
 if (isset($_POST['update_status'])) {
     $order_id = $_POST['order_id'];
     $new_status = $_POST['new_status'];
+    $plate_number = $_POST['plate_number'] ?? null;
+    $transaction_number = $_POST['transaction_number'] ?? null;
 
-    // Map status name to orderstatus_id and update
-    $stmt = $pdo->prepare("UPDATE orders o
-                            JOIN order_status os ON os.status_name = :status
-                            SET o.orderstatus_id = os.orderstatus_id
-                            WHERE o.orders_id = :order_id");
-    $stmt->execute(['status' => $new_status, 'order_id' => $order_id]);
+    try {
+        // Validate transaction number format (exactly 19 digits)
+        if ($transaction_number && !preg_match('/^[0-9]{19}$/', $transaction_number)) {
+            $_SESSION['error'] = "Transaction number must be exactly 19 digits";
+            header("Location: transaction_logs.php");
+            exit;
+        }
+
+        // Check if transaction number is unique (if provided)
+        if ($transaction_number) {
+            $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE transaction_number = ? AND orders_id != ?");
+            $checkStmt->execute([$transaction_number, $order_id]);
+            $count = $checkStmt->fetchColumn();
+            
+            if ($count > 0) {
+                $_SESSION['error'] = "Transaction number already exists. Please use a different transaction number.";
+                header("Location: transaction_logs.php");
+                exit;
+            }
+        }
+
+        $pdo->beginTransaction();
+
+        // Map status name to orderstatus_id and update
+        $stmt = $pdo->prepare("UPDATE orders o
+                                JOIN order_status os ON os.status_name = :status
+                                SET o.orderstatus_id = os.orderstatus_id,
+                                    o.plate_number = :plate_number,
+                                    o.transaction_number = :transaction_number,
+                                    o.pickup_ready_at = CASE 
+                                        WHEN :status = 'Ready for Pick Up' AND o.pickup_ready_at IS NULL 
+                                        THEN NOW() 
+                                        ELSE o.pickup_ready_at 
+                                    END
+                                WHERE o.orders_id = :order_id");
+        $stmt->execute([
+            'status' => $new_status, 
+            'order_id' => $order_id,
+            'plate_number' => $plate_number,
+            'transaction_number' => $transaction_number
+        ]);
+
+        // If shipping order, notify customer with delivery details
+        if ($new_status === 'Out for delivery' && $plate_number && $transaction_number) {
+            // Get customer user_id for notification
+            $uidStmt = $pdo->prepare("SELECT user_id FROM orders WHERE orders_id = ?");
+            $uidStmt->execute([$order_id]);
+            $userId = $uidStmt->fetchColumn();
+            
+            if ($userId) {
+                $message = "Your order #{$order_id} is now out for delivery! Vehicle: {$plate_number}, Transaction: {$transaction_number}";
+                $notif = $pdo->prepare("INSERT INTO notifications (user_id, order_id, message, is_read, created_at) VALUES (?, ?, ?, 0, NOW())");
+                $notif->execute([$userId, $order_id, $message]);
+            }
+        }
+
+        $pdo->commit();
+        $_SESSION['success'] = "Order status updated successfully!";
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        
+        // Check if it's a unique constraint violation
+        if (strpos($e->getMessage(), 'uk_orders_transaction_number') !== false) {
+            $_SESSION['error'] = "Transaction number already exists. Please use a different transaction number.";
+        } else {
+            $_SESSION['error'] = "Error updating order status: " . $e->getMessage();
+        }
+    }
 
     header("Location: transaction_logs.php");
     exit;
@@ -82,6 +148,23 @@ if (isset($_POST['cancel_order'])) {
             $ins = $pdo->prepare("INSERT INTO order_cancellations (order_id, reason, cancelled_by) VALUES (:order_id, :reason, :by)");
             $ins->execute(['order_id' => $order_id, 'reason' => $reason, 'by' => $adminName]);
 
+            // Check if this is an overdue pickup cancellation that might need refund
+            $needsRefund = false;
+            if (strpos($reason, 'Customer did not pick up order within 3 hours') !== false) {
+                // Check if order was paid (has payment method and proof)
+                $paymentStmt = $pdo->prepare("SELECT pay.method, pay.proof FROM payments pay WHERE pay.orders_id = ?");
+                $paymentStmt->execute([$order_id]);
+                $payment = $paymentStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($payment && $payment['method'] && strtolower($payment['method']) !== 'cash on delivery' && $payment['proof']) {
+                    $needsRefund = true;
+                    // Update cancellation reason to indicate refund needed
+                    $refundReason = $reason . " - REFUND REQUIRED (Payment: " . $payment['method'] . ")";
+                    $updateStmt = $pdo->prepare("UPDATE order_cancellations SET reason = ? WHERE order_id = ? ORDER BY created_at DESC LIMIT 1");
+                    $updateStmt->execute([$refundReason, $order_id]);
+                }
+            }
+
             // Notify customer
             $uidStmt = $pdo->prepare("SELECT user_id FROM orders WHERE orders_id = ?");
             $uidStmt->execute([$order_id]);
@@ -92,8 +175,15 @@ if (isset($_POST['cancel_order'])) {
             }
 
             $pdo->commit();
+            
+            if ($needsRefund) {
+                $_SESSION['success'] = "Order cancelled successfully! Please upload the refund receipt for the customer.";
+            } else {
+                $_SESSION['success'] = "Order cancelled successfully!";
+            }
         } catch (Exception $e) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            $_SESSION['error'] = "Error cancelling order: " . $e->getMessage();
         }
     }
     header("Location: transaction_logs.php");
@@ -119,6 +209,9 @@ $query = "
            os.status_name AS status,
            o.total_price as total_amount,
            o.delivery_option,
+           o.plate_number,
+           o.transaction_number,
+           o.pickup_ready_at,
            o.created_at,
            COALESCE(pay.method, '') as payment_method,
            COALESCE(pay.proof, '') as payment_proof,
@@ -159,7 +252,7 @@ if ($search) {
     $query .= " AND (u.username LIKE '%$s%' OR o.orders_id LIKE '%$s%')";
 }
 
-$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at DESC";
+$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at DESC";
 
 try {
     $orders = $pdo->query($query)->fetchAll();
@@ -199,6 +292,9 @@ foreach ($statuses as $status) {
                os.status_name AS status,
                o.total_price as total_amount,
                o.delivery_option,
+               o.plate_number,
+               o.transaction_number,
+               o.pickup_ready_at,
                o.created_at,
                COALESCE(pay.method, '') as payment_method,
                COALESCE(pay.proof, '') as payment_proof,
@@ -226,7 +322,7 @@ foreach ($statuses as $status) {
             ) latest ON latest.order_id = oc1.order_id AND latest.max_id = oc1.id
         ) oc ON oc.order_id = o.orders_id
         WHERE os.status_name = :status
-        GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at 
+        GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at 
         ORDER BY o.created_at DESC
     ";
     
@@ -1336,19 +1432,35 @@ foreach ($statuses as $status) {
 
     function shipOrder(orderId) {
       Swal.fire({
-        title: 'Ship Order?',
+        title: 'Ship Order',
         html: `
           <div class="text-start">
             <p><strong>Order #${orderId}</strong></p>
-            <p>This will change the order status to <strong>"Out for Delivery"</strong></p>
-            <p class="text-info">The customer will be notified that their order is on the way.</p>
+            <p class="mb-3">Please provide the delivery details:</p>
+            
+            <div class="mb-3">
+              <label for="plateNumber" class="form-label">Plate Number *</label>
+              <input type="text" id="plateNumber" class="form-control" placeholder="Enter vehicle plate number" maxlength="20" required>
+              <small class="text-muted">e.g., ABC-1234, XYZ-5678</small>
+            </div>
+            
+            <div class="mb-3">
+              <label for="transactionNumber" class="form-label">Transaction Number *</label>
+              <input type="text" id="transactionNumber" class="form-control" placeholder="Enter 19-digit transaction number" maxlength="19" pattern="[0-9]{19}" required>
+              <small class="text-muted">Must be exactly 19 digits (e.g., 1234567890123456789)</small>
+            </div>
+            
+            <div class="alert alert-info">
+              <i class="fas fa-info-circle me-2"></i>
+              <strong>Note:</strong> This will change the order status to "Out for Delivery" and notify the customer with tracking details.
+            </div>
           </div>
         `,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#7F1734',
         cancelButtonColor: '#6c757d',
-        confirmButtonText: '<i class="fas fa-truck me-2"></i>Yes, Ship Order',
+        confirmButtonText: '<i class="fas fa-truck me-2"></i>Ship Order',
         cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
         customClass: {
           popup: 'swal2-popup-custom',
@@ -1356,15 +1468,58 @@ foreach ($statuses as $status) {
           htmlContainer: 'swal2-html-container-custom',
           confirmButton: 'swal2-confirm-button-custom',
           cancelButton: 'swal2-cancel-button-custom'
+        },
+        preConfirm: () => {
+          const plateNumber = document.getElementById('plateNumber').value.trim();
+          const transactionNumber = document.getElementById('transactionNumber').value.trim();
+          
+          if (!plateNumber) {
+            Swal.showValidationMessage('Please enter a plate number');
+            return false;
+          }
+          
+          if (!transactionNumber) {
+            Swal.showValidationMessage('Please enter a transaction number');
+            return false;
+          }
+          
+          // Validate transaction number format (exactly 19 digits)
+          if (!/^[0-9]{19}$/.test(transactionNumber)) {
+            Swal.showValidationMessage('Transaction number must be exactly 19 digits');
+            return false;
+          }
+          
+          return {
+            plateNumber: plateNumber,
+            transactionNumber: transactionNumber
+          };
         }
       }).then((result) => {
         if (result.isConfirmed) {
-          // Create and submit form
+          // Show loading state
+          Swal.fire({
+            title: 'Shipping Order...',
+            text: 'Please wait while we update the order status.',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+              Swal.showLoading();
+            },
+            customClass: {
+              popup: 'swal2-popup-custom',
+              title: 'swal2-title-custom',
+              htmlContainer: 'swal2-html-container-custom'
+            }
+          });
+          
+          // Create and submit form with delivery details
           const form = document.createElement('form');
           form.method = 'POST';
           form.innerHTML = `
             <input type="hidden" name="order_id" value="${orderId}">
             <input type="hidden" name="new_status" value="Out for Delivery">
+            <input type="hidden" name="plate_number" value="${result.value.plateNumber}">
+            <input type="hidden" name="transaction_number" value="${result.value.transactionNumber}">
             <input type="hidden" name="update_status" value="1">
           `;
           document.body.appendChild(form);
@@ -1409,6 +1564,228 @@ foreach ($statuses as $status) {
           document.body.appendChild(form);
           form.submit();
         }
+      });
+    }
+
+    function cancelOverduePickup(orderId, hoursElapsed, paymentMethod = '', paymentProof = '') {
+      // Check if order was paid (has payment method and proof)
+      const isPaid = paymentMethod && paymentMethod.toLowerCase() !== 'cash on delivery' && paymentProof;
+      
+      Swal.fire({
+        title: 'Cancel Overdue Pickup?',
+        html: `
+          <div class="text-start">
+            <p><strong>Order #${orderId}</strong></p>
+            <div class="alert alert-warning">
+              <i class="fas fa-exclamation-triangle me-2"></i>
+              <strong>Overdue:</strong> Customer hasn't picked up for <strong>${hoursElapsed} hours</strong>
+            </div>
+            ${isPaid ? `
+              <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Payment Status:</strong> Order was paid via <strong>${paymentMethod}</strong>
+                <br><small>You will need to upload a refund receipt after cancellation.</small>
+              </div>
+            ` : `
+              <div class="alert alert-secondary">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Payment Status:</strong> Cash on Delivery - No refund needed
+              </div>
+            `}
+            <p class="text-danger">This will:</p>
+            <ul class="text-danger">
+              <li>Change the order status to <strong>"Cancelled"</strong></li>
+              <li>Notify the customer about the cancellation</li>
+              <li>Free up inventory for other customers</li>
+              ${isPaid ? '<li><strong>Require refund receipt upload</strong></li>' : ''}
+            </ul>
+            <p class="text-danger"><strong>This action cannot be undone!</strong></p>
+          </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: `<i class="fas fa-ban me-2"></i>Yes, Cancel Order${isPaid ? ' & Refund' : ''}`,
+        cancelButtonText: '<i class="fas fa-times me-2"></i>Keep Waiting',
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          htmlContainer: 'swal2-html-container-custom',
+          confirmButton: 'swal2-confirm-button-custom',
+          cancelButton: 'swal2-cancel-button-custom'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          if (isPaid) {
+            // For paid orders, prompt for refund receipt upload
+            promptRefundReceiptUpload(orderId, hoursElapsed);
+          } else {
+            // For COD orders, proceed directly to cancellation
+            proceedWithCancellation(orderId, hoursElapsed);
+          }
+        }
+      });
+    }
+
+    function promptRefundReceiptUpload(orderId, hoursElapsed) {
+      Swal.fire({
+        title: 'Upload Refund Receipt',
+        html: `
+          <div class="text-start">
+            <p><strong>Order #${orderId}</strong></p>
+            <p>Since this order was already paid, please upload the refund receipt.</p>
+            <p class="text-muted small">Accepted formats: JPG, PNG, PDF (Max 5MB)</p>
+          </div>
+        `,
+        input: 'file',
+        inputLabel: 'Refund Receipt File',
+        inputAttributes: {
+          accept: '.jpg,.jpeg,.png,.pdf',
+          'aria-label': 'Upload refund receipt file'
+        },
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-upload me-2"></i>Upload & Cancel',
+        cancelButtonText: '<i class="fas fa-times me-2"></i>Cancel',
+        inputValidator: (value) => {
+          if (!value) {
+            return 'Please select a refund receipt file!';
+          }
+          // Check file size (5MB max)
+          if (value.size > 5 * 1024 * 1024) {
+            return 'File size must be less than 5MB!';
+          }
+          // Check file type
+          const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+          if (!allowedTypes.includes(value.type)) {
+            return 'Only JPG, PNG, and PDF files are allowed!';
+          }
+        },
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          htmlContainer: 'swal2-html-container-custom',
+          confirmButton: 'swal2-confirm-button-custom',
+          cancelButton: 'swal2-cancel-button-custom'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Show loading state
+          Swal.fire({
+            title: 'Processing Cancellation...',
+            text: 'Please wait while we cancel the order and upload the refund receipt',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+              Swal.showLoading();
+            },
+            customClass: {
+              popup: 'swal2-popup-custom',
+              title: 'swal2-title-custom',
+              htmlContainer: 'swal2-html-container-custom'
+            }
+          });
+
+          // First cancel the order
+          proceedWithCancellation(orderId, hoursElapsed).then(() => {
+            // Wait a moment for the cancellation to complete
+            setTimeout(() => {
+              // Now upload the refund receipt
+              const formData = new FormData();
+              formData.append('receipt', result.value);
+              formData.append('order_id', orderId);
+
+              // Upload refund receipt
+              fetch('upload_cancellation_receipt.php', {
+                method: 'POST',
+                body: formData
+              })
+              .then(response => response.json())
+              .then(data => {
+                if (data.success) {
+                  Swal.fire({
+                    icon: 'success',
+                    title: 'Success!',
+                    text: 'Order cancelled and refund receipt uploaded successfully',
+                    confirmButtonColor: '#7F1734',
+                    timer: 2000,
+                    timerProgressBar: true,
+                    customClass: {
+                      popup: 'swal2-popup-custom',
+                      title: 'swal2-title-custom',
+                      htmlContainer: 'swal2-html-container-custom',
+                      confirmButton: 'swal2-confirm-button-custom'
+                    }
+                  }).then(() => {
+                    // Refresh the page to show updated order status
+                    location.reload();
+                  });
+                } else {
+                  Swal.fire({
+                    icon: 'error',
+                    title: 'Upload Failed',
+                    text: data.message || 'Failed to upload refund receipt',
+                    confirmButtonColor: '#7F1734',
+                    customClass: {
+                      popup: 'swal2-popup-custom',
+                      title: 'swal2-title-custom',
+                      htmlContainer: 'swal2-html-container-custom',
+                      confirmButton: 'swal2-confirm-button-custom'
+                    }
+                  });
+                }
+              })
+              .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                  icon: 'error',
+                  title: 'Error',
+                  text: 'Failed to upload refund receipt. Please try again.',
+                  confirmButtonColor: '#7F1734',
+                  customClass: {
+                    popup: 'swal2-popup-custom',
+                    title: 'swal2-title-custom',
+                    htmlContainer: 'swal2-html-container-custom',
+                    confirmButton: 'swal2-confirm-button-custom'
+                  }
+                });
+              });
+            }, 1000);
+          }).catch(error => {
+            console.error('Cancellation error:', error);
+            Swal.fire({
+              icon: 'error',
+              title: 'Cancellation Failed',
+              text: 'Failed to cancel the order. Please try again.',
+              confirmButtonColor: '#7F1734',
+              customClass: {
+                popup: 'swal2-popup-custom',
+                title: 'swal2-title-custom',
+                htmlContainer: 'swal2-html-container-custom',
+                confirmButton: 'swal2-confirm-button-custom'
+              }
+            });
+          });
+        }
+      });
+    }
+
+    function proceedWithCancellation(orderId, hoursElapsed) {
+      return new Promise((resolve, reject) => {
+        // Create and submit form with cancellation reason
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+          <input type="hidden" name="order_id" value="${orderId}">
+          <input type="hidden" name="cancel_reason" value="Customer did not pick up order within 3 hours (${hoursElapsed} hours elapsed)">
+          <input type="hidden" name="cancel_order" value="1">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+        resolve();
       });
     }
 
@@ -1606,6 +1983,7 @@ foreach ($statuses as $status) {
                   confirmButton: 'swal2-confirm-button-custom'
                 }
               }).then(() => {
+                // Refresh the page to show updated order status
                 location.reload();
               });
             } else {
@@ -1655,6 +2033,24 @@ foreach ($statuses as $status) {
         })
         .then(response => {
           if (response.ok) {
+            // Show success message and refresh the page
+            Swal.fire({
+              icon: 'success',
+              title: 'Order Cancelled!',
+              text: 'The order has been successfully cancelled.',
+              confirmButtonColor: '#7F1734',
+              timer: 2000,
+              timerProgressBar: true,
+              customClass: {
+                popup: 'swal2-popup-custom',
+                title: 'swal2-title-custom',
+                htmlContainer: 'swal2-html-container-custom',
+                confirmButton: 'swal2-confirm-button-custom'
+              }
+            }).then(() => {
+              // Refresh the page to show updated order status
+              location.reload();
+            });
             resolve();
           } else {
             reject(new Error('Cancellation failed'));
@@ -1849,8 +2245,15 @@ foreach ($statuses as $status) {
                 text: 'Payment proof rejected successfully!',
                  confirmButtonColor: '#7F1734',
                  timer: 2000,
-                 timerProgressBar: true
+                 timerProgressBar: true,
+                 customClass: {
+                   popup: 'swal2-popup-custom',
+                   title: 'swal2-title-custom',
+                   htmlContainer: 'swal2-html-container-custom',
+                   confirmButton: 'swal2-confirm-button-custom'
+                 }
               }).then(() => {
+                // Refresh the page to show updated order status
                 location.reload();
               });
             } else {
@@ -2332,6 +2735,48 @@ foreach ($statuses as $status) {
           badgeStyle = 'background: #f1f8e9; color: #689f38;';
         }
 
+        // Add pickup timing information for Ready for Pick Up orders
+        let pickupTimingHtml = '';
+        if (order.status === 'Ready for Pick Up' && order.pickup_ready_at) {
+          const pickupTime = new Date(order.pickup_ready_at);
+          const now = new Date();
+          const timeDiff = now - pickupTime;
+          
+          // Only show timing if pickup time is in the past
+          if (timeDiff > 0) {
+            const hoursElapsed = timeDiff / (1000 * 60 * 60);
+            const isOverdue = hoursElapsed > 3;
+            
+             if (isOverdue) {
+               pickupTimingHtml = `
+                 <div class="mt-1">
+                   <span class="badge" style="background: #dc3545; color: white; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                     <i class="fas fa-exclamation-triangle me-1"></i>OVERDUE: ${Math.round(hoursElapsed * 10) / 10}h
+                   </span>
+                 </div>
+               `;
+             } else {
+               const minutesElapsed = Math.round(hoursElapsed * 60);
+               pickupTimingHtml = `
+                 <div class="mt-1">
+                   <span class="badge" style="background: #ffc107; color: #212529; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                     <i class="fas fa-clock me-1"></i>Ready: ${minutesElapsed}m
+                   </span>
+                 </div>
+               `;
+             }
+           } else {
+             // Just processed, show 0 minutes
+             pickupTimingHtml = `
+               <div class="mt-1">
+                 <span class="badge" style="background: #ffc107; color: #212529; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                   <i class="fas fa-clock me-1"></i>Ready: 0m
+                 </span>
+               </div>
+             `;
+           }
+        }
+
         return `
           <tr class="order-row" data-order-id="${order.id || 'unknown'}" style="transition: all 0.2s ease;">
             <td class="fw-semibold text-dark">#${order.id || 'N/A'}</td>
@@ -2385,6 +2830,7 @@ foreach ($statuses as $status) {
               <span class="badge" style="${badgeStyle} border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
                 ${escapeHtml(order.status || 'Unknown')}
               </span>
+              ${pickupTimingHtml}
             </td>
             <td>
               ${order.delivery_option ? `
@@ -2437,6 +2883,12 @@ foreach ($statuses as $status) {
           <i class="fas fa-truck me-1"></i>Ship
         </button>`;
       } else if (order.status === 'Ready for Pick Up') {
+        // Check if order is overdue (more than 3 hours)
+        const pickupTime = new Date(order.pickup_ready_at);
+        const now = new Date();
+        const timeDiff = now - pickupTime;
+        const isOverdue = timeDiff > 0 && (timeDiff / (1000 * 60 * 60)) > 3;
+        
         if (isSuperAdmin) {
           buttons += `<button type="button" class="action-btn btn-deliver" onclick="event.stopPropagation(); completePickup(${order.id})">
             <i class="fas fa-check me-1"></i>Complete
@@ -2446,6 +2898,14 @@ foreach ($statuses as $status) {
             <i class="fas fa-clock me-1"></i>Waiting
           </span>`;
         }
+        
+             // Add cancel button for overdue orders
+             if (isOverdue) {
+               const hoursElapsed = timeDiff / (1000 * 60 * 60);
+               buttons += `<button type="button" class="action-btn" style="background: #dc3545; color: white;" onclick="event.stopPropagation(); cancelOverduePickup(${order.id}, ${Math.round(hoursElapsed * 10) / 10}, '${order.payment_method || ''}', '${order.payment_proof || ''}')">
+                 <i class="fas fa-exclamation-triangle me-1"></i>Cancel Overdue
+               </button>`;
+             }
       } else if (order.status === 'Out for delivery') {
         buttons += `<span class="action-btn btn-waiting" title="Waiting for customer to confirm receipt">
           <i class="fas fa-clock me-1"></i>Waiting

@@ -21,6 +21,13 @@ if (isCustomer($pdo)) {
 // Initialize batch manager
 $batchManager = new BatchManager($pdo);
 
+// Helper function to calculate default expiration date (3 months from today)
+function calculateDefaultExpirationDate() {
+    $expirationDate = new DateTime();
+    $expirationDate->add(new DateInterval('P3M')); // Add 3 months
+    return $expirationDate->format('Y-m-d');
+}
+
 // Handle expiration date update
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_expiration'])) {
     try {
@@ -113,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                 'brand_id' => $brand_id,
                 'quantity_received' => $restock['quantity_added'],
                 'unit_cost' => $cost_price,
-                'expiration_date' => $restock['expiration_date'] ?? null,
+                'expiration_date' => $restock['expiration_date'] ?? calculateDefaultExpirationDate(),
                 'received_date' => $restock['restock_date'],
                 'created_by' => $_SESSION['user_id'],
                 'reference_type' => 'restock',
@@ -206,9 +213,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock'])) {
 
         $pdo->beginTransaction();
 
-        // Insert restocking record (without cost columns)
-        $stmt = $pdo->prepare("INSERT INTO restocking (product_id, supplier_id, quantity_added, restock_date, status_id, notes, created_by) VALUES (?, ?, ?, ?, 2, ?, ?)");
-        $stmt->execute([$product_id, $supplier_id, $quantity_added, $restock_date, $notes, $_SESSION['user_id']]);
+        // Insert restocking record with cost columns
+        $stmt = $pdo->prepare("INSERT INTO restocking (product_id, supplier_id, brand_id, quantity_added, cost_per_unit, total_cost, restock_date, expiration_date, status_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, ?, ?)");
+        $stmt->execute([$product_id, $supplier_id, $brand_id, $quantity_added, $cost_per_unit, $total_cost, $restock_date, $expiration_date, $notes, $_SESSION['user_id']]);
         $restock_id = $pdo->lastInsertId();
 
         // Update cost_price in product_pricing table (keep as fallback only)
@@ -320,24 +327,66 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET' && isset($_GET['action']) && $_GET['acti
     exit;
 }
 
-// Fetch recent restocking records
+// Handle AJAX request for PO details
+if (isset($_GET['action']) && $_GET['action'] == 'get_po_details' && isset($_GET['po_number'])) {
+    $po_number = $_GET['po_number'];
+    
+    $stmt = $pdo->prepare("
+        SELECT 
+            r.*,
+            p.product_name,
+            b.name as brand_name,
+            u.name as uom_name,
+            COALESCE(r.cost_per_unit, pp.cost_price, 0) as unit_cost,
+            COALESCE(r.total_cost, r.quantity_added * COALESCE(r.cost_per_unit, pp.cost_price, 0), 0) as total_cost,
+            CASE 
+                WHEN r.status_id = 1 THEN 'Pending'
+                WHEN r.status_id = 2 THEN 'Received'
+                WHEN r.status_id = 3 THEN 'Cancelled'
+                ELSE 'Unknown'
+            END as status_name
+        FROM restocking r
+        LEFT JOIN products p ON r.product_id = p.product_id
+        LEFT JOIN brands b ON r.brand_id = b.id
+        LEFT JOIN uom u ON p.uom_id = u.uom_id
+        LEFT JOIN product_pricing pp ON r.product_id = pp.product_id
+        WHERE r.po_number = ?
+        ORDER BY p.product_name
+    ");
+    $stmt->execute([$po_number]);
+    $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    header('Content-Type: application/json');
+    echo json_encode(['items' => $items]);
+    exit;
+}
+
+// Fetch recent restocking records (including Purchase Orders)
 $stmt = $pdo->query("
     SELECT 
         r.*,
         p.product_name,
         s.name as supplier_name,
+        b.name as brand_name,
         u.name as uom_name,
         ps.expiration_date,
-        pp.cost_price,
-        (r.quantity_added * pp.cost_price) as total_cost
+        COALESCE(r.cost_per_unit, pp.cost_price, 0) as unit_cost,
+        COALESCE(r.total_cost, r.quantity_added * COALESCE(r.cost_per_unit, pp.cost_price, 0), 0) as total_cost,
+        CASE 
+            WHEN r.status_id = 1 THEN 'Pending'
+            WHEN r.status_id = 2 THEN 'Received'
+            WHEN r.status_id = 3 THEN 'Cancelled'
+            ELSE 'Unknown'
+        END as status_name
     FROM restocking r
     JOIN products p ON r.product_id = p.product_id
     JOIN suppliers s ON r.supplier_id = s.supplier_id
+    LEFT JOIN brands b ON r.brand_id = b.id
     LEFT JOIN uom u ON p.uom_id = u.uom_id
     LEFT JOIN product_stock ps ON ps.product_id = r.product_id
     LEFT JOIN product_pricing pp ON pp.product_id = r.product_id
     ORDER BY r.restock_date DESC, r.created_at DESC
-    LIMIT 20
+    LIMIT 50
 ");
 $recent_restocks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -358,6 +407,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <?php include 'includes/admin_styles.php'; ?>
     <style>
         :root {
@@ -502,13 +552,113 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
         }
         
         .low-stock-item {
-            background-color: #fff3cd;
-            border-left: 4px solid #856404;
+            background-color: #fff8e1;
+            border-left: 4px solid #ffb74d;
         }
         
         .out-of-stock-item {
-            background-color: #f5c6cb;
-            border-left: 4px solid #721c24;
+            background-color: #ffebee;
+            border-left: 4px solid #f44336;
+        }
+        
+        /* Pastel button styles */
+        .btn-pastel-primary {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #bbdefb;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-pastel-primary:hover {
+            background-color: #bbdefb;
+            color: #0d47a1;
+            transform: translateY(-1px);
+        }
+        
+        .btn-pastel-success {
+            background-color: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-pastel-success:hover {
+            background-color: #c8e6c9;
+            color: #1b5e20;
+            transform: translateY(-1px);
+        }
+        
+        .btn-pastel-danger {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-pastel-danger:hover {
+            background-color: #ffcdd2;
+            color: #b71c1c;
+            transform: translateY(-1px);
+        }
+        
+        .btn-pastel-info {
+            background-color: #e0f2f1;
+            color: #00695c;
+            border: 1px solid #b2dfdb;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-pastel-info:hover {
+            background-color: #b2dfdb;
+            color: #004d40;
+            transform: translateY(-1px);
+        }
+        
+        /* Status badges with pastel colors */
+        .badge-pastel-warning {
+            background-color: #fff8e1;
+            color: #f57c00;
+            border: 1px solid #ffcc02;
+        }
+        
+        .badge-pastel-success {
+            background-color: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #4caf50;
+        }
+        
+        .badge-pastel-danger {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #f44336;
+        }
+        
+        .badge-pastel-info {
+            background-color: #e0f2f1;
+            color: #00695c;
+            border: 1px solid #b2dfdb;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .badge-pastel-secondary {
+            background-color: #f3e5f5;
+            color: #7b1fa2;
+            border: 1px solid #ba68c8;
         }
         
         /* Select2 Custom Styling */
@@ -696,14 +846,14 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                                     <td><?= $product['reorder_point'] ?></td>
                                     <td>
                                         <?php if ((float)$product['stock'] <= 0): ?>
-                                            <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Out of Stock</span>
+                                            <span class="badge badge-pastel-danger">Out of Stock</span>
                                         <?php else: ?>
-                                            <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Low Stock</span>
+                                            <span class="badge badge-pastel-warning">Low Stock</span>
                                         <?php endif; ?>
                                     </td>
                                     <td><?= htmlspecialchars($product['supplier_name']) ?></td>
                                     <td>
-                                        <button class="btn btn-sm" style="background: #d4edda; color: #155724; border-radius: 8px;" onclick="openRestockModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>')">
+                                        <button class="btn btn-pastel-success" onclick="openRestockModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>')">
                                             <i class="fa fa-plus me-1"></i>Restock
                                         </button>
                                     </td>
@@ -727,49 +877,64 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                     <thead class="table-light">
                          <tr>
                              <th class="fw-semibold">Date</th>
+                             <th class="fw-semibold">Type/PO</th>
                              <th class="fw-semibold">Product</th>
+                             <th class="fw-semibold">Brand</th>
                              <th class="fw-semibold">Supplier</th>
                              <th class="fw-semibold">Quantity</th>
                              <th class="fw-semibold">Cost per Unit</th>
                              <th class="fw-semibold">Total Cost</th>
-                             <th class="fw-semibold">Expiration</th>
+                             <th class="fw-semibold">Status</th>
+                             <th class="fw-semibold">Actions</th>
                          </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($recent_restocks as $restock): ?>
                             <tr>
                                 <td><?= date('M d, Y', strtotime($restock['restock_date'])) ?></td>
+                                <td>
+                                    <?php if ($restock['is_purchase_order']): ?>
+                                        <span class="badge badge-pastel-info" style="cursor: pointer;" onclick="viewPODetails('<?= htmlspecialchars($restock['po_number']) ?>')">
+                                            <i class="fa fa-file-invoice me-1"></i><?= htmlspecialchars($restock['po_number']) ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge badge-pastel-secondary">Manual</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?= htmlspecialchars($restock['product_name']) ?></td>
+                                <td>
+                                    <?php if (!empty($restock['brand_name'])): ?>
+                                        <span class="badge bg-secondary"><?= htmlspecialchars($restock['brand_name']) ?></span>
+                                    <?php else: ?>
+                                        <span class="text-muted">-</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?= htmlspecialchars($restock['supplier_name']) ?></td>
                                 <td><?= number_format((float)$restock['quantity_added'], 1) ?> <?= htmlspecialchars($restock['uom_name']) ?></td>
-                                <td>₱<?= number_format($restock['cost_price'], 2) ?></td>
+                                <td>₱<?= number_format($restock['unit_cost'], 2) ?></td>
                                 <td>₱<?= number_format($restock['total_cost'], 2) ?></td>
                                 <td>
-                                    <?php if (!empty($restock['expiration_date']) && $restock['expiration_date'] !== '0000-00-00'): ?>
-                                        <?php 
-                                        $exp_date = strtotime($restock['expiration_date']);
-                                        $today = time();
-                                        $days_until_expiry = floor(($exp_date - $today) / (60 * 60 * 24));
-                                        
-                                        if ($days_until_expiry < 0): ?>
-                                            <span class="badge" style="background: #f5c6cb; color: #721c24; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Expired</span>
-                                        <?php elseif ($days_until_expiry <= 7): ?>
-                                            <span class="badge" style="background: #fff3cd; color: #856404; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= date('M d, Y', $exp_date) ?></span>
-                                        <?php else: ?>
-                                            <span class="text-muted"><?= date('M d, Y', $exp_date) ?></span>
-                                        <?php endif; ?>
+                                    <?php
+                                    $statusClass = '';
+                                    switch($restock['status_id']) {
+                                        case 1: $statusClass = 'badge-pastel-warning'; break;
+                                        case 2: $statusClass = 'badge-pastel-success'; break;
+                                        case 3: $statusClass = 'badge-pastel-danger'; break;
+                                        default: $statusClass = 'badge-pastel-secondary';
+                                    }
+                                    ?>
+                                    <span class="badge <?= $statusClass ?>"><?= htmlspecialchars($restock['status_name']) ?></span>
+                                </td>
+                                <td>
+                                    <?php if ($restock['status_id'] == 1): ?>
+                                        <button class="btn btn-pastel-success" onclick="updateRestockStatus(<?= $restock['restocking_id'] ?>, 2)" title="Mark as Received">
+                                            <i class="fa fa-check me-1"></i>Receive
+                                        </button>
+                                        <button class="btn btn-pastel-danger" onclick="updateRestockStatus(<?= $restock['restocking_id'] ?>, 3)" title="Cancel">
+                                            <i class="fa fa-times"></i>
+                                        </button>
                                     <?php else: ?>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="text-muted small">
-                                                <i class="fa fa-info-circle me-1"></i>No expiration set
-                                            </span>
-                                            <button class="btn btn-sm" 
-                                                    style="background: #cce5ff; color: #004085; border-radius: 8px;"
-                                                    onclick="setExpirationDate(<?= $restock['product_id'] ?>, '<?= htmlspecialchars($restock['product_name']) ?>')"
-                                                    title="Set expiration date">
-                                                <i class="fa fa-calendar-plus"></i>
-                                            </button>
-                                        </div>
+                                        <span class="text-muted">-</span>
                                     <?php endif; ?>
                                 </td>
                             </tr>
@@ -864,6 +1029,46 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
         </div>
     </div>
 
+    <!-- View Purchase Order Modal -->
+    <div class="modal fade" id="viewPOModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fa fa-file-invoice me-2" style="color: #7F1734;"></i>Purchase Order Details: <span id="view_po_number"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Brand</th>
+                                    <th>Quantity</th>
+                                    <th>Unit Cost</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="po_items_body"></tbody>
+                        </table>
+                    </div>
+                    <div class="alert alert-light mt-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold fs-5">Grand Total:</span>
+                            <span class="fw-bold fs-4 text-primary">₱<span id="po_grand_total">0.00</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -922,10 +1127,20 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                          form.submit();
                      }
                  } else {
-                     alert('Invalid date format. Please use YYYY-MM-DD format.');
+                     Swal.fire({
+                         icon: 'error',
+                         title: 'Invalid Date',
+                         text: 'Please use YYYY-MM-DD format.',
+                         confirmButtonColor: '#7F1734'
+                     });
                  }
              } else if (expirationDate) {
-                 alert('Invalid date format. Please use YYYY-MM-DD format.');
+                 Swal.fire({
+                     icon: 'error',
+                     title: 'Invalid Date',
+                     text: 'Please use YYYY-MM-DD format.',
+                     confirmButtonColor: '#7F1734'
+                 });
              }
          }
         
@@ -933,34 +1148,45 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
             const statusNames = {1: 'Pending', 2: 'Received', 3: 'Cancelled'};
             const statusName = statusNames[newStatus];
             
-            if (confirm(`Are you sure you want to mark this restocking as "${statusName}"?`)) {
-                // Create a form to submit the status update
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = 'restocking.php';
-                
-                const restockIdInput = document.createElement('input');
-                restockIdInput.type = 'hidden';
-                restockIdInput.name = 'restocking_id';
-                restockIdInput.value = restockId;
-                
-                const statusInput = document.createElement('input');
-                statusInput.type = 'hidden';
-                statusInput.name = 'status_id';
-                statusInput.value = newStatus;
-                
-                const updateInput = document.createElement('input');
-                updateInput.type = 'hidden';
-                updateInput.name = 'update_status';
-                updateInput.value = '1';
-                
-                form.appendChild(restockIdInput);
-                form.appendChild(statusInput);
-                form.appendChild(updateInput);
-                
-                document.body.appendChild(form);
-                form.submit();
-            }
+            Swal.fire({
+                title: 'Update Status',
+                text: `Are you sure you want to mark this restocking as "${statusName}"?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#7F1734',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, update it!',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Create a form to submit the status update
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = 'restocking.php';
+                    
+                    const restockIdInput = document.createElement('input');
+                    restockIdInput.type = 'hidden';
+                    restockIdInput.name = 'restocking_id';
+                    restockIdInput.value = restockId;
+                    
+                    const statusInput = document.createElement('input');
+                    statusInput.type = 'hidden';
+                    statusInput.name = 'status_id';
+                    statusInput.value = newStatus;
+                    
+                    const updateInput = document.createElement('input');
+                    updateInput.type = 'hidden';
+                    updateInput.name = 'update_status';
+                    updateInput.value = '1';
+                    
+                    form.appendChild(restockIdInput);
+                    form.appendChild(statusInput);
+                    form.appendChild(updateInput);
+                    
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
         }
         
          // Function to load suppliers for a selected product
@@ -1160,6 +1386,97 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                  }
              }
          });
+         
+         // Purchase Order Functions
+         function viewPODetails(poNumber) {
+             document.getElementById('view_po_number').textContent = poNumber;
+             
+             // Fetch PO details via PHP query
+             fetch(`restocking.php?action=get_po_details&po_number=${encodeURIComponent(poNumber)}`)
+                 .then(response => response.json())
+                 .then(data => {
+                     const tbody = document.getElementById('po_items_body');
+                     tbody.innerHTML = '';
+                     let grandTotal = 0;
+                     
+                     if (data.items && data.items.length > 0) {
+                         data.items.forEach(item => {
+                             const statusClass = item.status_id == 1 ? 'warning' : (item.status_id == 2 ? 'success' : 'danger');
+                             tbody.innerHTML += `
+                                 <tr>
+                                     <td>${item.product_name}</td>
+                                     <td><span class="badge bg-secondary">${item.brand_name || 'No Brand'}</span></td>
+                                     <td>${parseFloat(item.quantity_added).toFixed(1)} ${item.uom_name || ''}</td>
+                                     <td>₱${parseFloat(item.unit_cost).toFixed(2)}</td>
+                                     <td>₱${parseFloat(item.total_cost).toFixed(2)}</td>
+                                     <td><span class="badge bg-${statusClass}">${item.status_name}</span></td>
+                                 </tr>
+                             `;
+                             grandTotal += parseFloat(item.total_cost);
+                         });
+                     } else {
+                         tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No items found</td></tr>';
+                     }
+                     
+                     document.getElementById('po_grand_total').textContent = grandTotal.toFixed(2);
+                     new bootstrap.Modal(document.getElementById('viewPOModal')).show();
+                 })
+                 .catch(error => {
+                     console.error('Error loading PO details:', error);
+                     Swal.fire({
+                         icon: 'error',
+                         title: 'Error Loading PO Details',
+                         text: 'Please try again or contact support if the issue persists.',
+                         confirmButtonColor: '#7F1734'
+                     });
+                 });
+         }
+         
+         function updateRestockStatus(restockingId, newStatus) {
+             const statusNames = {1: 'Pending', 2: 'Received', 3: 'Cancelled'};
+             const message = newStatus == 2 ? 
+                 'Mark this item as received? This will update stock levels.' : 
+                 'Cancel this restocking item?';
+             
+             Swal.fire({
+                 title: 'Update Status',
+                 text: message,
+                 icon: 'question',
+                 showCancelButton: true,
+                 confirmButtonColor: '#7F1734',
+                 cancelButtonColor: '#6c757d',
+                 confirmButtonText: 'Yes, update it!',
+                 cancelButtonText: 'Cancel'
+             }).then((result) => {
+                 if (result.isConfirmed) {
+                     const form = document.createElement('form');
+                     form.method = 'POST';
+                     form.action = 'restocking.php';
+                     
+                     const restockingIdInput = document.createElement('input');
+                     restockingIdInput.type = 'hidden';
+                     restockingIdInput.name = 'restocking_id';
+                     restockingIdInput.value = restockingId;
+                     
+                     const statusInput = document.createElement('input');
+                     statusInput.type = 'hidden';
+                     statusInput.name = 'status_id';
+                     statusInput.value = newStatus;
+                     
+                     const updateStatusInput = document.createElement('input');
+                     updateStatusInput.type = 'hidden';
+                     updateStatusInput.name = 'update_status';
+                     updateStatusInput.value = '1';
+                     
+                     form.appendChild(restockingIdInput);
+                     form.appendChild(statusInput);
+                     form.appendChild(updateStatusInput);
+                     
+                     document.body.appendChild(form);
+                     form.submit();
+                 }
+             });
+         }
     </script>
 </body>
 </html>

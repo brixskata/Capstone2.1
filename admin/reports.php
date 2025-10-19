@@ -174,7 +174,15 @@ if ($reportType === 'sales') {
             p.product_id as id,
             p.product_name as name,
             COALESCE(ps.current_stock, 0) as stock,
-            COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) as price,
+            COALESCE(pp.markup_price, 0) + COALESCE((
+                SELECT pb.unit_cost 
+                FROM product_batches pb 
+                WHERE pb.product_id = p.product_id 
+                AND pb.quantity_remaining > 0 
+                AND pb.is_active = 1
+                ORDER BY pb.received_date DESC 
+                LIMIT 1
+            ), pp.cost_price, 0) as price,
             p.is_archive as is_archived
         FROM products p
         LEFT JOIN product_stock ps ON p.product_id = ps.product_id

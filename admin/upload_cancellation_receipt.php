@@ -41,7 +41,7 @@ if (!in_array($fileType, $allowedTypes)) {
 }
 
 // Validate file size (5MB max)
-$maxSize = 5 * 1024 * 1024; // 5MB in bytes
+$maxSize = 5 * 1024 * 1024; 
 if ($file['size'] > $maxSize) {
     echo json_encode(['success' => false, 'message' => 'File too large. Maximum size is 5MB.']);
     exit;

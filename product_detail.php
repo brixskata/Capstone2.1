@@ -65,7 +65,7 @@ if ($product_id <= 0) {
                     ORDER BY pp.productpricing_id DESC
                     LIMIT 1
                 ), 0) as cost_per_unit,
-                -- Calculate total price: markup_price + (best available cost from batches or general cost_price)
+                -- Calculate total price: markup_price + (newest batch cost for this product)
                 COALESCE((
                     SELECT pp.markup_price
                     FROM product_pricing pp
@@ -73,17 +73,15 @@ if ($product_id <= 0) {
                     ORDER BY pp.productpricing_id DESC
                     LIMIT 1
                 ), 0) + COALESCE((
-                    SELECT COALESCE(
-                        (SELECT pb.unit_cost 
-                         FROM product_batches pb 
-                         WHERE pb.product_id = p.product_id 
-                         AND pb.quantity_remaining > 0 
-                         AND pb.is_active = 1
-                         ORDER BY pb.expiration_date ASC 
-                         LIMIT 1),
-                        pp.cost_price, 
-                        0
-                    )
+                    SELECT pb.unit_cost 
+                    FROM product_batches pb 
+                    WHERE pb.product_id = p.product_id 
+                    AND pb.quantity_remaining > 0 
+                    AND pb.is_active = 1
+                    ORDER BY pb.received_date DESC 
+                    LIMIT 1
+                ), (
+                    SELECT pp.cost_price
                     FROM product_pricing pp
                     WHERE pp.product_id = p.product_id
                     ORDER BY pp.productpricing_id DESC
@@ -146,12 +144,13 @@ if ($product_id <= 0) {
                     AND pb.quantity_remaining > 0 
                     AND pb.is_active = 1
                     AND b.is_archived = 0
-                    ORDER BY pb.expiration_date ASC, pb.received_date ASC
+                    ORDER BY pb.received_date DESC, pb.batch_id DESC
                 ");
                 $brand_stmt->execute([$product_id]);
                 $alternative_brands = $brand_stmt->fetchAll(PDO::FETCH_ASSOC);
                 
-                // Group by brand and get the best price/stock for each brand
+                
+                // Group by brand and get the newest batch price/stock for each brand
                 $brands_grouped = [];
                 foreach ($alternative_brands as $brand) {
                     $brand_id = $brand['brand_id'];
@@ -160,9 +159,9 @@ if ($product_id <= 0) {
                             'brand_id' => $brand['brand_id'],
                             'brand_name' => $brand['brand_name'],
                             'total_stock' => 0,
-                            'best_price' => PHP_FLOAT_MAX,
-                            'best_batch_id' => null,
-                            'expiration_date' => null,
+                            'best_price' => $brand['total_price'], // Use newest batch price (first in DESC order)
+                            'best_batch_id' => $brand['batch_id'],
+                            'expiration_date' => $brand['expiration_date'],
                             'batches' => []
                         ];
                     }
@@ -170,11 +169,8 @@ if ($product_id <= 0) {
                     $brands_grouped[$brand_id]['total_stock'] += $brand['quantity_remaining'];
                     $brands_grouped[$brand_id]['batches'][] = $brand;
                     
-                    if ($brand['total_price'] < $brands_grouped[$brand_id]['best_price']) {
-                        $brands_grouped[$brand_id]['best_price'] = $brand['total_price'];
-                        $brands_grouped[$brand_id]['best_batch_id'] = $brand['batch_id'];
-                        $brands_grouped[$brand_id]['expiration_date'] = $brand['expiration_date'];
-                    }
+                    // Since we're ordering by received_date DESC, the first batch per brand is the newest
+                    // No need to compare prices - just use the first (newest) batch
                 }
                 
                 $product['alternative_brands'] = array_values($brands_grouped);
@@ -1238,15 +1234,7 @@ if ($product_id <= 0) {
         function initializeBrandSelection() {
             const brandOptions = document.querySelectorAll('.brand-option');
             
-            console.log('Initializing brand selection. Found', brandOptions.length, 'brand options');
-            
             brandOptions.forEach((option, index) => {
-                console.log(`Brand option ${index}:`, {
-                    brandId: option.dataset.brandId,
-                    batchId: option.dataset.batchId,
-                    price: option.dataset.price,
-                    stock: option.dataset.stock
-                });
                 
                 option.addEventListener('click', function() {
                     // Remove selected class from all options
@@ -1265,33 +1253,19 @@ if ($product_id <= 0) {
                     
                     // Update main price display
                     updateMainPrice(this.dataset.price);
-                    
-                    console.log('Brand selected:', {
-                        brandId: selectedBrandId,
-                        batchId: selectedBatchId,
-                        stock: this.dataset.stock,
-                        price: this.dataset.price
-                    });
                 });
             });
             
-            // Set default selection if brands exist
+            // Set default selection if brands exist (but don't update price display automatically)
             if (brandOptions.length > 0) {
                 const firstOption = brandOptions[0];
                 selectedBrandId = firstOption.dataset.brandId;
                 selectedBatchId = firstOption.dataset.batchId;
                 
-                console.log('Default brand set:', {
-                    brandId: selectedBrandId,
-                    batchId: selectedBatchId
-                });
-                
-                // Update stock and price displays with default values
+                // Only update stock and quantity input, NOT the main price display
+                // The main price should remain as the product's total_price
                 updateStockDisplay(firstOption.dataset.stock);
                 updateQuantityInput(firstOption.dataset.stock);
-                updateMainPrice(firstOption.dataset.price);
-            } else {
-                console.warn('No brand options found! This will cause brand_id and batch_id to be null.');
             }
         }
 

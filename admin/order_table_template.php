@@ -119,6 +119,38 @@
               <span class="badge" style="<?= $badgeStyle ?> border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
                 <?= htmlspecialchars($order['status']) ?>
               </span>
+              
+              <?php if ($status === 'ready for pick up' && !empty($order['pickup_ready_at'])): ?>
+                <?php
+                  $pickupTime = new DateTime($order['pickup_ready_at']);
+                  $now = new DateTime();
+                  
+                  // Calculate elapsed time correctly
+                  if ($now > $pickupTime) {
+                    $diff = $now->diff($pickupTime);
+                    $totalMinutes = ($diff->days * 24 * 60) + ($diff->h * 60) + $diff->i;
+                  } else {
+                    $totalMinutes = 0; // Just processed, no time elapsed yet
+                  }
+                  
+                  $isOverdue = $totalMinutes > 180; // 3 hours = 180 minutes
+                ?>
+                <div class="mt-1">
+                  <?php if ($isOverdue): ?>
+                    <span class="badge" style="background: #dc3545; color: white; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                      <i class="fas fa-exclamation-triangle me-1"></i>OVERDUE: <?= round($totalMinutes / 60, 1) ?>h
+                    </span>
+                  <?php elseif ($totalMinutes == 0): ?>
+                    <span class="badge" style="background: #ffc107; color: #212529; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                      <i class="fas fa-clock me-1"></i>Ready: 0m
+                    </span>
+                  <?php else: ?>
+                    <span class="badge" style="background: #ffc107; color: #212529; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                      <i class="fas fa-clock me-1"></i>Ready: <?= $totalMinutes ?>m
+                    </span>
+                  <?php endif; ?>
+                </div>
+              <?php endif; ?>
             </td>
             <td>
               <?php if (!empty($order['delivery_option'])): ?>
@@ -168,6 +200,28 @@
                      <span class="action-btn btn-waiting" title="Waiting for Super Admin confirmation">
                        <i class="fas fa-clock me-1"></i>Waiting
                      </span>
+                   <?php endif; ?>
+                   
+                   <?php if (!empty($order['pickup_ready_at'])): ?>
+                     <?php
+                       $pickupTime = new DateTime($order['pickup_ready_at']);
+                       $now = new DateTime();
+                       
+                       // Calculate elapsed time correctly
+                       if ($now > $pickupTime) {
+                         $diff = $now->diff($pickupTime);
+                         $totalMinutes = ($diff->days * 24 * 60) + ($diff->h * 60) + $diff->i;
+                       } else {
+                         $totalMinutes = 0; // Just processed, no time elapsed yet
+                       }
+                       
+                       $isOverdue = $totalMinutes > 180; // 3 hours = 180 minutes
+                     ?>
+                     <?php if ($isOverdue): ?>
+                       <button type="button" class="action-btn" style="background: #dc3545; color: white;" onclick="event.stopPropagation(); cancelOverduePickup(<?= $order['id'] ?>, <?= round($totalMinutes / 60, 1) ?>, '<?= htmlspecialchars($order['payment_method'] ?? '') ?>', '<?= htmlspecialchars($order['payment_proof'] ?? '') ?>')">
+                         <i class="fas fa-exclamation-triangle me-1"></i>Cancel Overdue
+                       </button>
+                     <?php endif; ?>
                    <?php endif; ?>
                  <?php endif; ?>
                 <?php if ($order['status'] == 'Out for delivery'): ?>

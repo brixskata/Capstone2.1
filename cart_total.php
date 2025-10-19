@@ -44,7 +44,7 @@ if (!empty($_SESSION['cart']) && isset($_SESSION['user_id'])) {
                     AND pb.brand_id = ?
                     AND pb.quantity_remaining > 0 
                     AND pb.is_active = 1
-                    ORDER BY pb.expiration_date ASC
+                    ORDER BY pb.received_date DESC, pb.batch_id DESC
                     LIMIT 1";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$product_id, $brand_id]);
@@ -60,7 +60,7 @@ if (!empty($_SESSION['cart']) && isset($_SESSION['user_id'])) {
                             WHERE pb.product_id = p.product_id 
                             AND pb.quantity_remaining > 0 
                             AND pb.is_active = 1
-                            ORDER BY pb.expiration_date ASC 
+                            ORDER BY pb.received_date DESC, pb.batch_id DESC 
                             LIMIT 1
                         ), 0) AS final_price
                         FROM products p
@@ -79,7 +79,7 @@ if (!empty($_SESSION['cart']) && isset($_SESSION['user_id'])) {
                         WHERE pb.product_id = p.product_id 
                         AND pb.quantity_remaining > 0 
                         AND pb.is_active = 1
-                        ORDER BY pb.expiration_date ASC 
+                        ORDER BY pb.received_date DESC, pb.batch_id DESC 
                         LIMIT 1
                     ), 0) AS final_price
                     FROM products p

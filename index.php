@@ -8,7 +8,7 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// Fetch 8 featured products (not archived, in stock, ordered by is_hot/is_new/created_at)
+// Fetch 8 best selling products (not archived, in stock, ordered by most sold)
 $featuredProducts = [];
 try {
     $stmt = $pdo->query("
@@ -28,20 +28,20 @@ try {
                      WHERE pb.product_id = p.product_id 
                      AND pb.quantity_remaining > 0 
                      AND pb.is_active = 1
-                     ORDER BY pb.expiration_date ASC 
+                     ORDER BY pb.received_date DESC 
                      LIMIT 1),
                     pp.cost_price, 
                     0
                 )
             ), 0) AS price,
-            -- Get lowest price among all brands for this product
+            -- Get newest batch price among all brands for this product
             MIN(COALESCE(pp.markup_price, 0) + COALESCE(
                 (SELECT pb.unit_cost 
                  FROM product_batches pb 
                  WHERE pb.product_id = p.product_id 
                  AND pb.quantity_remaining > 0 
                  AND pb.is_active = 1
-                 ORDER BY pb.expiration_date ASC 
+                 ORDER BY pb.received_date DESC 
                  LIMIT 1),
                 pp.cost_price, 
                 0
@@ -81,7 +81,7 @@ try {
         LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
         WHERE p.is_archive = 0 AND COALESCE(ps.current_stock, 0) > 0
         GROUP BY p.product_id
-        ORDER BY p.created_at DESC
+        ORDER BY products_sold DESC, p.created_at DESC
         LIMIT 8
     ");
     $featuredProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -111,6 +111,115 @@ try {
     $testimonials = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $testimonials = [];
+}
+
+// Fetch latest products for floating cards (pork, beef, chicken)
+$floatingProducts = [];
+try {
+    $stmt = $pdo->query("
+        SELECT 
+            p.product_id AS id,
+            p.product_name AS name,
+            c.category_name,
+            b.name AS brand_name,
+            uom.name AS uom_name,
+            COALESCE(ps.current_stock, 0) AS stock,
+            -- Calculate total price: markup_price + (best available cost from batches or general cost_price)
+            COALESCE(pp.markup_price, 0) + COALESCE((
+                SELECT COALESCE(
+                    (SELECT pb.unit_cost 
+                     FROM product_batches pb 
+                     WHERE pb.product_id = p.product_id 
+                     AND pb.quantity_remaining > 0 
+                     AND pb.is_active = 1
+                     ORDER BY pb.received_date DESC 
+                     LIMIT 1),
+                    pp.cost_price, 
+                    0
+                )
+            ), 0) AS price,
+            (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 ORDER BY pi.product_image_id DESC LIMIT 1) AS image1,
+            p.created_at
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.category_id
+        LEFT JOIN brands b ON p.brand_id = b.id
+        LEFT JOIN uom uom ON p.uom_id = uom.uom_id
+        LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+        LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        WHERE p.is_archive = 0 
+        AND COALESCE(ps.current_stock, 0) > 0
+        AND LOWER(c.category_name) IN ('pork', 'beef', 'chicken')
+        ORDER BY p.created_at DESC, c.category_name
+        LIMIT 3
+    ");
+    $floatingProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $floatingProducts = [];
+}
+
+// Fetch seasonal specials - products with manual discounts
+$seasonalSpecials = [];
+try {
+    $stmt = $pdo->query("
+        SELECT 
+            p.product_id AS id,
+            p.product_name AS name,
+            p.product_description AS description,
+            c.category_name,
+            b.name AS brand_name,
+            uom.name AS uom_name,
+            COALESCE(ps.current_stock, 0) AS stock,
+            -- Current price (original price)
+            COALESCE(pp.markup_price, 0) + COALESCE((
+                SELECT COALESCE(
+                    (SELECT pb.unit_cost 
+                     FROM product_batches pb 
+                     WHERE pb.product_id = p.product_id 
+                     AND pb.quantity_remaining > 0 
+                     AND pb.is_active = 1
+                     ORDER BY pb.received_date DESC 
+                     LIMIT 1),
+                    pp.cost_price, 
+                    0
+                )
+            ), 0) AS current_price,
+            -- Previous price (same as current for manual discounts)
+            COALESCE(pp.markup_price, 0) + COALESCE((
+                SELECT COALESCE(
+                    (SELECT pb.unit_cost 
+                     FROM product_batches pb 
+                     WHERE pb.product_id = p.product_id 
+                     AND pb.quantity_remaining > 0 
+                     AND pb.is_active = 1
+                     ORDER BY pb.received_date DESC 
+                     LIMIT 1),
+                    pp.cost_price, 
+                    0
+                )
+            ), 0) AS previous_price,
+            (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 ORDER BY pi.product_image_id DESC LIMIT 1) AS image1,
+            p.created_at,
+            -- Manual discount percentage
+            pd.discount_percentage,
+            pd.expires_at AS discount_expires_at
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.category_id
+        LEFT JOIN brands b ON p.brand_id = b.id
+        LEFT JOIN uom uom ON p.uom_id = uom.uom_id
+        LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+        LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        INNER JOIN product_discounts pd ON p.product_id = pd.product_id
+        WHERE p.is_archive = 0 
+        AND COALESCE(ps.current_stock, 0) > 0
+        AND pd.discount_percentage > 0
+        AND (pd.expires_at IS NULL OR pd.expires_at > NOW())
+        GROUP BY p.product_id
+        ORDER BY pd.discount_percentage DESC, p.created_at DESC
+        LIMIT 3
+    ");
+    $seasonalSpecials = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $seasonalSpecials = [];
 }
 ?>
 <?php
@@ -1828,10 +1937,6 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             <div class="row align-items-center min-vh-75">
                 <div class="col-lg-6">
                     <div class="hero-content">
-                        <div class="hero-badge">
-                            <i class="fas fa-snowflake me-2"></i>
-                            Always Freshly Frozen
-                        </div>
 
                         <h1 class="hero-title">
                             <span id="typewriter-text"></span><span class="text-highlight" id="highlight-text"></span><span class="cursor">|</span>
@@ -1873,23 +1978,36 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                 <div class="col-lg-6">
                     <div class="hero-image-container">
                         <!-- Floating Cards -->
-                        <div class="floating-card card-1">
-                            <img src="images/beef1.jpg" alt="Premium Beef">
-                            <h6>Premium Beef</h6>
-                            <div class="price">₱599/kg</div>
-                        </div>
+                        <?php if (!empty($floatingProducts)): ?>
+                            <?php foreach ($floatingProducts as $index => $product): ?>
+                                <div class="floating-card card-<?= $index + 1 ?>">
+                                    <img src="<?= !empty($product['image1']) ? 'admin/' . htmlspecialchars($product['image1']) : 'images/placeholder.jpg' ?>" 
+                                         alt="<?= htmlspecialchars($product['name']) ?>" 
+                                         onerror="this.src='images/placeholder.jpg'">
+                                    <h6><?= htmlspecialchars($product['name']) ?></h6>
+                                    <div class="price">₱<?= number_format($product['price'], 2) ?>/<?= htmlspecialchars($product['uom_name']) ?></div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <!-- Fallback floating cards -->
+                            <div class="floating-card card-1">
+                                <img src="images/beef1.jpg" alt="Premium Beef">
+                                <h6>Premium Beef</h6>
+                                <div class="price">₱599/kg</div>
+                            </div>
 
-                        <div class="floating-card card-2">
-                            <img src="images/bangus.jpg" alt="Fresh Fish">
-                            <h6>Fresh Bangus</h6>
-                            <div class="price">₱299/kg</div>
-                        </div>
+                            <div class="floating-card card-2">
+                                <img src="images/bangus.jpg" alt="Fresh Fish">
+                                <h6>Fresh Bangus</h6>
+                                <div class="price">₱299/kg</div>
+                            </div>
 
-                        <div class="floating-card card-3">
-                            <img src="images/breast.jpg" alt="Chicken">
-                            <h6>Chicken Breast</h6>
-                            <div class="price">₱199/kg</div>
-                        </div>
+                            <div class="floating-card card-3">
+                                <img src="images/breast.jpg" alt="Chicken">
+                                <h6>Chicken Breast</h6>
+                                <div class="price">₱199/kg</div>
+                            </div>
+                        <?php endif; ?>
 
                         <img src="images/beef2.jpg" alt="Fresh Groceries" class="hero-main-image">
                     </div>
@@ -1951,7 +2069,6 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                                 <img data-src="<?= !empty($product['image1']) ? 'admin/' . htmlspecialchars($product['image1']) : 'images/placeholder.jpg' ?>" alt="<?= htmlspecialchars($product['name']) ?>" class="product-image lazy lazy-placeholder" onerror="this.src='images/placeholder.jpg'">
 
                                 <h3 class="product-title"><?= htmlspecialchars($product['name'] ?? 'Unknown Product') ?></h3>
-                                <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
 
                                 <!-- Product Rating -->
                                 <div class="product-rating mb-2">
@@ -1977,7 +2094,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                                     <?php endif; ?>
                                 </div>
 
-                                <div class="product-price">From ₱<?= number_format($product['lowest_price'], 2) ?></div>
+                                <div class="product-price">₱<?= number_format($product['lowest_price'], 2) ?></div>
                                 
                                 <!-- Stock and Sold Info - Aligned horizontally -->
                                 <div class="product-meta d-flex justify-content-between align-items-center">
@@ -2007,78 +2124,111 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             </div>
 
             <div class="row g-4">
-                <div class="col-md-6 col-lg-4">
-                    <div class="seasonal-card">
-                        <div class="seasonal-image">
-                            <img src="images/beefscrap.jpg" alt="Holiday Specials" class="img-fluid">
-                            <div class="seasonal-badge">
-                                <i class="fas fa-gift"></i>
-                                Holiday Special
+                <?php if (!empty($seasonalSpecials)): ?>
+                    <?php foreach ($seasonalSpecials as $index => $special): ?>
+                        <div class="col-md-6 col-lg-4">
+                            <div class="seasonal-card">
+                                <div class="seasonal-image">
+                                    <img src="<?= !empty($special['image1']) ? 'admin/' . htmlspecialchars($special['image1']) : 'images/placeholder.jpg' ?>" 
+                                         alt="<?= htmlspecialchars($special['name']) ?>" 
+                                         class="img-fluid"
+                                         onerror="this.src='images/placeholder.jpg'">
+                                    <div class="seasonal-badge">
+                                        <i class="fas fa-tag"></i>
+                                        <?= round($special['discount_percentage']) ?>% OFF
+                                    </div>
+                                </div>
+                                <div class="seasonal-content">
+                                    <h3 class="seasonal-title"><?= htmlspecialchars($special['name']) ?></h3>
+                                    <p class="seasonal-desc"><?= htmlspecialchars($special['description']) ?></p>
+                                    <div class="seasonal-price">
+                                        <span class="price-old">₱<?= number_format($special['current_price'], 2) ?></span>
+                                        <span class="price-new">₱<?= number_format($special['current_price'] * (1 - $special['discount_percentage'] / 100), 2) ?></span>
+                                        <span class="discount"><?= round($special['discount_percentage']) ?>% OFF</span>
+                                    </div>
+                                    <div class="seasonal-timer">
+                                        <i class="fas fa-clock"></i>
+                                        <span>Limited time offer - While stock lasts</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="seasonal-content">
-                            <h3 class="seasonal-title">Holiday Feast Package</h3>
-                            <p class="seasonal-desc">Complete your holiday table with our premium meat selection. Perfect for family gatherings and special celebrations.</p>
-                            <div class="seasonal-price">
-                                <span class="price-old">₱2,999</span>
-                                <span class="price-new">₱2,399</span>
-                                <span class="discount">20% OFF</span>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <!-- Fallback seasonal cards when no discounts are found -->
+                    <div class="col-md-6 col-lg-4">
+                        <div class="seasonal-card">
+                            <div class="seasonal-image">
+                                <img src="images/beefscrap.jpg" alt="Holiday Specials" class="img-fluid">
+                                <div class="seasonal-badge">
+                                    <i class="fas fa-gift"></i>
+                                    Holiday Special
+                                </div>
                             </div>
-                            <div class="seasonal-timer">
-                                <i class="fas fa-clock"></i>
-                                <span>Limited time offer - Ends in 5 days</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4">
-                    <div class="seasonal-card">
-                        <div class="seasonal-image">
-                            <img src="images/bangus.jpg" alt="Fresh Catch" class="img-fluid">
-                            <div class="seasonal-badge">
-                                <i class="fas fa-fish"></i>
-                                Fresh Catch
-                            </div>
-                        </div>
-                        <div class="seasonal-content">
-                            <h3 class="seasonal-title">Fresh Catch of the Week</h3>
-                            <p class="seasonal-desc">This week's fresh catch includes premium bangus, tilapia, and other seasonal fish varieties.</p>
-                            <div class="seasonal-price">
-                                <span class="price-old">₱350/kg</span>
-                                <span class="price-new">₱299/kg</span>
-                                <span class="discount">15% OFF</span>
-                            </div>
-                            <div class="seasonal-timer">
-                                <i class="fas fa-clock"></i>
-                                <span>Until stock lasts</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4">
-                    <div class="seasonal-card">
-                        <div class="seasonal-image">
-                            <img src="images/beef1.jpg" alt="Premium Cuts" class="img-fluid">
-                            <div class="seasonal-badge">
-                                <i class="fas fa-star"></i>
-                                Premium Week
-                            </div>
-                        </div>
-                        <div class="seasonal-content">
-                            <h3 class="seasonal-title">Premium Cuts Week</h3>
-                            <p class="seasonal-desc">Hand-selected premium beef cuts with perfect marbling. Limited quantity available this week only.</p>
-                            <div class="seasonal-price">
-                                <span class="price-old">₱650/kg</span>
-                                <span class="price-new">₱599/kg</span>
-                                <span class="discount">8% OFF</span>
-                            </div>
-                            <div class="seasonal-timer">
-                                <i class="fas fa-clock"></i>
-                                <span>Weekend special - 2 days left</span>
+                            <div class="seasonal-content">
+                                <h3 class="seasonal-title">Holiday Feast Package</h3>
+                                <p class="seasonal-desc">Complete your holiday table with our premium meat selection. Perfect for family gatherings and special celebrations.</p>
+                                <div class="seasonal-price">
+                                    <span class="price-old">₱2,999</span>
+                                    <span class="price-new">₱2,399</span>
+                                    <span class="discount">20% OFF</span>
+                                </div>
+                                <div class="seasonal-timer">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Limited time offer - Ends in 5 days</span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                    <div class="col-md-6 col-lg-4">
+                        <div class="seasonal-card">
+                            <div class="seasonal-image">
+                                <img src="images/bangus.jpg" alt="Fresh Catch" class="img-fluid">
+                                <div class="seasonal-badge">
+                                    <i class="fas fa-fish"></i>
+                                    Fresh Catch
+                                </div>
+                            </div>
+                            <div class="seasonal-content">
+                                <h3 class="seasonal-title">Fresh Catch of the Week</h3>
+                                <p class="seasonal-desc">This week's fresh catch includes premium bangus, tilapia, and other seasonal fish varieties.</p>
+                                <div class="seasonal-price">
+                                    <span class="price-old">₱350/kg</span>
+                                    <span class="price-new">₱299/kg</span>
+                                    <span class="discount">15% OFF</span>
+                                </div>
+                                <div class="seasonal-timer">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Until stock lasts</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-4">
+                        <div class="seasonal-card">
+                            <div class="seasonal-image">
+                                <img src="images/beef1.jpg" alt="Premium Cuts" class="img-fluid">
+                                <div class="seasonal-badge">
+                                    <i class="fas fa-star"></i>
+                                    Premium Week
+                                </div>
+                            </div>
+                            <div class="seasonal-content">
+                                <h3 class="seasonal-title">Premium Cuts Week</h3>
+                                <p class="seasonal-desc">Hand-selected premium beef cuts with perfect marbling. Limited quantity available this week only.</p>
+                                <div class="seasonal-price">
+                                    <span class="price-old">₱650/kg</span>
+                                    <span class="price-new">₱599/kg</span>
+                                    <span class="discount">8% OFF</span>
+                                </div>
+                                <div class="seasonal-timer">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Weekend special - 2 days left</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </section>

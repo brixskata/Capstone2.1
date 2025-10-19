@@ -123,6 +123,184 @@ if (isset($_GET['delete']) && isset($_GET['id'])) {
     exit;
 }
 
+// Handle PO creation
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'create_po') {
+    try {
+        $supplier_id = (int)$_POST['supplier_id'];
+        $expected_delivery = date('Y-m-d'); // Use today's date
+        $po_notes = $_POST['po_notes'] ?? '';
+        $selected_products = $_POST['selected_products'] ?? [];
+        
+        if (empty($selected_products)) {
+            throw new Exception("Please select at least one product for the PO.");
+        }
+        
+        // Generate PO number
+        $date_part = date('Ymd');
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM restocking WHERE po_number LIKE ? AND is_purchase_order = 1");
+        $stmt->execute(["PO-$date_part-%"]);
+        $count = $stmt->fetchColumn() + 1;
+        $po_number = sprintf("PO-%s-%04d", $date_part, $count);
+        
+        $pdo->beginTransaction();
+        
+        $total_items = 0;
+        foreach ($selected_products as $product_key) {
+            list($product_id, $brand_id) = explode('_', $product_key);
+            $product_id = (int)$product_id;
+            $brand_id = (int)$brand_id;
+            
+            $quantity = (float)$_POST["quantity_{$product_key}"];
+            $cost = (float)$_POST["cost_{$product_key}"];
+            $expiration_date = $_POST["expiration_{$product_key}"];
+            $total_cost = $quantity * $cost;
+            
+            // Debug logging
+            error_log("PO Creation Debug - Product: $product_id, Brand: $brand_id, Quantity: $quantity, Cost: $cost, Expiration: $expiration_date, Total: $total_cost");
+            
+            if ($quantity <= 0) {
+                throw new Exception("Quantity must be greater than 0 for all products.");
+            }
+            
+            if ($cost <= 0) {
+                throw new Exception("Cost per unit must be greater than 0 for all products. Product ID: $product_id, Brand ID: $brand_id");
+            }
+            
+            if (empty($expiration_date)) {
+                throw new Exception("Expiration date is required for all products. Product ID: $product_id, Brand ID: $brand_id");
+            }
+            
+            // Validate expiration date is in the future
+            if (strtotime($expiration_date) <= strtotime($expected_delivery)) {
+                throw new Exception("Expiration date must be after delivery date for Product ID: $product_id, Brand ID: $brand_id");
+            }
+            
+            // Insert into restocking table
+            $stmt = $pdo->prepare("
+                INSERT INTO restocking 
+                (po_number, is_purchase_order, product_id, supplier_id, brand_id, quantity_added, cost_per_unit, total_cost, restock_date, expiration_date, status_id, notes, created_by)
+                VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            ");
+            $stmt->execute([
+                $po_number,
+                $product_id,
+                $supplier_id,
+                $brand_id,
+                $quantity,
+                $cost,
+                $total_cost,
+                $expected_delivery,
+                $expiration_date,
+                $po_notes,
+                $_SESSION['user_id']
+            ]);
+            $total_items++;
+        }
+        
+        $pdo->commit();
+        
+        // Get supplier name for logging
+        $stmt = $pdo->prepare("SELECT name FROM suppliers WHERE supplier_id = ?");
+        $stmt->execute([$supplier_id]);
+        $supplier_name = $stmt->fetchColumn();
+        
+        logHistory($pdo, 'Purchase Order Created', "PO: $po_number, Supplier: $supplier_name, Items: $total_items", $_SESSION['username']);
+        
+        $_SESSION['success'] = "Purchase Order $po_number created successfully with $total_items items!";
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $_SESSION['error'] = "Error creating PO: " . $e->getMessage();
+    }
+    
+    header("Location: manage_suppliers.php");
+    exit;
+}
+
+// Handle AJAX request for low stock products
+if (isset($_GET['action']) && $_GET['action'] == 'get_low_stock' && isset($_GET['supplier_id'])) {
+    $supplier_id = (int)$_GET['supplier_id'];
+    
+    // First, let's get all products assigned to this supplier
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT
+            p.product_id,
+            p.product_name,
+            uom.name as uom_name,
+            COALESCE(ps.current_stock, 0) as current_stock,
+            COALESCE(ps.reorder_point, 10) as reorder_point,
+            COALESCE(pp.cost_price, 0) as last_cost
+        FROM supplier_products sp
+        INNER JOIN products p ON sp.product_id = p.product_id
+        LEFT JOIN product_stock ps ON ps.product_id = p.product_id
+        LEFT JOIN uom ON p.uom_id = uom.uom_id
+        LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        WHERE sp.supplier_id = ? AND sp.is_active = 1 AND p.is_archive = 0
+        ORDER BY p.product_name
+    ");
+    $stmt->execute([$supplier_id]);
+    $allProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    $lowStockProducts = [];
+    
+    foreach ($allProducts as $product) {
+        // Check if this product has low stock
+        if ($product['current_stock'] <= $product['reorder_point']) {
+            // Get brands for this product that are actually assigned to this supplier
+            $brandStmt = $pdo->prepare("
+                SELECT DISTINCT b.id as brand_id, b.name as brand_name
+                FROM product_batches pb
+                INNER JOIN brands b ON pb.brand_id = b.id
+                WHERE pb.product_id = ? AND pb.is_active = 1 AND pb.supplier_id = ?
+                UNION
+                SELECT 1 as brand_id, 'No Brand' as brand_name
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM product_batches pb2 
+                    WHERE pb2.product_id = ? AND pb2.is_active = 1 AND pb2.supplier_id = ?
+                )
+            ");
+            $brandStmt->execute([$product['product_id'], $supplier_id, $product['product_id'], $supplier_id]);
+            $brands = $brandStmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            if (empty($brands)) {
+                // If no brands found, add a default entry
+                $brands = [['brand_id' => 1, 'brand_name' => 'No Brand']];
+            }
+            
+            foreach ($brands as $brand) {
+                // Calculate brand-specific stock
+                $stockStmt = $pdo->prepare("
+                    SELECT COALESCE(SUM(quantity_remaining), 0) as brand_stock
+                    FROM product_batches 
+                    WHERE product_id = ? AND brand_id = ? AND is_active = 1 AND quantity_remaining > 0
+                ");
+                $stockStmt->execute([$product['product_id'], $brand['brand_id']]);
+                $brandStock = $stockStmt->fetchColumn();
+                
+                // Only include if brand stock is low or out
+                if ($brandStock <= $product['reorder_point']) {
+                    $lowStockProducts[] = [
+                        'product_id' => $product['product_id'],
+                        'product_name' => $product['product_name'],
+                        'brand_id' => $brand['brand_id'],
+                        'brand_name' => $brand['brand_name'],
+                        'current_stock' => $brandStock,
+                        'reorder_point' => $product['reorder_point'],
+                        'uom_name' => $product['uom_name'],
+                        'last_cost' => $product['last_cost'],
+                        'suggested_qty' => max($product['reorder_point'] - $brandStock, 1)
+                    ];
+                }
+            }
+        }
+    }
+    
+    header('Content-Type: application/json');
+    echo json_encode($lowStockProducts);
+    exit;
+}
+
 // Handle assign product to supplier
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'assign_product') {
     try {
@@ -179,7 +357,7 @@ $activeSuppliers = $pdo->query("
     ORDER BY s.name
 ")->fetchAll();
 
-// Fetch detailed products for each supplier
+// Fetch detailed products for each supplier (with brand-specific stock)
 $supplierProducts = [];
 foreach ($activeSuppliers as $supplier) {
     $stmt = $pdo->prepare("
@@ -189,19 +367,21 @@ foreach ($activeSuppliers as $supplier) {
             p.product_description,
             c.category_name,
             b.name AS brand_name,
+            b.id AS brand_id,
             uom.name AS uom_name,
-            COALESCE(ps.current_stock, 0) AS stock,
-            COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) AS price,
+            COALESCE(SUM(pb.quantity_remaining), 0) AS stock,
+            COALESCE(pp.markup_price, 0) + COALESCE(AVG(pb.unit_cost), pp.cost_price, 0) AS price,
             (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
         FROM supplier_products sp
         INNER JOIN products p ON sp.product_id = p.product_id
+        LEFT JOIN product_batches pb ON p.product_id = pb.product_id AND pb.is_active = 1 AND pb.quantity_remaining > 0
+        LEFT JOIN brands b ON pb.brand_id = b.id
         LEFT JOIN categories c ON p.category_id = c.category_id
-        LEFT JOIN brands b ON p.brand_id = b.id
         LEFT JOIN uom uom ON p.uom_id = uom.uom_id
-        LEFT JOIN product_stock ps ON p.product_id = ps.product_id
         LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
         WHERE sp.supplier_id = ? AND sp.is_active = 1 AND p.is_archive = 0
-        ORDER BY p.product_name
+        GROUP BY p.product_id, p.product_name, p.product_description, c.category_name, b.id, b.name, uom.name, pp.markup_price, pp.cost_price
+        ORDER BY p.product_name, b.name
     ");
     $stmt->execute([$supplier['id']]);
     $supplierProducts[$supplier['id']] = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -225,7 +405,7 @@ $archivedSuppliers = $pdo->query("
     ORDER BY s.name
 ")->fetchAll();
 
-// Fetch detailed products for archived suppliers
+// Fetch detailed products for archived suppliers (with brand-specific stock)
 $archivedSupplierProducts = [];
 foreach ($archivedSuppliers as $supplier) {
     $stmt = $pdo->prepare("
@@ -235,19 +415,21 @@ foreach ($archivedSuppliers as $supplier) {
             p.product_description,
             c.category_name,
             b.name AS brand_name,
+            b.id AS brand_id,
             uom.name AS uom_name,
-            COALESCE(ps.current_stock, 0) AS stock,
-            COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) AS price,
+            COALESCE(SUM(pb.quantity_remaining), 0) AS stock,
+            COALESCE(pp.markup_price, 0) + COALESCE(AVG(pb.unit_cost), pp.cost_price, 0) AS price,
             (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
         FROM supplier_products sp
         INNER JOIN products p ON sp.product_id = p.product_id
+        LEFT JOIN product_batches pb ON p.product_id = pb.product_id AND pb.is_active = 1 AND pb.quantity_remaining > 0
+        LEFT JOIN brands b ON pb.brand_id = b.id
         LEFT JOIN categories c ON p.category_id = c.category_id
-        LEFT JOIN brands b ON p.brand_id = b.id
         LEFT JOIN uom uom ON p.uom_id = uom.uom_id
-        LEFT JOIN product_stock ps ON p.product_id = ps.product_id
         LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
         WHERE sp.supplier_id = ? AND sp.is_active = 1 AND p.is_archive = 0
-        ORDER BY p.product_name
+        GROUP BY p.product_id, p.product_name, p.product_description, c.category_name, b.id, b.name, uom.name, pp.markup_price, pp.cost_price
+        ORDER BY p.product_name, b.name
     ");
     $stmt->execute([$supplier['id']]);
     $archivedSupplierProducts[$supplier['id']] = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -706,9 +888,15 @@ foreach ($archivedSuppliers as $supplier) {
                 <tr id="products-row-<?= $supplier['id'] ?>" class="products-detail-row" style="display: none;">
                   <td colspan="5">
                     <div class="p-3 bg-light rounded">
-                      <h6 class="fw-semibold mb-3">
-                        <i class="fa fa-box me-2 text-primary"></i>Products Supplied by <?= htmlspecialchars($supplier['name']) ?>
-                      </h6>
+                      <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-semibold mb-0">
+                          <i class="fa fa-box me-2 text-primary"></i>Products Supplied by <?= htmlspecialchars($supplier['name']) ?>
+                        </h6>
+                        <button class="btn btn-success btn-sm" 
+                                onclick="event.stopPropagation(); openCreatePOModal(<?= $supplier['id'] ?>, '<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>')">
+                          <i class="fa fa-file-invoice me-1"></i>Create Purchase Order
+                        </button>
+                      </div>
                       <?php 
                       $products = $supplierProducts[$supplier['id']] ?? [];
                       if (!empty($products)): ?>
@@ -731,10 +919,8 @@ foreach ($archivedSuppliers as $supplier) {
                                   </div>
                                   <div class="product-meta">
                                     <small><?= htmlspecialchars($product['category_name'] ?? '') ?></small>
-                                    <?php if (!empty($product['brand_name'])): ?>
-                                      <span class="mx-1">•</span>
-                                      <small><?= htmlspecialchars($product['brand_name']) ?></small>
-                                    <?php endif; ?>
+                                    <span class="mx-1">•</span>
+                                    <small><?= !empty($product['brand_name']) ? htmlspecialchars($product['brand_name']) : 'No Brand' ?></small>
                                   </div>
                                 </div>
                               </div>
@@ -876,9 +1062,11 @@ foreach ($archivedSuppliers as $supplier) {
                 <tr id="products-row-<?= $supplier['id'] ?>" class="products-detail-row" style="display: none;">
                   <td colspan="5">
                     <div class="p-3 bg-light rounded">
-                      <h6 class="fw-semibold mb-3">
-                        <i class="fa fa-box me-2 text-primary"></i>Products Supplied by <?= htmlspecialchars($supplier['name']) ?>
-                      </h6>
+                      <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-semibold mb-0">
+                          <i class="fa fa-box me-2 text-primary"></i>Products Supplied by <?= htmlspecialchars($supplier['name']) ?>
+                        </h6>
+                      </div>
                       <?php 
                       $products = $archivedSupplierProducts[$supplier['id']] ?? [];
                       if (!empty($products)): ?>
@@ -901,10 +1089,8 @@ foreach ($archivedSuppliers as $supplier) {
                   </div>
                                   <div class="product-meta">
                                     <small><?= htmlspecialchars($product['category_name'] ?? '') ?></small>
-                                    <?php if (!empty($product['brand_name'])): ?>
-                                      <span class="mx-1">•</span>
-                                      <small><?= htmlspecialchars($product['brand_name']) ?></small>
-                <?php endif; ?>
+                                    <span class="mx-1">•</span>
+                                    <small><?= !empty($product['brand_name']) ? htmlspecialchars($product['brand_name']) : 'No Brand' ?></small>
                                   </div>
                                 </div>
               </div>
@@ -1092,6 +1278,88 @@ foreach ($archivedSuppliers as $supplier) {
     </div>
   </div>
 
+  <!-- Create Purchase Order Modal -->
+  <div class="modal fade" id="createPOModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">
+            <i class="fa fa-file-invoice me-2" style="color: #7F1734;"></i>Create Purchase Order
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form method="POST" id="createPOForm">
+          <div class="modal-body">
+            <input type="hidden" name="action" value="create_po">
+            <input type="hidden" name="supplier_id" id="po_supplier_id">
+            
+            <div class="row g-3 mb-4">
+              <div class="col-md-12">
+                <label class="form-label fw-semibold">Supplier</label>
+                <input type="text" id="po_supplier_name" class="form-control" readonly>
+              </div>
+            </div>
+            
+            <div class="alert alert-info">
+              <i class="fa fa-info-circle me-2"></i>
+              <strong>Low Stock Products:</strong> The products below have stock at or below their reorder point. Select items to include in the purchase order.
+            </div>
+            
+            <div id="po_products_container" style="max-height: 400px; overflow-y: auto;">
+              <table class="table table-hover" id="po_products_table">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th style="width: 50px;">
+                      <input type="checkbox" id="select_all_po" class="form-check-input" checked>
+                    </th>
+                    <th>Product</th>
+                    <th>Brand</th>
+                    <th>Current Stock</th>
+                    <th>Reorder Point</th>
+                    <th style="width: 100px;">Quantity <span class="text-danger">*</span></th>
+                    <th style="width: 120px;">Unit Cost <span class="text-danger">*</span></th>
+                    <th style="width: 120px;">Expiration Date <span class="text-danger">*</span></th>
+                    <th style="width: 120px;">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody id="po_products_body">
+                  <tr>
+                    <td colspan="8" class="text-center py-4">
+                      <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                      </div>
+                      <p class="mt-2 mb-0">Loading low stock products...</p>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <div class="row g-3 mt-3">
+              <div class="col-md-12">
+                <label class="form-label fw-semibold">Notes</label>
+                <textarea name="po_notes" class="form-control" rows="2" placeholder="Additional notes for this purchase order..."></textarea>
+              </div>
+            </div>
+            
+            <div class="alert alert-light mt-3 mb-0">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-bold fs-5">Total Amount:</span>
+                <span class="fw-bold fs-4 text-primary">₱<span id="po_total">0.00</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-success fw-bold" id="submit_po_btn">
+              <i class="fa fa-check me-2"></i>Create Purchase Order
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <?php include 'includes/admin_scripts.php'; ?>
   <script>
@@ -1140,6 +1408,238 @@ foreach ($archivedSuppliers as $supplier) {
         productsRow.style.display = 'none';
       }
     }
+
+    // Purchase Order Functions
+    function openCreatePOModal(supplierId, supplierName) {
+      document.getElementById('po_supplier_id').value = supplierId;
+      document.getElementById('po_supplier_name').value = supplierName;
+      
+      // Reset form
+      document.getElementById('createPOForm').reset();
+      document.getElementById('po_supplier_id').value = supplierId;
+      document.getElementById('po_supplier_name').value = supplierName;
+      
+      // Show loading state
+      document.getElementById('po_products_body').innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 mb-0">Loading low stock products...</p>
+          </td>
+        </tr>
+      `;
+      
+      // Fetch low stock products via AJAX
+      fetch(`manage_suppliers.php?action=get_low_stock&supplier_id=${supplierId}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.length === 0) {
+            document.getElementById('po_products_body').innerHTML = `
+              <tr>
+                <td colspan="8" class="text-center py-4">
+                  <i class="fa fa-check-circle display-4 text-success mb-3"></i>
+                  <h6 class="text-muted">No Low Stock Products</h6>
+                  <p class="text-muted">All products from this supplier have adequate stock levels.</p>
+                </td>
+              </tr>
+            `;
+            document.getElementById('submit_po_btn').disabled = true;
+          } else {
+            populatePOProducts(data);
+            calculatePOTotal();
+            document.getElementById('submit_po_btn').disabled = false;
+          }
+          
+          const modal = new bootstrap.Modal(document.getElementById('createPOModal'));
+          modal.show();
+        })
+        .catch(error => {
+          console.error('Error loading low stock products:', error);
+          document.getElementById('po_products_body').innerHTML = `
+            <tr>
+              <td colspan="8" class="text-center py-4">
+                <i class="fa fa-exclamation-triangle display-4 text-danger mb-3"></i>
+                <h6 class="text-danger">Error Loading Products</h6>
+                <p class="text-muted">Please try again or contact support if the issue persists.</p>
+              </td>
+            </tr>
+          `;
+        });
+    }
+
+    function populatePOProducts(products) {
+      const tbody = document.getElementById('po_products_body');
+      tbody.innerHTML = '';
+      
+      products.forEach(product => {
+        const stockClass = product.current_stock <= 0 ? 'text-danger fw-bold' : 'text-warning fw-bold';
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="text-center">
+            <input type="checkbox" name="selected_products[]" value="${product.product_id}_${product.brand_id}" 
+                   class="form-check-input po-product-checkbox" checked>
+          </td>
+          <td>${product.product_name}</td>
+          <td><span class="badge bg-secondary">${product.brand_name || 'No Brand'}</span></td>
+          <td class="${stockClass}">${product.current_stock} ${product.uom_name || ''}</td>
+          <td>${product.reorder_point}</td>
+          <td>
+            <input type="number" name="quantity_${product.product_id}_${product.brand_id}" 
+                   class="form-control form-control-sm qty-input" min="1" step="0.01"
+                   value="${Math.ceil(product.suggested_qty)}" required>
+          </td>
+          <td>
+            <input type="number" name="cost_${product.product_id}_${product.brand_id}" 
+                   class="form-control form-control-sm cost-input" min="0.01" step="0.01"
+                   value="${product.last_cost > 0 ? parseFloat(product.last_cost).toFixed(2) : ''}" 
+                   placeholder="Enter cost" required>
+          </td>
+          <td>
+            <input type="date" name="expiration_${product.product_id}_${product.brand_id}" 
+                   class="form-control form-control-sm expiration-input" required>
+          </td>
+          <td class="subtotal fw-bold">₱0.00</td>
+        `;
+        tbody.appendChild(row);
+      });
+      
+      // Add event listeners for auto-calculation
+      document.querySelectorAll('.qty-input, .cost-input').forEach(input => {
+        input.addEventListener('input', calculatePOTotal);
+      });
+      
+      // Set default expiration dates (3 months from today)
+      document.querySelectorAll('.expiration-input').forEach(input => {
+        const today = new Date();
+        const expirationDate = new Date(today);
+        expirationDate.setMonth(expirationDate.getMonth() + 3);
+        input.value = expirationDate.toISOString().split('T')[0];
+        
+        // Add validation
+        input.addEventListener('change', function() {
+          const selectedDate = new Date(this.value);
+          const today = new Date();
+          const minDate = new Date(today);
+          minDate.setMonth(minDate.getMonth() + 1); // At least 1 month from today
+          
+          if (selectedDate <= today) {
+            this.style.borderColor = '#dc3545';
+            alert('Expiration date must be in the future');
+            this.focus();
+          } else if (selectedDate < minDate) {
+            this.style.borderColor = '#ffc107';
+            // Warning but allow it
+          } else {
+            this.style.borderColor = '';
+          }
+        });
+      });
+      
+      document.querySelectorAll('.po-product-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+          const row = this.closest('tr');
+          const inputs = row.querySelectorAll('input[type="number"]');
+          inputs.forEach(input => {
+            input.disabled = !this.checked;
+            if (!this.checked) {
+              input.removeAttribute('required');
+            } else {
+              input.setAttribute('required', 'required');
+            }
+          });
+          calculatePOTotal();
+        });
+      });
+      
+      // Select all checkbox
+      document.getElementById('select_all_po').addEventListener('change', function() {
+        document.querySelectorAll('.po-product-checkbox').forEach(checkbox => {
+          checkbox.checked = this.checked;
+          checkbox.dispatchEvent(new Event('change'));
+        });
+      });
+    }
+
+    function calculatePOTotal() {
+      let total = 0;
+      document.querySelectorAll('#po_products_body tr').forEach(row => {
+        const checkbox = row.querySelector('.po-product-checkbox');
+        if (checkbox && checkbox.checked) {
+          const qtyInput = row.querySelector('.qty-input');
+          const costInput = row.querySelector('.cost-input');
+          const subtotalCell = row.querySelector('.subtotal');
+          
+          if (qtyInput && costInput) {
+            const qty = parseFloat(qtyInput.value) || 0;
+            const cost = parseFloat(costInput.value) || 0;
+            const subtotal = qty * cost;
+            subtotalCell.textContent = `₱${subtotal.toFixed(2)}`;
+            total += subtotal;
+          }
+        } else {
+          const subtotalCell = row.querySelector('.subtotal');
+          if (subtotalCell) {
+            subtotalCell.textContent = '₱0.00';
+          }
+        }
+      });
+      document.getElementById('po_total').textContent = total.toFixed(2);
+    }
+
+    // Form validation
+    document.getElementById('createPOForm')?.addEventListener('submit', function(e) {
+      const checkedProducts = document.querySelectorAll('.po-product-checkbox:checked');
+      if (checkedProducts.length === 0) {
+        e.preventDefault();
+        alert('Please select at least one product for the purchase order.');
+        return false;
+      }
+      
+      // Validate cost fields and expiration dates
+      let hasEmptyCost = false;
+      let hasInvalidExpiration = false;
+      
+      checkedProducts.forEach(checkbox => {
+        const row = checkbox.closest('tr');
+        const costInput = row.querySelector('.cost-input');
+        const expirationInput = row.querySelector('.expiration-input');
+        
+        // Validate cost
+        if (costInput && (!costInput.value || parseFloat(costInput.value) <= 0)) {
+          hasEmptyCost = true;
+          costInput.style.borderColor = '#dc3545';
+        } else if (costInput) {
+          costInput.style.borderColor = '';
+        }
+        
+        // Validate expiration date
+        if (expirationInput) {
+          const selectedDate = new Date(expirationInput.value);
+          const today = new Date();
+          
+          if (!expirationInput.value || selectedDate <= today) {
+            hasInvalidExpiration = true;
+            expirationInput.style.borderColor = '#dc3545';
+          } else {
+            expirationInput.style.borderColor = '';
+          }
+        }
+      });
+      
+      if (hasEmptyCost) {
+        e.preventDefault();
+        alert('Please enter a valid cost (greater than 0) for all selected products.');
+        return false;
+      }
+      
+      if (hasInvalidExpiration) {
+        e.preventDefault();
+        alert('Please enter valid expiration dates (in the future) for all selected products.');
+        return false;
+      }
+    });
 
   </script>
 </body>

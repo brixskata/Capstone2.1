@@ -34,9 +34,11 @@ $is_auto_confirm = isset($_POST['auto_confirm']) && $_POST['auto_confirm'] == '1
 
 try {
     // First, verify that the order belongs to the current user and is in "Out for delivery" status
-    $sql = "SELECT o.orders_id, o.orderstatus_id, os.status_name 
+    $sql = "SELECT o.orders_id, o.orderstatus_id, os.status_name, o.delivery_option,
+                   a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country
             FROM orders o 
             LEFT JOIN order_status os ON o.orderstatus_id = os.orderstatus_id 
+            LEFT JOIN addresses a ON o.address_id = a.address_id
             WHERE o.orders_id = :order_id AND o.user_id = :user_id";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':order_id' => $order_id, ':user_id' => $user_id]);
@@ -93,17 +95,51 @@ try {
     logHistory($pdo, 'Order Received Confirmed', $log_message, $_SESSION['username']);
 
     if ($is_auto_confirm) {
+        // Prepare delivery/pickup information for auto-confirm message
+        $delivery_info = "";
+        if ($order['delivery_option'] === 'delivery') {
+            $address_parts = array_filter([
+                $order['address_line'],
+                $order['address_line2'],
+                $order['city'],
+                $order['state'],
+                $order['postal_code'],
+                $order['country']
+            ]);
+            $full_address = implode(', ', $address_parts);
+            $delivery_info = " (Delivery to: " . $full_address . ")";
+        } else {
+            $delivery_info = " (Pickup order)";
+        }
+        
         // Return JSON response for AJAX calls
         header('Content-Type: application/json');
         echo json_encode([
             'success' => true, 
-            'message' => 'Order automatically confirmed after 48 hours',
+            'message' => 'Order automatically confirmed after 48 hours' . $delivery_info,
             'order_id' => $order_id
         ]);
         exit;
     }
 
-    $_SESSION['success'] = "Thank you for confirming receipt of your order!";
+    // Prepare delivery/pickup information for display
+    $delivery_info = "";
+    if ($order['delivery_option'] === 'delivery') {
+        $address_parts = array_filter([
+            $order['address_line'],
+            $order['address_line2'],
+            $order['city'],
+            $order['state'],
+            $order['postal_code'],
+            $order['country']
+        ]);
+        $full_address = implode(', ', $address_parts);
+        $delivery_info = " (Delivery to: " . $full_address . ")";
+    } else {
+        $delivery_info = " (Pickup order)";
+    }
+
+    $_SESSION['success'] = "Thank you for confirming receipt of your order!" . $delivery_info;
     $_SESSION['order_confirmed'] = true;
     header('Location: orders.php');
     exit;

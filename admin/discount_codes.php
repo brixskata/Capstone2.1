@@ -107,6 +107,115 @@ $stmt = $pdo->query("SELECT dc.*, COUNT(dcu.id) as usage_count FROM discount_cod
                      LEFT JOIN discount_code_usage dcu ON dc.id = dcu.discount_code_id 
                      GROUP BY dc.id ORDER BY dc.id DESC");
 $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Handle brand discount operations
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'set_brand_discount') {
+    $brand_id = (int)$_POST['brand_id'];
+    $discount_percentage = floatval($_POST['discount_percentage']);
+    $discount_expires_at = !empty($_POST['discount_expires_at']) ? $_POST['discount_expires_at'] : null;
+    
+    try {
+        // Get all products for this brand
+        $stmt = $pdo->prepare("SELECT product_id FROM products WHERE brand_id = ? AND is_archive = 0");
+        $stmt->execute([$brand_id]);
+        $products = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (empty($products)) {
+            $_SESSION['error'] = "No products found for this brand";
+        } else {
+            // Set discount for all products in this brand
+            foreach ($products as $product_id) {
+                // Check if discount already exists
+                $stmt = $pdo->prepare("SELECT id FROM product_discounts WHERE product_id = ?");
+                $stmt->execute([$product_id]);
+                $existing = $stmt->fetch();
+                
+                if ($existing) {
+                    // Update existing discount
+                    $stmt = $pdo->prepare("UPDATE product_discounts SET discount_percentage = ?, expires_at = ?, updated_at = NOW() WHERE product_id = ?");
+                    $stmt->execute([$discount_percentage, $discount_expires_at, $product_id]);
+                } else {
+                    // Create new discount
+                    $stmt = $pdo->prepare("INSERT INTO product_discounts (product_id, discount_percentage, expires_at, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())");
+                    $stmt->execute([$product_id, $discount_percentage, $discount_expires_at]);
+                }
+            }
+            
+            $_SESSION['success'] = "Brand discount set for " . count($products) . " products successfully";
+            logHistory($pdo, 'Brand Discount Set', "Set discount for brand ID: $brand_id affecting " . count($products) . " products", $_SESSION['username']);
+        }
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Error setting brand discount: " . $e->getMessage();
+    }
+    
+    header("Location: discount_codes.php");
+    exit;
+}
+
+// Handle brand discount removal
+if (isset($_GET['remove_brand_discount'])) {
+    $brand_id = (int)$_GET['remove_brand_discount'];
+    
+    try {
+        // Get all products for this brand
+        $stmt = $pdo->prepare("SELECT product_id FROM products WHERE brand_id = ? AND is_archive = 0");
+        $stmt->execute([$brand_id]);
+        $products = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        // Remove discounts for all products in this brand
+        foreach ($products as $product_id) {
+            $stmt = $pdo->prepare("DELETE FROM product_discounts WHERE product_id = ?");
+            $stmt->execute([$product_id]);
+        }
+        
+        $_SESSION['success'] = "Brand discount removed for " . count($products) . " products successfully";
+        logHistory($pdo, 'Brand Discount Removed', "Removed discount for brand ID: $brand_id affecting " . count($products) . " products", $_SESSION['username']);
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Error removing brand discount: " . $e->getMessage();
+    }
+    
+    header("Location: discount_codes.php");
+    exit;
+}
+
+// Fetch all brands with their discount information and product counts
+$stmt = $pdo->query("
+    SELECT 
+        b.id AS brand_id,
+        b.name AS brand_name,
+        COUNT(p.product_id) AS total_products,
+        COUNT(CASE WHEN pd.discount_percentage > 0 THEN 1 END) AS discounted_products,
+        AVG(CASE WHEN pd.discount_percentage > 0 THEN pd.discount_percentage END) AS avg_discount_percentage,
+        MIN(CASE WHEN pd.expires_at IS NOT NULL THEN pd.expires_at END) AS earliest_expiration,
+        -- Get average current price for this brand
+        AVG(COALESCE(pp.markup_price, 0) + COALESCE((
+            SELECT COALESCE(
+                (SELECT pb.unit_cost 
+                 FROM product_batches pb 
+                 WHERE pb.product_id = p.product_id 
+                 AND pb.quantity_remaining > 0 
+                 AND pb.is_active = 1
+                 ORDER BY pb.received_date DESC 
+                 LIMIT 1),
+                pp.cost_price, 
+                0
+            )
+        ), 0)) AS avg_current_price
+    FROM brands b
+    LEFT JOIN products p ON b.id = p.brand_id AND p.is_archive = 0
+    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+    LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+    LEFT JOIN product_discounts pd ON p.product_id = pd.product_id
+    WHERE COALESCE(ps.current_stock, 0) > 0 OR ps.current_stock IS NULL
+    GROUP BY b.id, b.name
+    HAVING total_products > 0
+    ORDER BY b.name ASC
+");
+$brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch all brands for dropdown (including those without products)
+$stmt = $pdo->query("SELECT id, name FROM brands ORDER BY name ASC");
+$allBrands = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -426,6 +535,115 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
+
+            <!-- Brand Discount Management Section -->
+            <div class="mt-5">
+                <div class="page-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h2><i class="fas fa-tag me-2"></i>Brand Discount Management</h2>
+                            <p class="mb-0 opacity-75">Set discounts for entire brands to appear in Seasonal Specials</p>
+                        </div>
+                        <button class="btn text-white fw-bold px-4" 
+                                style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);" 
+                                data-bs-toggle="modal" data-bs-target="#brandDiscountModal">
+                            <i class="fa fa-plus me-2"></i>Add Brand Discount
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Brands Overview -->
+                <div class="row g-4">
+                    <?php if (empty($brands)): ?>
+                        <div class="col-12">
+                            <div class="text-center py-5">
+                                <i class="fas fa-tag fa-3x text-muted mb-3"></i>
+                                <h4 class="text-muted">No brands with products found</h4>
+                                <p class="text-muted">Add products to brands first, then you can set brand discounts</p>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($brands as $brand): ?>
+                            <div class="col-lg-4 col-md-6">
+                                <div class="discount-card">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <h5 class="fw-bold mb-0 text-dark"><?= htmlspecialchars($brand['brand_name']) ?></h5>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                <i class="fa fa-ellipsis-v"></i>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li>
+                                                    <a class="dropdown-item" href="#" onclick="editBrandDiscount(<?= htmlspecialchars(json_encode($brand)) ?>)">
+                                                        <i class="fa fa-edit me-2"></i>Edit Discount
+                                                    </a>
+                                                </li>
+                                                <?php if ($brand['discounted_products'] > 0): ?>
+                                                <li>
+                                                    <a class="dropdown-item text-danger" href="discount_codes.php?remove_brand_discount=<?= $brand['brand_id'] ?>" 
+                                                       onclick="return confirm('Remove discount for all products in this brand?')">
+                                                        <i class="fa fa-trash me-2"></i>Remove Discount
+                                                    </a>
+                                                </li>
+                                                <?php endif; ?>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="text-center mb-3">
+                                        <?php if ($brand['discounted_products'] > 0): ?>
+                                            <div class="discount-value">
+                                                <?= round($brand['avg_discount_percentage']) ?>% OFF
+                                            </div>
+                                            <small class="text-muted">Average Discount</small>
+                                        <?php else: ?>
+                                            <div class="text-muted">
+                                                <i class="fas fa-percent fa-2x mb-2"></i>
+                                                <br>
+                                                <small>No Discount Set</small>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                    
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <div class="d-flex align-items-center">
+                                            <?php if ($brand['discounted_products'] > 0): ?>
+                                                <span class="badge bg-success"><?= $brand['discounted_products'] ?>/<?= $brand['total_products'] ?> Products</span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary"><?= $brand['total_products'] ?> Products</span>
+                                            <?php endif; ?>
+                                        </div>
+                                        
+                                        <?php if ($brand['earliest_expiration']): ?>
+                                            <?php 
+                                            $expiration = new DateTime($brand['earliest_expiration']);
+                                            $now = new DateTime();
+                                            $daysLeft = $now->diff($expiration)->days;
+                                            $isExpired = $expiration < $now;
+                                            ?>
+                                            <small class="text-muted">
+                                                Expires: <?= $isExpired ? 'Expired' : ($daysLeft <= 7 ? $daysLeft . ' days left' : date('M d, Y', strtotime($brand['earliest_expiration']))) ?>
+                                            </small>
+                                        <?php endif; ?>
+                                    </div>
+                                    
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <small class="text-muted">
+                                            <i class="fas fa-boxes me-1"></i>
+                                            Avg Price: ₱<?= number_format($brand['avg_current_price'], 2) ?>
+                                        </small>
+                                        <button class="btn btn-sm <?= $brand['discounted_products'] > 0 ? 'btn-outline-primary' : 'btn-success' ?>" 
+                                                onclick="<?= $brand['discounted_products'] > 0 ? 'editBrandDiscount(' . htmlspecialchars(json_encode($brand)) . ')' : 'setBrandDiscount(' . htmlspecialchars(json_encode($brand)) . ')' ?>">
+                                            <i class="fas fa-percent me-1"></i>
+                                            <?= $brand['discounted_products'] > 0 ? 'Edit' : 'Set' ?> Discount
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -488,6 +706,113 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
     </div>
 
+    <!-- Brand Discount Modal -->
+    <div class="modal fade" id="brandDiscountModal" tabindex="-1">
+        <div class="modal-dialog">
+            <form action="discount_codes.php" method="POST" id="brandDiscountForm">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="brandDiscountModalTitle">Add Brand Discount</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="set_brand_discount">
+                        <input type="hidden" name="brand_id" id="brandDiscountId">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Product</label>
+                            <select class="form-select" name="product_id" id="productSelect" required>
+                                <option value="">Select a product...</option>
+                                <?php 
+                                // Fetch products with their brands for dropdown
+                                $stmt = $pdo->query("
+                                    SELECT DISTINCT
+                                        p.product_id,
+                                        p.product_name,
+                                        b.id as brand_id,
+                                        b.name as brand_name,
+                                        COALESCE(ps.current_stock, 0) AS stock,
+                                        COALESCE(pp.markup_price, 0) + COALESCE((
+                                            SELECT COALESCE(
+                                                (SELECT pb.unit_cost 
+                                                 FROM product_batches pb 
+                                                 WHERE pb.product_id = p.product_id 
+                                                 AND pb.quantity_remaining > 0 
+                                                 AND pb.is_active = 1
+                                                 ORDER BY pb.received_date DESC 
+                                                 LIMIT 1),
+                                                pp.cost_price, 
+                                                0
+                                            )
+                                        ), 0) AS current_price
+                                    FROM products p
+                                    LEFT JOIN brands b ON p.brand_id = b.id
+                                    LEFT JOIN product_stock ps ON p.product_id = ps.product_id
+                                    LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+                                    WHERE p.is_archive = 0 
+                                    AND COALESCE(ps.current_stock, 0) > 0
+                                    AND b.id IS NOT NULL
+                                    ORDER BY p.product_name ASC
+                                ");
+                                $productsWithBrands = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                                foreach ($productsWithBrands as $product): ?>
+                                    <option value="<?= $product['product_id'] ?>" 
+                                            data-brand-id="<?= $product['brand_id'] ?>"
+                                            data-brand-name="<?= htmlspecialchars($product['brand_name']) ?>"
+                                            data-current-price="<?= $product['current_price'] ?>">
+                                        <?= htmlspecialchars($product['product_name']) ?> - <?= htmlspecialchars($product['brand_name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="text-muted">Select a product to see its brand and pricing</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Product Brand</label>
+                            <input type="text" class="form-control" id="brandDisplay" readonly placeholder="Select a product first">
+                            <input type="hidden" name="brand_id" id="brandId">
+                            <small class="text-muted">Brand will be auto-filled based on selected product</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Current Average Price</label>
+                            <input type="text" class="form-control" id="brandCurrentPrice" readonly placeholder="Select a brand first">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Discount Percentage</label>
+                            <input type="number" step="0.01" min="1" max="99" class="form-control" name="discount_percentage" id="brandDiscountPercentage" required 
+                                   placeholder="Enter discount percentage (e.g., 20 for 20%)">
+                            <small class="text-muted">Enter the discount percentage (1-99%)</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Discount Expires At</label>
+                            <input type="datetime-local" class="form-control" name="discount_expires_at" id="brandDiscountExpires">
+                            <small class="text-muted">Leave empty for no expiration</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="alert alert-info">
+                                <strong>Preview:</strong>
+                                <div id="brandDiscountPreview">
+                                    <span class="text-decoration-line-through text-muted" id="brandOriginalPricePreview"></span>
+                                    <span class="text-success fw-bold ms-2" id="brandDiscountedPricePreview"></span>
+                                    <span class="badge bg-danger ms-2" id="brandDiscountBadgePreview"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn text-white fw-bold px-4" id="brandDiscountSubmitBtn" 
+                                style="background-color: #7F1734; border-radius: 8px;">Set Brand Discount</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <?php include 'includes/admin_scripts.php'; ?>
     <script>
@@ -532,6 +857,110 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
             document.getElementById('discountForm').reset();
             document.getElementById('discountActive').checked = true;
             document.getElementById('submitBtn').textContent = 'Add Discount Code';
+        });
+
+        // Brand Discount Functions
+        function setBrandDiscount(brand) {
+            document.getElementById('brandDiscountModalTitle').textContent = 'Set Brand Discount';
+            
+            // Find a product from this brand to pre-select
+            const productSelect = document.getElementById('productSelect');
+            const options = productSelect.options;
+            
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].getAttribute('data-brand-id') == brand.brand_id) {
+                    productSelect.value = options[i].value;
+                    updateBrandInfoFromProduct();
+                    break;
+                }
+            }
+            
+            document.getElementById('brandDiscountPercentage').value = '';
+            document.getElementById('brandDiscountExpires').value = '';
+            document.getElementById('brandDiscountSubmitBtn').textContent = 'Set Brand Discount';
+            
+            // Update preview
+            updateBrandDiscountPreview();
+            
+            new bootstrap.Modal(document.getElementById('brandDiscountModal')).show();
+        }
+
+        function editBrandDiscount(brand) {
+            document.getElementById('brandDiscountModalTitle').textContent = 'Edit Brand Discount';
+            
+            // Find a product from this brand to pre-select
+            const productSelect = document.getElementById('productSelect');
+            const options = productSelect.options;
+            
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].getAttribute('data-brand-id') == brand.brand_id) {
+                    productSelect.value = options[i].value;
+                    updateBrandInfoFromProduct();
+                    break;
+                }
+            }
+            
+            document.getElementById('brandDiscountPercentage').value = brand.avg_discount_percentage || '';
+            document.getElementById('brandDiscountExpires').value = brand.earliest_expiration ? brand.earliest_expiration.replace(' ', 'T') : '';
+            document.getElementById('brandDiscountSubmitBtn').textContent = 'Update Brand Discount';
+            
+            // Update preview
+            updateBrandDiscountPreview();
+            
+            new bootstrap.Modal(document.getElementById('brandDiscountModal')).show();
+        }
+
+        // Function to update brand info when product is selected
+        function updateBrandInfoFromProduct() {
+            const productSelect = document.getElementById('productSelect');
+            const selectedOption = productSelect.options[productSelect.selectedIndex];
+            
+            if (selectedOption.value) {
+                const brandId = selectedOption.getAttribute('data-brand-id');
+                const brandName = selectedOption.getAttribute('data-brand-name');
+                const currentPrice = selectedOption.getAttribute('data-current-price');
+                
+                document.getElementById('brandId').value = brandId;
+                document.getElementById('brandDisplay').value = brandName;
+                document.getElementById('brandCurrentPrice').value = '₱' + parseFloat(currentPrice).toFixed(2);
+            } else {
+                document.getElementById('brandId').value = '';
+                document.getElementById('brandDisplay').value = '';
+                document.getElementById('brandCurrentPrice').value = '';
+            }
+            
+            updateBrandDiscountPreview();
+        }
+
+        // Update brand discount preview
+        function updateBrandDiscountPreview() {
+            const currentPrice = parseFloat(document.getElementById('brandCurrentPrice').value.replace('₱', '')) || 0;
+            const discountPercentage = parseFloat(document.getElementById('brandDiscountPercentage').value) || 0;
+            
+            if (discountPercentage > 0 && currentPrice > 0) {
+                const discountedPrice = currentPrice * (1 - discountPercentage / 100);
+                
+                document.getElementById('brandOriginalPricePreview').textContent = '₱' + currentPrice.toFixed(2);
+                document.getElementById('brandDiscountedPricePreview').textContent = '₱' + discountedPrice.toFixed(2);
+                document.getElementById('brandDiscountBadgePreview').textContent = Math.round(discountPercentage) + '% OFF';
+                
+                document.getElementById('brandDiscountPreview').style.display = 'block';
+            } else {
+                document.getElementById('brandDiscountPreview').style.display = 'none';
+            }
+        }
+
+        // Add event listeners
+        document.getElementById('productSelect').addEventListener('change', updateBrandInfoFromProduct);
+        document.getElementById('brandDiscountPercentage').addEventListener('input', updateBrandDiscountPreview);
+
+        // Reset brand discount form when modal is hidden
+        document.getElementById('brandDiscountModal').addEventListener('hidden.bs.modal', function() {
+            document.getElementById('brandDiscountForm').reset();
+            document.getElementById('brandDiscountPreview').style.display = 'none';
+            document.getElementById('brandDisplay').value = '';
+            document.getElementById('brandId').value = '';
+            document.getElementById('brandCurrentPrice').value = '';
         });
     </script>
 </body>

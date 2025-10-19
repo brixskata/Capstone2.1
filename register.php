@@ -635,35 +635,107 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 </div>
                 <div class="modal-body">
                     <div class="terms-text">
-                        <p><strong>1. Acceptance of Terms</strong><br>
-                        By using MikeMadz, you agree to these terms and conditions and our privacy policy.</p>
+            
+                        <p>Welcome to MikeMadz Frozen Product Store! By using our online meat ordering system ("Service"), you agree to the following terms:</p>
                         
-                        <p><strong>2. User Account</strong><br>
-                        You must be at least 18 years old to create an account. You are responsible for maintaining the security of your account credentials.</p>
+                        <p><strong>1. Ordering & Payments</strong><br>
+                        Orders can be placed through our website/app.<br>
+                        Cash on Delivery (COD) is only available for orders up to ₱2,000.00. For higher amounts, payments must be made through [Credit/Debit Card, Bank Transfer, or E-Wallet].<br>
+                        A minimum order amount of ₱300.00 applies for COD transactions.<br>
+                        All prices are in [PHP] and may change without prior notice.</p>
                         
-                        <p><strong>3. Privacy Policy</strong><br>
-                        Your personal information will be handled according to our privacy policy. We respect your privacy and protect your data.</p>
+                        <p><strong>2. Delivery & Pick-up</strong><br>
+                        <strong>Pickup</strong><br>
+                        Customers can select Pickup and collect their orders directly from our store.<br>
+                        Customers may also arrange their own delivery by booking a third-party courier (e.g., Grab, Lalamove) to pick up the order on their behalf.<br>
+                        Once the order is released to the customer or their chosen courier, responsibility for the product transfers to the customer.<br><br>
+                        <strong>3. Delivery</strong><br>
+                        We arrange nationwide delivery through trusted third-party courier partners for customer convenience.<br>
+                        Delivery fees, timelines, and conditions will follow the policies of the assigned courier.<br>
+                        While we coordinate the shipment, we are not responsible for courier delays, damages, or failed deliveries caused by factors beyond our control (e.g., weather, traffic, incomplete addresses).<br>
+                        Customers must provide accurate delivery details to avoid delays or additional charges.</p>
                         
-                        <p><strong>4. Account Security</strong><br>
-                        You are responsible for maintaining the confidentiality of your account and password. Notify us immediately of any unauthorized use.</p>
+                        <p><strong>4. Cancellations & Refunds</strong><br>
+                        Customers may cancel their orders only if the order has not yet been shipped or dispatched.<br>
+                        Once an order is shipped, it can no longer be canceled.<br>
+                        Perishable goods cannot be refunded once delivered, unless proven defective or spoiled upon receipt.<br>
+                        The admin reserves the right to cancel or not proceed with an order if the submitted proof of payment (via Bank Transfer or GCash) is not verified or invalid.<br>
+                        In case of admin-initiated cancellation, the customer will be notified immediately, and any verified payments already received will be refunded.</p>
                         
-                        <p><strong>5. Prohibited Activities</strong><br>
-                        We reserve the right to suspend accounts that violate our terms, engage in fraudulent activities, or misuse our services.</p>
+                        <p><strong>5. Product Quality</strong><br>
+                        We guarantee that our meats are fresh and handled in compliance with food safety standards.<br>
+                        All products are properly packed and stored in well-insulated styrofoam containers to ensure freshness during handling and delivery.<br>
+                        When properly frozen and stored, our meats can maintain quality for an extended period, even up to years, depending on storage conditions.<br>
+                        Customers are advised to refrigerate or freeze products immediately upon receipt to maximize shelf life.<br>
+                        We are not responsible for spoilage due to improper storage or delayed receipt after successful delivery.</p>
                         
-                        <p><strong>6. Product Information</strong><br>
-                        All purchases are subject to availability. Prices and product information are subject to change without notice.</p>
+                        <p><strong>6. Limitation of Liability</strong><br>
+                        We are not liable for any indirect, incidental, or consequential damages, including but not limited to product spoilage caused by delayed receipt, courier delays, or improper storage after delivery.<br>
+                        Once an order is handed over to a third-party courier, responsibility for the handling, timeliness, and condition of the shipment lies with the courier and the customer.<br>
+                        Our maximum liability, in any case, is limited to the total amount paid for the specific order in question.</p>
                         
-                        <p><strong>7. Order Processing</strong><br>
-                        Orders are processed in the order received. We reserve the right to refuse or cancel orders at our discretion.</p>
+                        <hr>
                         
-                        <p><strong>8. Accurate Information</strong><br>
-                        You agree to provide accurate and complete information when creating your account and placing orders.</p>
+                        <h4>🔒 Privacy Policy</h4>
+                        <p>Your privacy is important to us. This Privacy Policy explains how we collect, use, and protect your personal information when you use our online ordering system.</p>
                         
-                        <p><strong>9. Changes to Terms</strong><br>
-                        We reserve the right to modify these terms at any time. Continued use of our services constitutes acceptance of new terms.</p>
+                        <p><strong>1. Information We Collect</strong><br>
+                        Personal details such as name, delivery address, contact number, and email address.<br>
+                        Payment details, processed securely via trusted third-party payment providers (we do not store your full payment information).<br>
+                        Order history and preferences to help us improve your experience.</p>
                         
-                        <p><strong>10. Contact Information</strong><br>
-                        If you have any questions about these terms, please contact our customer support team.</p>
+                        <p><strong>2. How We Use Your Information</strong><br>
+                        To process and deliver your orders.<br>
+                        To contact you regarding your order status or, with your consent, send promotions and updates.<br>
+                        To improve our services, website/app features, and customer experience.</p>
+                        
+                        <p><strong>3. Data Sharing</strong><br>
+                        We may share limited personal information (such as name, delivery address, and contact number) with third-party couriers or service providers solely for the purpose of fulfilling your order.<br>
+                        These partners are only authorized to use your data to complete delivery and are required to keep it secure.<br>
+                        We do not sell, trade, or rent your personal information to unrelated third parties.</p>
+                        
+                        <p><strong>4. Data Protection</strong><br>
+                        We comply with the Philippine Data Privacy Act of 2012 (RA 10173).<br>
+                        We use secure servers, encryption, and industry-standard practices to safeguard your information.<br>
+                        Access to your personal data is limited to authorized personnel only.</p>
+                        
+                        <p><strong>5. Your Rights</strong><br>
+                        You may access and update or correct your personal information in your account.<br>
+                        You may opt out of marketing communications anytime by following the unsubscribe instructions or contacting us directly.<br>
+                        Please note: Account deletion is not currently available in our system, but we comply with the Philippine Data Privacy Act of 2012 regarding the proper handling and retention of your data.</p>
+                        
+                        <hr>
+                        
+                        <h4>📱 End-User License Agreement (EULA)</h4>
+                        <p>This End-User License Agreement ("Agreement") is a legal contract between you ("User") and MikeMadz Frozen Product Store ("Company") regarding the use of our online ordering platform and related services ("Service").</p>
+                        
+                        <p><strong>1. License Grant</strong><br>
+                        We grant you a limited, non-exclusive, non-transferable license to access and use the Service solely for personal, non-commercial purposes (e.g., browsing, placing orders, and managing your account).</p>
+                        
+                        <p><strong>2. Restrictions</strong><br>
+                        You may not copy, modify, distribute, sell, lease, or reverse-engineer any part of the Service.<br>
+                        You may not use the Service for any fraudulent, abusive, or unlawful purposes.<br>
+                        You must not interfere with or disrupt the Service, servers, or networks connected to it.</p>
+                        
+                        <p><strong>3. Ownership</strong><br>
+                        All content, software, trademarks, logos, and intellectual property within the Service remain the sole property of MikeMadz Frozen Product Store.<br>
+                        Use of the Service does not grant you ownership rights in any part of it.</p>
+                        
+                        <p><strong>4. Payments</strong><br>
+                        By placing an order, you agree to provide accurate payment information through the available payment methods (Cash on Delivery, Bank Transfer, GCash).<br>
+                        Orders may be canceled by the admin if proof of payment is invalid, unverified, or fraudulent.</p>
+                        
+                        <p><strong>5. Termination</strong><br>
+                        We may suspend or terminate your access immediately if you violate this Agreement or applicable laws.<br>
+                        Upon termination, your license to use the Service will end, but you remain responsible for any outstanding payments.</p>
+                        
+                        <p><strong>6. Disclaimer of Warranties</strong><br>
+                        The Service is provided "as is" and "as available," without warranties of any kind.<br>
+                        We do not guarantee uninterrupted access, error-free operation, or that the Service will always be secure.</p>
+                        
+                        <p><strong>7. Limitation of Liability</strong><br>
+                        To the maximum extent permitted by law, our liability is limited to the amount you paid for the order in question.<br>
+                        We are not responsible for indirect damages (e.g., spoilage due to late receipt, third-party courier delays, or technical failures).</p>
                     </div>
                 </div>
                 <div class="modal-footer">

@@ -67,8 +67,13 @@
 
         .logo-section img {
             width: 60px;
+            height: 60px;
             margin-bottom: 15px;
             border-radius: 12px;
+            object-fit: contain;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px;
+            filter: brightness(0) invert(1);
         }
 
         .brand-logo {
@@ -152,8 +157,24 @@
         .step-description {
             color: #6c757d;
             text-align: center;
-            margin-bottom: 2rem;
+            margin-bottom: 1rem;
             line-height: 1.6;
+        }
+
+        .email-display {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 1rem;
+            margin: 0 auto 2rem auto;
+            text-align: center;
+            max-width: 300px;
+            color: var(--bs-secondary);
+            font-size: 1rem;
+        }
+
+        .email-display i {
+            color: var(--bs-secondary);
         }
 
         .form-group {
@@ -370,9 +391,9 @@
     <div class="verification-container">
         <div class="verification-header">
             <div class="logo-section">
-               
+                <img src="images/logo.png" alt="MikeMadz Logo" class="logo-img">
                 <div class="brand-logo">
-                    <i class="fas fa-store me-2"></i>MikeMadz
+                    MikeMadz
                 </div>
                 <p class="brand-subtitle">Secure Email Verification</p>
             </div>
@@ -407,7 +428,11 @@
             <!-- Step 2: Enter OTP -->
             <div id="step2" class="step">
                 <h2 class="step-title">Enter Verification Code</h2>
-                <p class="step-description">We've sent a 6-digit verification code to your email address</p>
+                <p class="step-description">We've sent a 6-digit verification code to:</p>
+                <div class="email-display">
+                    <i class="fas fa-envelope me-2"></i>
+                    <strong id="displayEmail"></strong>
+                </div>
                 
                 <div class="otp-container">
                     <input type="text" class="otp-input" maxlength="1" id="otp1" data-index="0">
@@ -480,6 +505,7 @@
                 
                 if (data.success) {
                     showMessage(data.message, 'success');
+                    document.getElementById('displayEmail').textContent = email;
                     showStep(2);
                     startCountdown(600); // 10 minutes
                 } else {

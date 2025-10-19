@@ -34,14 +34,14 @@ try {
                     p.product_name AS name,
                     p.product_description AS description,
                     uom.name AS uom_name,
-                    -- Get lowest price among all brands for this product
-                    MIN(COALESCE(pp.markup_price, 0) + COALESCE(
+                    -- Get newest batch price for this specific brand
+                    COALESCE(pp.markup_price, 0) + COALESCE(
                         (SELECT pb.unit_cost FROM product_batches pb 
                          WHERE pb.product_id = p.product_id AND pb.brand_id = b.id 
                          AND pb.quantity_remaining > 0 AND pb.is_active = 1
-                         ORDER BY pb.expiration_date ASC LIMIT 1),
+                         ORDER BY pb.received_date DESC LIMIT 1),
                         pp.cost_price, 0
-                    )) AS price,
+                    ) AS price,
                     -- Total stock from all brands combined
                     COALESCE(SUM(
                         (SELECT SUM(pb.quantity_remaining) FROM product_batches pb 
@@ -94,14 +94,14 @@ try {
                         p.product_name AS name,
                         p.product_description AS description,
                         uom.name AS uom_name,
-                        -- Get lowest price among all brands for this product
-                        MIN(COALESCE(pp.markup_price, 0) + COALESCE(
+                        -- Get newest batch price for this specific brand
+                        COALESCE(pp.markup_price, 0) + COALESCE(
                             (SELECT pb.unit_cost FROM product_batches pb 
                              WHERE pb.product_id = p.product_id AND pb.brand_id = b.id 
                              AND pb.quantity_remaining > 0 AND pb.is_active = 1
-                             ORDER BY pb.expiration_date ASC LIMIT 1),
+                             ORDER BY pb.received_date DESC LIMIT 1),
                             pp.cost_price, 0
-                        )) AS price,
+                        ) AS price,
                         -- Total stock from all brands combined
                         COALESCE(SUM(
                             (SELECT SUM(pb.quantity_remaining) FROM product_batches pb 
@@ -152,14 +152,14 @@ try {
                 p.product_name AS name,
                 p.product_description AS description,
                 uom.name AS uom_name,
-                -- Get lowest price among all brands for this product
-                MIN(COALESCE(pp.markup_price, 0) + COALESCE(
+                -- Get newest batch price for this specific brand
+                COALESCE(pp.markup_price, 0) + COALESCE(
                     (SELECT pb.unit_cost FROM product_batches pb 
                      WHERE pb.product_id = p.product_id AND pb.brand_id = b.id 
                      AND pb.quantity_remaining > 0 AND pb.is_active = 1
-                     ORDER BY pb.expiration_date ASC LIMIT 1),
+                     ORDER BY pb.received_date DESC LIMIT 1),
                     pp.cost_price, 0
-                )) AS price,
+                ) AS price,
                 -- Total stock from all brands combined
                 COALESCE(SUM(
                     (SELECT SUM(pb.quantity_remaining) FROM product_batches pb 
@@ -214,7 +214,7 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                 COALESCE(pp.markup_price, 0) + COALESCE(
                     (SELECT pb.unit_cost FROM product_batches pb 
                      WHERE pb.product_id = p.product_id AND pb.quantity_remaining > 0 
-                     ORDER BY pb.expiration_date ASC, pb.created_at ASC LIMIT 1),
+                     ORDER BY pb.received_date DESC LIMIT 1),
                     pp.cost_price, 0
                 ) AS price,
                 COALESCE(ps.current_stock, 0) AS stock
@@ -808,10 +808,9 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
                         <h3 class="product-title" onclick="window.location.href='product_detail.php?id=<?= $product['id'] ?>'" style="cursor: pointer;">
                             <?= htmlspecialchars($product['name']) ?>
                         </h3>
-                        <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
 
                         <div class="product-price">
-                            From ₱<?= number_format($product['price'], 2) ?>
+                            ₱<?= number_format($product['price'], 2) ?>
                             <span class="fs-6 text-muted"> / <?= htmlspecialchars($product['uom_name'] ?? '') ?></span>
                         </div>
 

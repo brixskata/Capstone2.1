@@ -88,32 +88,77 @@ if (isset($_POST['payment_method']) && $_POST['payment_method'] === 'GCash') {
 // Use the total price from the form (includes discount)
 $total_price = isset($_POST['total_price']) ? floatval($_POST['total_price']) : 0;
 
-// If total_price is 0 or empty, calculate from cart as fallback
+// If total_price is 0 or empty, calculate from selected items as fallback
 if ($total_price <= 0) {
+    error_log("Calculating total price from selected items as fallback");
+    
+    // Get selected cart items from POST data first
+    $selected_items = [];
+    if (isset($_POST['selected_items'])) {
+        $selected_items = json_decode($_POST['selected_items'], true) ?? [];
+    }
+    
     $total_price = 0;
-    foreach ($_SESSION['cart'] as $cart_key => $cart_item) {
-        $product_id = $cart_item['product_id'] ?? $cart_key;
-        if (is_string($product_id) && strpos($product_id, '_') !== false) {
-            $product_id = intval(explode('_', $product_id)[0]);
-        }
-        
-        $quantity = floatval($cart_item['quantity'] ?? 1);
-        $unit_price = floatval($cart_item['unit_price'] ?? 0);
-        
-        if ($unit_price == 0) {
-            $stmt = $pdo->prepare("SELECT COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) as price FROM products p 
-                                   LEFT JOIN product_pricing pp ON p.product_id = pp.product_id 
-                                   WHERE p.product_id = :product_id AND p.is_archive = 0");
-            $stmt->bindParam(':product_id', $product_id);
-            $stmt->execute();
-            $product = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($product) {
-                $unit_price = floatval($product['price']);
+    
+    if (!empty($selected_items)) {
+        // Calculate price only for selected items
+        foreach ($selected_items as $cart_key) {
+            if (isset($_SESSION['cart'][$cart_key])) {
+                $cart_item = $_SESSION['cart'][$cart_key];
+                $product_id = $cart_item['product_id'] ?? $cart_key;
+                if (is_string($product_id) && strpos($product_id, '_') !== false) {
+                    $product_id = intval(explode('_', $product_id)[0]);
+                }
+                
+                $quantity = floatval($cart_item['quantity'] ?? 1);
+                $unit_price = floatval($cart_item['unit_price'] ?? 0);
+                
+                if ($unit_price == 0) {
+                    $stmt = $pdo->prepare("SELECT COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) as price FROM products p 
+                                           LEFT JOIN product_pricing pp ON p.product_id = pp.product_id 
+                                           WHERE p.product_id = :product_id AND p.is_archive = 0");
+                    $stmt->bindParam(':product_id', $product_id);
+                    $stmt->execute();
+                    $product = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($product) {
+                        $unit_price = floatval($product['price']);
+                    }
+                }
+                
+                $item_total = $unit_price * $quantity;
+                $total_price += $item_total;
+                error_log("Selected item $cart_key: quantity=$quantity, unit_price=$unit_price, item_total=$item_total");
             }
         }
-        
-        $total_price += $unit_price * $quantity;
+        error_log("Total calculated from selected items: $total_price");
+    } else {
+        // Fallback: calculate from all items (backward compatibility)
+        error_log("No selected items - calculating from all cart items (backward compatibility)");
+        foreach ($_SESSION['cart'] as $cart_key => $cart_item) {
+            $product_id = $cart_item['product_id'] ?? $cart_key;
+            if (is_string($product_id) && strpos($product_id, '_') !== false) {
+                $product_id = intval(explode('_', $product_id)[0]);
+            }
+            
+            $quantity = floatval($cart_item['quantity'] ?? 1);
+            $unit_price = floatval($cart_item['unit_price'] ?? 0);
+            
+            if ($unit_price == 0) {
+                $stmt = $pdo->prepare("SELECT COALESCE(pp.markup_price, 0) + COALESCE(pp.cost_price, 0) as price FROM products p 
+                                       LEFT JOIN product_pricing pp ON p.product_id = pp.product_id 
+                                       WHERE p.product_id = :product_id AND p.is_archive = 0");
+                $stmt->bindParam(':product_id', $product_id);
+                $stmt->execute();
+                $product = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($product) {
+                    $unit_price = floatval($product['price']);
+                }
+            }
+            
+            $total_price += $unit_price * $quantity;
+        }
     }
     
     // Apply discount if available in session
@@ -286,13 +331,38 @@ if ($payment_method && $payment_method !== 'COD') {
 // Initialize batch manager
 $batchManager = new BatchManager($pdo);
 
+// Get selected cart items from POST data
+$selected_items = [];
+if (isset($_POST['selected_items'])) {
+    $selected_items = json_decode($_POST['selected_items'], true) ?? [];
+    error_log("Selected items from POST: " . json_encode($selected_items));
+} else {
+    error_log("No selected_items in POST data - processing all items");
+}
+
 // Load cart data from database using CartManager (same as checkout.php)
 include_once 'includes/cart_manager.php';
 $cartManager = new CartManager($pdo);
-$cart_data = $cartManager->loadCartFromDatabase($_SESSION['user_id']);
+$all_cart_data = $cartManager->loadCartFromDatabase($_SESSION['user_id']);
+
+// Filter cart data to only include selected items
+$cart_data = [];
+if (!empty($selected_items)) {
+    // Only process selected items
+    foreach ($selected_items as $cart_key) {
+        if (isset($all_cart_data[$cart_key])) {
+            $cart_data[$cart_key] = $all_cart_data[$cart_key];
+        }
+    }
+    error_log("Filtered cart data for selected items: " . json_encode($cart_data));
+} else {
+    // Fallback: process all items (backward compatibility)
+    $cart_data = $all_cart_data;
+    error_log("No selection data - processing all items (backward compatibility)");
+}
 
 // Debug: Log cart data
-error_log("Cart data loaded: " . json_encode($cart_data));
+error_log("Cart data to process: " . json_encode($cart_data));
 error_log("Cart data count: " . count($cart_data));
 
 // Debug: Log each cart item structure
@@ -378,7 +448,7 @@ try {
                     AND pb.is_active = 1
                 LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
                 WHERE p.product_id = ? AND p.is_archive = 0
-                ORDER BY pb.expiration_date ASC
+                ORDER BY pb.received_date DESC, pb.batch_id DESC
                 LIMIT 1";
                 
                 $stmt = $pdo->prepare($price_sql);
@@ -400,7 +470,7 @@ try {
                     AND pb.is_active = 1
                 LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
                 WHERE p.product_id = ? AND p.is_archive = 0
-                ORDER BY pb.expiration_date ASC
+                ORDER BY pb.received_date DESC, pb.batch_id DESC
                 LIMIT 1";
                 
                 $stmt = $pdo->prepare($general_sql);
@@ -476,9 +546,24 @@ try {
         }
     }
 
-    // Clear the cart
-    unset($_SESSION['cart']);
-    $_SESSION['cart'] = [];
+    // Clear only selected items from the cart
+    $selected_items = [];
+    if (isset($_POST['selected_items'])) {
+        $selected_items = json_decode($_POST['selected_items'], true) ?? [];
+    }
+    
+    if (!empty($selected_items)) {
+        // Remove only selected items from cart
+        foreach ($selected_items as $cart_key) {
+            if (isset($_SESSION['cart'][$cart_key])) {
+                unset($_SESSION['cart'][$cart_key]);
+            }
+        }
+    } else {
+        // Fallback: clear entire cart (backward compatibility)
+        unset($_SESSION['cart']);
+        $_SESSION['cart'] = [];
+    }
     
     // Record discount code usage if a discount was applied
     if (isset($_SESSION['discount_code_id']) && isset($_SESSION['discount']) && $_SESSION['discount'] > 0) {
@@ -498,8 +583,68 @@ try {
     $pdo->commit();
     error_log("Order processing completed successfully. Order ID: $order_id");
     
-    // Clear cart from database using CartManager (after transaction is committed)
-    $cartManager->clearCartFromDatabase($_SESSION['user_id']);
+    // Clear only selected items from database cart (after transaction is committed)
+    if (!empty($selected_items)) {
+        // Remove only selected items from database cart using proper database columns
+        try {
+            $cart_stmt = $pdo->prepare("SELECT cart_id FROM cart WHERE user_id = ? AND is_active = 1");
+            $cart_stmt->execute([$_SESSION['user_id']]);
+            $cart_id = $cart_stmt->fetchColumn();
+            
+            if ($cart_id) {
+                foreach ($selected_items as $cart_key) {
+                    // Parse cart_key to extract product_id, brand_id, batch_id, and unit
+                    // Format: product_id_unit[_brand_brandId][_batch_batchId]
+                    $parts = explode('_', $cart_key);
+                    $product_id = intval($parts[0]);
+                    $unit = $parts[1] ?? 'kilo';
+                    $brand_id = null;
+                    $batch_id = null;
+                    
+                    // Parse brand_id and batch_id from cart_key
+                    for ($i = 2; $i < count($parts); $i += 2) {
+                        if (isset($parts[$i]) && isset($parts[$i + 1])) {
+                            if ($parts[$i] === 'brand') {
+                                $brand_id = intval($parts[$i + 1]);
+                            } elseif ($parts[$i] === 'batch') {
+                                $batch_id = intval($parts[$i + 1]);
+                            }
+                        }
+                    }
+                    
+                    // Build WHERE clause based on parsed values
+                    $where_conditions = ["cart_id = ?", "user_id = ?", "product_id = ?", "unit = ?"];
+                    $params = [$cart_id, $_SESSION['user_id'], $product_id, $unit];
+                    
+                    if ($brand_id !== null) {
+                        $where_conditions[] = "brand_id = ?";
+                        $params[] = $brand_id;
+                    } else {
+                        $where_conditions[] = "brand_id IS NULL";
+                    }
+                    
+                    if ($batch_id !== null) {
+                        $where_conditions[] = "batch_id = ?";
+                        $params[] = $batch_id;
+                    } else {
+                        $where_conditions[] = "batch_id IS NULL";
+                    }
+                    
+                    $remove_stmt = $pdo->prepare("DELETE FROM cart_items WHERE " . implode(" AND ", $where_conditions));
+                    $remove_stmt->execute($params);
+                    
+                    error_log("Removed cart item from database: $cart_key (product_id=$product_id, brand_id=" . ($brand_id ?: 'NULL') . ", batch_id=" . ($batch_id ?: 'NULL') . ", unit=$unit)");
+                }
+                error_log("Removed selected items from database cart: " . json_encode($selected_items));
+            }
+        } catch (Exception $e) {
+            error_log("Error removing selected items from database cart: " . $e->getMessage());
+        }
+    } else {
+        // Fallback: clear entire database cart (backward compatibility)
+        $cartManager->clearCartFromDatabase($_SESSION['user_id']);
+        error_log("Cleared entire database cart (backward compatibility)");
+    }
     
 } catch (Exception $e) {
     // Rollback transaction on any error (only if transaction is active)
