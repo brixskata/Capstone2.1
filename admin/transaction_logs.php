@@ -2903,7 +2903,7 @@ foreach ($statuses as $status) {
              if (isOverdue) {
                const hoursElapsed = timeDiff / (1000 * 60 * 60);
                buttons += `<button type="button" class="action-btn" style="background: #dc3545; color: white;" onclick="event.stopPropagation(); cancelOverduePickup(${order.id}, ${Math.round(hoursElapsed * 10) / 10}, '${order.payment_method || ''}', '${order.payment_proof || ''}')">
-                 <i class="fas fa-exclamation-triangle me-1"></i>Cancel Overdue
+                 <i class="fas fa-exclamation-triangle me-1"></i>Cancel Order
                </button>`;
              }
       } else if (order.status === 'Out for delivery') {

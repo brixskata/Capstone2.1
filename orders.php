@@ -1755,9 +1755,6 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                                 <p class="mb-0"><?= htmlspecialchars($existing_rating['review']) ?></p>
                                                             </div>
                                                         <?php endif; ?>
-                                                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="editRating(<?= $order['id'] ?>)">
-                                                            <i class="fas fa-edit me-1"></i>Edit Rating
-                                                        </button>
                                                     </div>
                                                 <?php else: ?>
                                                     <!-- Show rating form -->
@@ -1787,6 +1784,13 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         </form>
                                                     </div>
                                                 <?php endif; ?>
+                                            </div>
+                                            
+                                            <!-- E-Invoice Button -->
+                                            <div class="mt-3">
+                                                <a href="generate_e_invoice.php?order_id=<?= $order['id'] ?>" class="btn btn-outline-primary btn-sm" target="_blank">
+                                                    <i class="fas fa-file-pdf me-1"></i>View E-Invoice
+                                                </a>
                                             </div>
                                         </div>
                                     </div>
@@ -1894,6 +1898,13 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                     <?php endif; ?>
                                                 </div>
                                             <?php endif; ?>
+                                            
+                                            <!-- E-Invoice Button -->
+                                            <div class="mt-2">
+                                                <a href="generate_e_invoice.php?order_id=<?= $order['id'] ?>" class="btn btn-outline-primary btn-sm" target="_blank">
+                                                    <i class="fas fa-file-pdf me-1"></i>View E-Invoice
+                                                </a>
+                                            </div>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
@@ -2801,18 +2812,6 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             });
         }
         
-        function editRating(orderId) {
-            // Hide existing rating and show form
-            const ratingSection = document.getElementById(`rating-section-${orderId}`);
-            const existingRating = ratingSection.querySelector('.existing-rating');
-            const ratingForm = ratingSection.querySelector('.rating-form');
-            
-            if (existingRating && ratingForm) {
-                existingRating.style.display = 'none';
-                ratingForm.style.display = 'block';
-            }
-        }
-        
         function showToast(message, type) {
             const toast = document.createElement('div');
             toast.className = 'toast show position-fixed top-0 end-0 m-3';
@@ -3577,6 +3576,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     // If 48+ hours have passed, auto-confirm
                     if (hoursElapsed >= 48) {
                         console.log(`Auto-confirming order ${orderId} (${hoursElapsed.toFixed(2)} hours elapsed)`);
+                        console.log(`Order ${orderId} should be auto-confirmed immediately`);
                         autoConfirmOrder(orderId);
                     } else {
                         // Schedule auto-confirmation for when 48 hours will be reached

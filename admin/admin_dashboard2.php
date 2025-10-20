@@ -47,30 +47,33 @@ try {
 	$stmt = $pdo->query("SELECT COUNT(*) FROM users");
 	$totalUsers = $stmt->fetchColumn();
 
-	// Fetch brand-based stock levels (matching stock_levels.php logic)
-	$stmt = $pdo->query("
-		SELECT
-			COUNT(CASE WHEN b.product_count > 0 AND b.total_stock > b.avg_reorder_point THEN 1 END) as in_stock_brands,
-			COUNT(CASE WHEN b.product_count > 0 AND b.total_stock > 0 AND b.total_stock <= b.avg_reorder_point THEN 1 END) as low_stock_brands,
-			COUNT(*) as total_brands
-		FROM (
-			SELECT
-				b.id as brand_id,
-				COUNT(DISTINCT pb.product_id) as product_count,
-				COALESCE(SUM(pb.quantity_remaining), 0) as total_stock,
-				COALESCE(AVG(bps.reorder_point), 0) as avg_reorder_point
-			FROM brands b
-			LEFT JOIN product_batches pb ON b.id = pb.brand_id AND pb.is_active = 1
-			LEFT JOIN products p ON pb.product_id = p.product_id AND p.is_archive = 0
-			LEFT JOIN brand_product_stock bps ON bps.product_id = pb.product_id AND bps.brand_id = pb.brand_id
-			WHERE b.is_archived = 0
-			GROUP BY b.id
-		) b
-	");
-	$brandStockStats = $stmt->fetch(PDO::FETCH_ASSOC);
-	$inStockBrands = $brandStockStats['in_stock_brands'] ?? 0;
-	$lowStockBrands = $brandStockStats['low_stock_brands'] ?? 0;
-	$totalBrands = $brandStockStats['total_brands'] ?? 0;
+  // Fetch brand-based stock levels using the same logic as stock_levels.php
+  // Use the ReorderPointCalculator to obtain brand group data and classify each brand
+  include_once __DIR__ . '/../includes/reorder_point_calculator.php';
+  $ropCalculator = new ReorderPointCalculator($pdo);
+  $brandRows = [];
+  try {
+    $brandRows = $ropCalculator->getBrandStockData();
+  } catch (Exception $e) {
+    // fallback to empty array if something goes wrong
+    $brandRows = [];
+  }
+  $inStockBrands = 0;
+  $lowStockBrands = 0;
+  $outOfStockBrands = 0;
+  $totalBrands = count($brandRows);
+  foreach ($brandRows as $b) {
+    $avg_rop = isset($b['avg_reorder_point']) ? (float)$b['avg_reorder_point'] : 0.0;
+    $total_stock = isset($b['total_stock']) ? (float)$b['total_stock'] : 0.0;
+    $status = $ropCalculator->getStockStatus($total_stock, $avg_rop);
+    if ($status === 'Out of Stock') {
+      $outOfStockBrands++;
+    } elseif ($status === 'Low Stock') {
+      $lowStockBrands++;
+    } else {
+      $inStockBrands++;
+    }
+  }
 
   // Order status counts
   $stmt = $pdo->query("SELECT COUNT(*)
@@ -156,6 +159,23 @@ try {
 		HAVING product_count > 0
 		ORDER BY product_count DESC");
 	$categoriesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+  // Customer/member analytics
+  // Customer/member analytics
+  // Active customers: match any user_type role containing 'customer' (case-insensitive), active, and has an email in user_info
+  $stmt = $pdo->prepare("SELECT COUNT(*) FROM users u JOIN user_type ut ON u.usertype_id = ut.usertype_id LEFT JOIN user_info ui ON ui.user_id = u.user_id WHERE LOWER(ut.role) LIKE '%customer%' AND (u.is_active IS NULL OR u.is_active = 1) AND COALESCE(ui.email, '') <> ''");
+  $stmt->execute();
+  $activeCustomers = (int)$stmt->fetchColumn();
+
+  // Active registered customers: any user_type role containing 'customer' (case-insensitive) with email_verified = 1 and active
+  $stmt = $pdo->prepare("SELECT COUNT(*) FROM users u JOIN user_type ut ON u.usertype_id = ut.usertype_id WHERE LOWER(ut.role) LIKE '%customer%' AND u.email_verified = 1 AND (u.is_active IS NULL OR u.is_active = 1)");
+  $stmt->execute();
+  $activeRegisteredCustomers = (int)$stmt->fetchColumn();
+
+  // Active members: count all users whose role is not 'customer' (active)
+  $stmt = $pdo->prepare("SELECT COUNT(*) FROM users u JOIN user_type ut ON u.usertype_id = ut.usertype_id WHERE (ut.role IS NULL OR ut.role != 'customer') AND (u.is_active IS NULL OR u.is_active = 1)");
+  $stmt->execute();
+  $activeMembers = (int)$stmt->fetchColumn();
 
   // Order status data removed — chart omitted from dashboard
 
@@ -472,7 +492,7 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
 
       <!-- BOTTOM Analytics Cards -->
       <div class="row g-4 mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
           <a href="products.php" class="text-decoration-none">
             <div class="analytics-card">
               <div class="card-icon">
@@ -485,7 +505,7 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
             </div>
           </a>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
           <a href="stock_levels.php" class="text-decoration-none">
             <div class="analytics-card">
               <div class="card-icon">
@@ -493,12 +513,12 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
               </div>
               <div class="card-content">
                 <h3 class="card-number"><?php echo $inStockBrands; ?></h3>
-                <p class="card-label">In stock (brands)</p>
+                <p class="card-label">Sufficient</p>
               </div>
             </div>
           </a>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
           <a href="stock_levels.php" class="text-decoration-none">
             <div class="analytics-card">
               <div class="card-icon">
@@ -507,6 +527,19 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
               <div class="card-content">
                 <h3 class="card-number"><?php echo $lowStockBrands; ?></h3>
                 <p class="card-label">Low stock (brands)</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-3">
+          <a href="stock_levels.php" class="text-decoration-none">
+            <div class="analytics-card">
+              <div class="card-icon">
+                <i class="fas fa-times-circle"></i>
+              </div>
+              <div class="card-content">
+                <h3 class="card-number"><?php echo $outOfStockBrands; ?></h3>
+                <p class="card-label">Out of Stock</p>
               </div>
             </div>
           </a>
@@ -530,6 +563,8 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
         </div>
       </div>
 
+      <!-- removed duplicate individual customer/member analytics cards -->
+
       <!-- Product Distribution and User Registration Trend -->
       <div class="row g-4 mb-4">
         <!-- Product Distribution Pie Chart -->
@@ -543,6 +578,51 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
             </div>
             <div class="card-body" style="height: 300px;">
               <canvas id="categoriesChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Customer / Member Analytics (side card) -->
+        <div class="col-lg-4">
+          <div class="table-card">
+            <div class="card-header bg-transparent border-0 p-4">
+              <h5 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-user-friends me-2"></i>Customer / Member Analytics
+              </h5>
+              <small class="text-muted">Active counts</small>
+            </div>
+            <div class="card-body" style="height:300px; display:flex; align-items:stretch; justify-content:center;">
+              <div class="w-100" style="display:flex; flex-direction:column; gap:12px;">
+                <a href="manage_users.php?role=customer" class="text-decoration-none">
+                  <div class="analytics-card" style="padding:12px; display:flex; gap:0.75rem; align-items:center; flex:1;">
+                    <div class="card-icon" style="width:48px; height:48px; font-size:1.1rem;"><i class="fas fa-users"></i></div>
+                    <div class="card-content">
+                      <h4 class="card-number" style="font-size:1.25rem; margin:0;"><?php echo $activeCustomers; ?></h4>
+                      <p class="card-label" style="margin:0;">Active Customers</p>
+                    </div>
+                  </div>
+                </a>
+
+                <a href="manage_users.php?filter=registered" class="text-decoration-none">
+                  <div class="analytics-card" style="padding:12px; display:flex; gap:0.75rem; align-items:center; flex:1;">
+                    <div class="card-icon" style="width:48px; height:48px; font-size:1.1rem;"><i class="fas fa-user-check"></i></div>
+                    <div class="card-content">
+                      <h4 class="card-number" style="font-size:1.25rem; margin:0;"><?php echo $activeRegisteredCustomers; ?></h4>
+                      <p class="card-label" style="margin:0;">Active Registered</p>
+                    </div>
+                  </div>
+                </a>
+
+                <a href="manage_users.php?role=member" class="text-decoration-none">
+                  <div class="analytics-card" style="padding:12px; display:flex; gap:0.75rem; align-items:center; flex:1;">
+                    <div class="card-icon" style="width:48px; height:48px; font-size:1.1rem;"><i class="fas fa-id-badge"></i></div>
+                    <div class="card-content">
+                      <h4 class="card-number" style="font-size:1.25rem; margin:0;"><?php echo $activeMembers; ?></h4>
+                      <p class="card-label" style="margin:0;">Active Members</p>
+                    </div>
+                  </div>
+                </a>
+              </div>
             </div>
           </div>
         </div>

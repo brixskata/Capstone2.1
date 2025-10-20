@@ -79,8 +79,7 @@ try {
                 <ul class="footer-links">
                     <li><a href="orders.php">My Orders</a></li>
                     <li><a href="cart.php">Shopping Cart</a></li>
-                    <li><a href="favorite.php">Favorites</a></li>
-                    <li><a href="notifications.php">Notifications</a></li>
+                    <li><a href="favorites.php">Favorites</a></li>
                 </ul>
             </div>
 
@@ -109,15 +108,7 @@ try {
                     </div>
                 </form>
                 <div class="newsletter-features">
-                    <div class="feature-item">
-                        <i class="fas fa-truck"></i>
-                        <span>Free delivery on ₱7,000+</span>
-                    </div>
-                    <div class="feature-item">
-                        <i class="fas fa-shield-alt"></i>
-                        <span>Secure payments</span>
-                    </div>
-                </div>
+                
             </div>
         </div>
 

@@ -91,9 +91,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             throw new Exception("Invalid status transition from {$status_names[$current_status]} to {$status_names[$new_status]}. Valid transitions: " . implode(', ', array_map(function($s) use ($status_names) { return $status_names[$s]; }, $valid_transitions[$current_status])));
         }
         
-        // Update status
-        $stmt = $pdo->prepare("UPDATE restocking SET status_id = ? WHERE restocking_id = ?");
-        $stmt->execute([$new_status, $restock_id]);
+        // If changing to "Received" (status 2), get actual received quantity
+        $actual_quantity_received = $restock['quantity_added']; // Default to ordered quantity
+        if ($new_status == 2 && isset($_POST['actual_quantity_received'])) {
+            $actual_quantity_received = (float)$_POST['actual_quantity_received'];
+            
+            // Validate received quantity
+            if ($actual_quantity_received < 0) {
+                throw new Exception("Received quantity cannot be negative.");
+            }
+            
+            // Allow over-delivery but warn if significantly more than ordered
+            if ($actual_quantity_received > $restock['quantity_added'] * 1.1) {
+                // Log warning for over-delivery
+                error_log("Warning: Over-delivery detected. Ordered: {$restock['quantity_added']}, Received: $actual_quantity_received");
+            }
+        }
+        
+        // Update status and actual received quantity
+        $stmt = $pdo->prepare("UPDATE restocking SET status_id = ?, actual_quantity_received = ? WHERE restocking_id = ?");
+        $stmt->execute([$new_status, $actual_quantity_received, $restock_id]);
         
         // If changing to "Received" (status 2), update stock and create batch
         if ($new_status == 2 && $restock['status_id'] != 2) {
@@ -118,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                 'product_id' => $restock['product_id'],
                 'supplier_id' => $restock['supplier_id'],
                 'brand_id' => $brand_id,
-                'quantity_received' => $restock['quantity_added'],
+                'quantity_received' => $actual_quantity_received, // Use actual received quantity
                 'unit_cost' => $cost_price,
                 'expiration_date' => $restock['expiration_date'] ?? calculateDefaultExpirationDate(),
                 'received_date' => $restock['restock_date'],
@@ -136,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             
             // Update product_stock current_stock and last_restock_date
             $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ? WHERE product_id = ?");
-            $stmt->execute([$restock['quantity_added'], $restock['restock_date'], $restock['product_id']]);
+            $stmt->execute([$actual_quantity_received, $restock['restock_date'], $restock['product_id']]);
             
             // Get new current stock
             $stmt = $pdo->prepare("SELECT current_stock FROM product_stock WHERE product_id = ?");
@@ -145,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             
             // Record stock movement
             $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, stockmovementtype_id, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) VALUES (?, 1, ?, ?, ?, 'Restocking - Status Updated', ?, 'restock', ?)");
-            $stmt->execute([$restock['product_id'], $restock['quantity_added'], $current_stock - $restock['quantity_added'], $current_stock, $restock_id, $_SESSION['user_id']]);
+            $stmt->execute([$restock['product_id'], $actual_quantity_received, $current_stock - $actual_quantity_received, $current_stock, $restock_id, $_SESSION['user_id']]);
         }
         
         $pdo->commit();
@@ -156,7 +173,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
         $product_name = $stmt->fetchColumn();
         
         $status_names = [1 => 'Pending', 2 => 'Received', 3 => 'Cancelled'];
-        logHistory($pdo, 'Restocking Status Update', "Product: $product_name, Status: {$status_names[$new_status]}", $_SESSION['username']);
+        $log_message = "Product: $product_name, Status: {$status_names[$new_status]}";
+        if ($new_status == 2) {
+            $log_message .= ", Ordered: {$restock['quantity_added']}, Received: $actual_quantity_received";
+        }
+        logHistory($pdo, 'Restocking Status Update', $log_message, $_SESSION['username']);
         $_SESSION['success'] = "Restocking status updated successfully!";
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
@@ -327,6 +348,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET' && isset($_GET['action']) && $_GET['acti
     exit;
 }
 
+// Handle AJAX request for restocking details
+if (isset($_GET['action']) && $_GET['action'] == 'get_restock_details' && isset($_GET['restocking_id'])) {
+    $restocking_id = (int)$_GET['restocking_id'];
+    
+    $stmt = $pdo->prepare("
+        SELECT 
+            r.*,
+            p.product_name,
+            u.name as uom_name
+        FROM restocking r
+        LEFT JOIN products p ON r.product_id = p.product_id
+        LEFT JOIN uom u ON p.uom_id = u.uom_id
+        WHERE r.restocking_id = ?
+    ");
+    $stmt->execute([$restocking_id]);
+    $restock = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($restock) {
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'product_name' => $restock['product_name'],
+            'quantity_added' => $restock['quantity_added'],
+            'uom_name' => $restock['uom_name']
+        ]);
+    } else {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'Restocking record not found']);
+    }
+    exit;
+}
+
 // Handle AJAX request for PO details
 if (isset($_GET['action']) && $_GET['action'] == 'get_po_details' && isset($_GET['po_number'])) {
     $po_number = $_GET['po_number'];
@@ -372,6 +425,7 @@ $stmt = $pdo->query("
         ps.expiration_date,
         COALESCE(r.cost_per_unit, pp.cost_price, 0) as unit_cost,
         COALESCE(r.total_cost, r.quantity_added * COALESCE(r.cost_per_unit, pp.cost_price, 0), 0) as total_cost,
+        COALESCE(r.actual_quantity_received, r.quantity_added) as actual_received_qty,
         CASE 
             WHEN r.status_id = 1 THEN 'Pending'
             WHEN r.status_id = 2 THEN 'Received'
@@ -881,7 +935,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                              <th class="fw-semibold">Product</th>
                              <th class="fw-semibold">Brand</th>
                              <th class="fw-semibold">Supplier</th>
-                             <th class="fw-semibold">Quantity</th>
+                             <th class="fw-semibold">Quantity (Ordered/Received)</th>
                              <th class="fw-semibold">Cost per Unit</th>
                              <th class="fw-semibold">Total Cost</th>
                              <th class="fw-semibold">Status</th>
@@ -910,7 +964,15 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                                     <?php endif; ?>
                                 </td>
                                 <td><?= htmlspecialchars($restock['supplier_name']) ?></td>
-                                <td><?= number_format((float)$restock['quantity_added'], 1) ?> <?= htmlspecialchars($restock['uom_name']) ?></td>
+                                <td>
+                                    <?php if ($restock['status_id'] == 2 && $restock['actual_quantity_received'] != $restock['quantity_added']): ?>
+                                        <span class="text-muted"><?= number_format((float)$restock['quantity_added'], 1) ?></span>
+                                        <br><span class="fw-bold text-success"><?= number_format((float)$restock['actual_received_qty'], 1) ?></span>
+                                        <small class="text-muted"><?= htmlspecialchars($restock['uom_name']) ?></small>
+                                    <?php else: ?>
+                                        <?= number_format((float)$restock['quantity_added'], 1) ?> <?= htmlspecialchars($restock['uom_name']) ?>
+                                    <?php endif; ?>
+                                </td>
                                 <td>₱<?= number_format($restock['unit_cost'], 2) ?></td>
                                 <td>₱<?= number_format($restock['total_cost'], 2) ?></td>
                                 <td>
@@ -1026,6 +1088,58 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Quantity Adjustment Modal -->
+    <div class="modal fade" id="quantityAdjustmentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fa fa-edit me-2" style="color: #7F1734;"></i>Adjust Received Quantity
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" id="quantityAdjustmentForm">
+                    <div class="modal-body">
+                        <input type="hidden" name="update_status" value="1">
+                        <input type="hidden" name="restocking_id" id="adjust_restocking_id">
+                        <input type="hidden" name="status_id" value="2">
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Product</label>
+                            <input type="text" id="adjust_product_name" class="form-control" readonly>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Ordered Quantity</label>
+                            <input type="text" id="adjust_ordered_qty" class="form-control" readonly>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Actual Received Quantity <span class="text-danger">*</span></label>
+                            <input type="number" name="actual_quantity_received" id="adjust_received_qty" 
+                                   class="form-control" min="0" step="0.01" required>
+                            <div class="form-text">
+                                <i class="fa fa-info-circle me-1"></i>
+                                Enter the actual quantity received from supplier
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle me-2"></i>
+                            <strong>Note:</strong> This will update your inventory with the actual received quantity.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success fw-bold">
+                            <i class="fa fa-check me-2"></i>Confirm Receipt
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -1434,49 +1548,158 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
          
          function updateRestockStatus(restockingId, newStatus) {
              const statusNames = {1: 'Pending', 2: 'Received', 3: 'Cancelled'};
-             const message = newStatus == 2 ? 
-                 'Mark this item as received? This will update stock levels.' : 
-                 'Cancel this restocking item?';
              
-             Swal.fire({
-                 title: 'Update Status',
-                 text: message,
-                 icon: 'question',
-                 showCancelButton: true,
-                 confirmButtonColor: '#7F1734',
-                 cancelButtonColor: '#6c757d',
-                 confirmButtonText: 'Yes, update it!',
-                 cancelButtonText: 'Cancel'
-             }).then((result) => {
-                 if (result.isConfirmed) {
-                     const form = document.createElement('form');
-                     form.method = 'POST';
-                     form.action = 'restocking.php';
-                     
-                     const restockingIdInput = document.createElement('input');
-                     restockingIdInput.type = 'hidden';
-                     restockingIdInput.name = 'restocking_id';
-                     restockingIdInput.value = restockingId;
-                     
-                     const statusInput = document.createElement('input');
-                     statusInput.type = 'hidden';
-                     statusInput.name = 'status_id';
-                     statusInput.value = newStatus;
-                     
-                     const updateStatusInput = document.createElement('input');
-                     updateStatusInput.type = 'hidden';
-                     updateStatusInput.name = 'update_status';
-                     updateStatusInput.value = '1';
-                     
-                     form.appendChild(restockingIdInput);
-                     form.appendChild(statusInput);
-                     form.appendChild(updateStatusInput);
-                     
-                     document.body.appendChild(form);
-                     form.submit();
-                 }
-             });
+             if (newStatus == 2) {
+                 // For "Received" status, show quantity adjustment modal
+                 openQuantityAdjustmentModal(restockingId);
+             } else {
+                 // For other statuses, use the original confirmation
+                 const message = newStatus == 3 ? 'Cancel this restocking item?' : 'Update status?';
+                 
+                 Swal.fire({
+                     title: 'Update Status',
+                     text: message,
+                     icon: 'question',
+                     showCancelButton: true,
+                     confirmButtonColor: '#7F1734',
+                     cancelButtonColor: '#6c757d',
+                     confirmButtonText: 'Yes, update it!',
+                     cancelButtonText: 'Cancel'
+                 }).then((result) => {
+                     if (result.isConfirmed) {
+                         submitStatusUpdate(restockingId, newStatus);
+                     }
+                 });
+             }
          }
+         
+         function openQuantityAdjustmentModal(restockingId) {
+             // Get restocking details via AJAX
+             fetch(`restocking.php?action=get_restock_details&restocking_id=${restockingId}`)
+                 .then(response => response.json())
+                 .then(data => {
+                     if (data.success) {
+                         document.getElementById('adjust_restocking_id').value = restockingId;
+                         document.getElementById('adjust_product_name').value = data.product_name;
+                         document.getElementById('adjust_ordered_qty').value = data.quantity_added;
+                         document.getElementById('adjust_received_qty').value = data.quantity_added; // Default to ordered quantity
+                         
+                         new bootstrap.Modal(document.getElementById('quantityAdjustmentModal')).show();
+                     } else {
+                         Swal.fire({
+                             icon: 'error',
+                             title: 'Error',
+                             text: 'Could not load restocking details.',
+                             confirmButtonColor: '#7F1734'
+                         });
+                     }
+                 })
+                 .catch(error => {
+                     console.error('Error loading restocking details:', error);
+                     Swal.fire({
+                         icon: 'error',
+                         title: 'Error',
+                         text: 'Could not load restocking details.',
+                         confirmButtonColor: '#7F1734'
+                     });
+                 });
+         }
+         
+         function submitStatusUpdate(restockingId, newStatus, actualQuantity = null) {
+             const form = document.createElement('form');
+             form.method = 'POST';
+             form.action = 'restocking.php';
+             
+             const restockingIdInput = document.createElement('input');
+             restockingIdInput.type = 'hidden';
+             restockingIdInput.name = 'restocking_id';
+             restockingIdInput.value = restockingId;
+             
+             const statusInput = document.createElement('input');
+             statusInput.type = 'hidden';
+             statusInput.name = 'status_id';
+             statusInput.value = newStatus;
+             
+             const updateStatusInput = document.createElement('input');
+             updateStatusInput.type = 'hidden';
+             updateStatusInput.name = 'update_status';
+             updateStatusInput.value = '1';
+             
+             form.appendChild(restockingIdInput);
+             form.appendChild(statusInput);
+             form.appendChild(updateStatusInput);
+             
+             if (actualQuantity !== null) {
+                 const quantityInput = document.createElement('input');
+                 quantityInput.type = 'hidden';
+                 quantityInput.name = 'actual_quantity_received';
+                 quantityInput.value = actualQuantity;
+                 form.appendChild(quantityInput);
+             }
+             
+             document.body.appendChild(form);
+             form.submit();
+         }
+         
+         // Add validation for quantity adjustment modal
+         document.addEventListener('DOMContentLoaded', function() {
+             const quantityForm = document.getElementById('quantityAdjustmentForm');
+             if (quantityForm) {
+                 quantityForm.addEventListener('submit', function(e) {
+                     const receivedQty = parseFloat(document.getElementById('adjust_received_qty').value);
+                     const orderedQty = parseFloat(document.getElementById('adjust_ordered_qty').value);
+                     
+                     if (receivedQty < 0) {
+                         e.preventDefault();
+                         Swal.fire({
+                             icon: 'error',
+                             title: 'Invalid Quantity',
+                             text: 'Received quantity cannot be negative.',
+                             confirmButtonColor: '#7F1734'
+                         });
+                         return false;
+                     }
+                     
+                     if (receivedQty > orderedQty * 1.2) {
+                         e.preventDefault();
+                         Swal.fire({
+                             title: 'Over-Delivery Warning',
+                             text: `You received ${receivedQty} units but only ordered ${orderedQty} units (${Math.round((receivedQty/orderedQty - 1) * 100)}% over). Are you sure this is correct?`,
+                             icon: 'warning',
+                             showCancelButton: true,
+                             confirmButtonColor: '#7F1734',
+                             cancelButtonColor: '#6c757d',
+                             confirmButtonText: 'Yes, confirm',
+                             cancelButtonText: 'Cancel'
+                         }).then((result) => {
+                             if (result.isConfirmed) {
+                                 quantityForm.submit();
+                             }
+                         });
+                         return false;
+                     }
+                     
+                     if (receivedQty < orderedQty * 0.5) {
+                         e.preventDefault();
+                         Swal.fire({
+                             title: 'Under-Delivery Warning',
+                             text: `You received ${receivedQty} units but ordered ${orderedQty} units (${Math.round((1 - receivedQty/orderedQty) * 100)}% under). Are you sure this is correct?`,
+                             icon: 'warning',
+                             showCancelButton: true,
+                             confirmButtonColor: '#7F1734',
+                             cancelButtonColor: '#6c757d',
+                             confirmButtonText: 'Yes, confirm',
+                             cancelButtonText: 'Cancel'
+                         }).then((result) => {
+                             if (result.isConfirmed) {
+                                 quantityForm.submit();
+                             }
+                         });
+                         return false;
+                     }
+                 });
+             }
+         });
     </script>
 </body>
 </html>

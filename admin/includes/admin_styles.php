@@ -443,10 +443,10 @@
   }
   
   .sidebar.collapsed .nav-link {
-    padding: 18px 12px;
-    margin: 6px 16px;
+    padding: 12px 8px;
+    margin: 4px 8px;
     justify-content: center;
-    min-height: 56px;
+    min-height: 48px;
     display: flex;
     align-items: center;
     border-radius: 10px;
@@ -454,9 +454,9 @@
   
   .sidebar.collapsed .nav-link i {
     margin-right: 0;
-    font-size: 20px;
-    width: 28px;
-    height: 28px;
+    font-size: 18px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -946,12 +946,12 @@
   
   .sidebar.collapsed .nav-icon {
     margin-right: 0;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 18px;
   }
   
   .sidebar.collapsed .nav-badge {
