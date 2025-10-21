@@ -2278,8 +2278,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                             <p class="about-text">
                                 Located in <strong>BIR Village Block 9 Lot 5 Franchise St., Brgy. Sauyo, Quezon City</strong>, 
                                 MikeMadz quickly grew from a small online venture into a trusted frozen goods supplier. 
-                                We now serve <strong>40 to 60 customers daily</strong>, offering 
-                                <strong>1,500 to 2,000 products every week</strong>, and proudly serving customers nationwide.
+                        
                             </p>
                         </div>
                         

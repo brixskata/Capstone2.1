@@ -190,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['address_action'])) {
 
 // Fetch all orders (current and completed)
 $sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price, o.delivery_option,
-               o.plate_number, o.transaction_number,
+               o.plate_number, o.transaction_number, o.application_name, o.rider_name,
                oi.quantity, p.product_name, oi.price,
                oc.reason AS cancel_reason, oc.receipt_path, oc.receipt_filename,
                a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country
@@ -227,6 +227,8 @@ foreach ($rawOrders as $row) {
             'delivery_option' => $row['delivery_option'] ?? 'pickup',
             'plate_number' => $row['plate_number'] ?? null,
             'transaction_number' => $row['transaction_number'] ?? null,
+            'application_name' => $row['application_name'] ?? null,
+            'rider_name' => $row['rider_name'] ?? null,
             'cancel_reason' => $row['cancel_reason'] ?? null,
             'receipt_path' => $row['receipt_path'] ?? null,
             'receipt_filename' => $row['receipt_filename'] ?? null,
@@ -1491,13 +1493,19 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                         </div>
 
                                         <!-- Delivery Tracking Information -->
-                                        <?php if (!empty($order['plate_number']) || !empty($order['transaction_number'])): ?>
+                                        <?php if (!empty($order['plate_number']) || !empty($order['transaction_number']) || !empty($order['application_name']) || !empty($order['rider_name'])): ?>
                                         <div class="delivery-tracking mb-3">
                                             <div class="alert alert-success py-2">
                                                 <small><i class="fas fa-truck me-1"></i><strong>Delivery Tracking:</strong></small>
                                                 <div class="mt-1">
+                                                    <?php if (!empty($order['application_name'])): ?>
+                                                        <div><i class="fas fa-mobile-alt me-1"></i><strong>Application:</strong> <?= htmlspecialchars($order['application_name']) ?></div>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($order['rider_name'])): ?>
+                                                        <div><i class="fas fa-user me-1"></i><strong>Rider:</strong> <?= htmlspecialchars($order['rider_name']) ?></div>
+                                                    <?php endif; ?>
                                                     <?php if (!empty($order['plate_number'])): ?>
-                                                        <div><i class="fas fa-car me-1"></i><strong>Vehicle:</strong> <?= htmlspecialchars($order['plate_number']) ?></div>
+                                                        <div><i class="fas fa-car me-1"></i><strong>Plate Number:</strong> <?= htmlspecialchars($order['plate_number']) ?></div>
                                                     <?php endif; ?>
                                                     <?php if (!empty($order['transaction_number'])): ?>
                                                         <div><i class="fas fa-receipt me-1"></i><strong>Transaction:</strong> <?= htmlspecialchars($order['transaction_number']) ?></div>

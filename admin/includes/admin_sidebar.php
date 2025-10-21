@@ -306,6 +306,15 @@ try {
           <?php endif; ?>
         </a>
         <?php endif; ?>
+        <?php if (isSuperAdmin($pdo)): ?>
+        <a href="user_permissions.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'user_permissions.php' ? 'active' : ''; ?>">
+          <div class="nav-icon">
+            <i class="fas fa-user-shield"></i>
+          </div>
+          <span>Roles</span>
+          <div class="nav-indicator"></div>
+        </a>
+        <?php endif; ?>
         <a href="id_verification_management.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'id_verification_management.php' ? 'active' : ''; ?>">
           <div class="nav-icon">
             <i class="fas fa-id-card"></i>
@@ -338,15 +347,6 @@ try {
             <i class="fas fa-mobile-alt"></i>
           </div>
           <span>GCash Settings</span>
-          <div class="nav-indicator"></div>
-        </a>
-        <?php endif; ?>
-        <?php if (isSuperAdmin($pdo)): ?>
-        <a href="user_permissions.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'user_permissions.php' ? 'active' : ''; ?>">
-          <div class="nav-icon">
-            <i class="fas fa-user-shield"></i>
-          </div>
-          <span>Permissions</span>
           <div class="nav-indicator"></div>
         </a>
         <?php endif; ?>

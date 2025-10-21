@@ -22,11 +22,13 @@ if (isset($_POST['update_status'])) {
     $new_status = $_POST['new_status'];
     $plate_number = $_POST['plate_number'] ?? null;
     $transaction_number = $_POST['transaction_number'] ?? null;
+    $application_name = $_POST['application_name'] ?? null;
+    $rider_name = $_POST['rider_name'] ?? null;
 
     try {
-        // Validate transaction number format (exactly 19 digits)
-        if ($transaction_number && !preg_match('/^[0-9]{19}$/', $transaction_number)) {
-            $_SESSION['error'] = "Transaction number must be exactly 19 digits";
+        // Validate transaction number format (up to 23 digits)
+        if ($transaction_number && !preg_match('/^[0-9]{1,23}$/', $transaction_number)) {
+            $_SESSION['error'] = "Transaction number must be up to 23 digits";
             header("Location: transaction_logs.php");
             exit;
         }
@@ -52,6 +54,8 @@ if (isset($_POST['update_status'])) {
                                 SET o.orderstatus_id = os.orderstatus_id,
                                     o.plate_number = :plate_number,
                                     o.transaction_number = :transaction_number,
+                                    o.application_name = :application_name,
+                                    o.rider_name = :rider_name,
                                     o.pickup_ready_at = CASE 
                                         WHEN :status = 'Ready for Pick Up' AND o.pickup_ready_at IS NULL 
                                         THEN NOW() 
@@ -62,7 +66,9 @@ if (isset($_POST['update_status'])) {
             'status' => $new_status, 
             'order_id' => $order_id,
             'plate_number' => $plate_number,
-            'transaction_number' => $transaction_number
+            'transaction_number' => $transaction_number,
+            'application_name' => $application_name,
+            'rider_name' => $rider_name
         ]);
 
         // If shipping order, notify customer with delivery details
@@ -73,7 +79,11 @@ if (isset($_POST['update_status'])) {
             $userId = $uidStmt->fetchColumn();
             
             if ($userId) {
-                $message = "Your order #{$order_id} is now out for delivery! Vehicle: {$plate_number}, Transaction: {$transaction_number}";
+                $message = "Your order #{$order_id} is now out for delivery! 
+                            Application: {$application_name}
+                            Rider: {$rider_name}
+                            Vehicle: {$plate_number}
+                            Transaction: {$transaction_number}";
                 $notif = $pdo->prepare("INSERT INTO notifications (user_id, order_id, message, is_read, created_at) VALUES (?, ?, ?, 0, NOW())");
                 $notif->execute([$userId, $order_id, $message]);
             }
@@ -211,6 +221,8 @@ $query = "
            o.delivery_option,
            o.plate_number,
            o.transaction_number,
+           o.application_name,
+           o.rider_name,
            o.pickup_ready_at,
            o.created_at,
            COALESCE(pay.method, '') as payment_method,
@@ -252,7 +264,7 @@ if ($search) {
     $query .= " AND (u.username LIKE '%$s%' OR o.orders_id LIKE '%$s%')";
 }
 
-$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at ASC";
+$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.application_name, o.rider_name, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at ASC";
 
 try {
     $orders = $pdo->query($query)->fetchAll();
@@ -294,6 +306,8 @@ foreach ($statuses as $status) {
                o.delivery_option,
                o.plate_number,
                o.transaction_number,
+               o.application_name,
+               o.rider_name,
                o.pickup_ready_at,
                o.created_at,
                COALESCE(pay.method, '') as payment_method,
@@ -322,7 +336,7 @@ foreach ($statuses as $status) {
             ) latest ON latest.order_id = oc1.order_id AND latest.max_id = oc1.id
         ) oc ON oc.order_id = o.orders_id
         WHERE os.status_name = :status
-        GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at 
+        GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.application_name, o.rider_name, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at 
         ORDER BY o.created_at ASC
     ";
     
@@ -1043,9 +1057,21 @@ foreach ($statuses as $status) {
                     <div class="col-8" id="modalTotalAmount">-</div>
           </div>
                   <div class="row mb-2">
-                    <div class="col-4"><strong>Delivery:</strong></div>
-                    <div class="col-8" id="modalDeliveryOption">-</div>
-        </div>
+                    <div class="col-4"><strong>Application:</strong></div>
+                    <div class="col-8" id="modalApplicationName">-</div>
+                  </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Rider:</strong></div>
+                    <div class="col-8" id="modalRiderName">-</div>
+                  </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Vehicle:</strong></div>
+                    <div class="col-8" id="modalPlateNumber">-</div>
+                  </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>Transaction:</strong></div>
+                    <div class="col-8" id="modalTransactionNumber">-</div>
+                  </div>
                   <div class="row mb-2">
                     <div class="col-4"><strong>Order Date:</strong></div>
                     <div class="col-8" id="modalOrderDate">-</div>
@@ -1439,6 +1465,21 @@ foreach ($statuses as $status) {
             <p class="mb-3">Please provide the delivery details:</p>
             
             <div class="mb-3">
+              <label for="applicationName" class="form-label">Application *</label>
+              <select id="applicationName" class="form-control" required>
+                <option value="">Select Application</option>
+                <option value="Lalamove">Lalamove</option>
+                <option value="Angkas Padala">Angkas Padala</option>
+                <option value="GrabExpress">GrabExpress</option>
+              </select>
+            </div>
+            
+            <div class="mb-3">
+              <label for="riderName" class="form-label">Rider's Name *</label>
+              <input type="text" id="riderName" class="form-control" placeholder="Enter rider's name" maxlength="100" required>
+            </div>
+            
+            <div class="mb-3">
               <label for="plateNumber" class="form-label">Plate Number *</label>
               <input type="text" id="plateNumber" class="form-control" placeholder="Enter vehicle plate number" maxlength="20" required>
               <small class="text-muted">e.g., ABC-1234, XYZ-5678</small>
@@ -1446,8 +1487,8 @@ foreach ($statuses as $status) {
             
             <div class="mb-3">
               <label for="transactionNumber" class="form-label">Transaction Number *</label>
-              <input type="text" id="transactionNumber" class="form-control" placeholder="Enter 19-digit transaction number" maxlength="19" pattern="[0-9]{19}" required>
-              <small class="text-muted">Must be exactly 19 digits (e.g., 1234567890123456789)</small>
+              <input type="text" id="transactionNumber" class="form-control" placeholder="Enter transaction number" maxlength="23" pattern="[0-9]{1,23}" required>
+              <small class="text-muted">Must be up to 23 digits (e.g., 1234567890123456789)</small>
             </div>
             
             <div class="alert alert-info">
@@ -1470,8 +1511,20 @@ foreach ($statuses as $status) {
           cancelButton: 'swal2-cancel-button-custom'
         },
         preConfirm: () => {
+          const applicationName = document.getElementById('applicationName').value.trim();
+          const riderName = document.getElementById('riderName').value.trim();
           const plateNumber = document.getElementById('plateNumber').value.trim();
           const transactionNumber = document.getElementById('transactionNumber').value.trim();
+          
+          if (!applicationName) {
+            Swal.showValidationMessage('Please select an application');
+            return false;
+          }
+          
+          if (!riderName) {
+            Swal.showValidationMessage('Please enter rider\'s name');
+            return false;
+          }
           
           if (!plateNumber) {
             Swal.showValidationMessage('Please enter a plate number');
@@ -1483,13 +1536,15 @@ foreach ($statuses as $status) {
             return false;
           }
           
-          // Validate transaction number format (exactly 19 digits)
-          if (!/^[0-9]{19}$/.test(transactionNumber)) {
-            Swal.showValidationMessage('Transaction number must be exactly 19 digits');
+          // Validate transaction number format (up to 23 digits)
+          if (!/^[0-9]{1,23}$/.test(transactionNumber)) {
+            Swal.showValidationMessage('Transaction number must be up to 23 digits');
             return false;
           }
           
           return {
+            applicationName: applicationName,
+            riderName: riderName,
             plateNumber: plateNumber,
             transactionNumber: transactionNumber
           };
@@ -1518,6 +1573,8 @@ foreach ($statuses as $status) {
           form.innerHTML = `
             <input type="hidden" name="order_id" value="${orderId}">
             <input type="hidden" name="new_status" value="Out for Delivery">
+            <input type="hidden" name="application_name" value="${result.value.applicationName}">
+            <input type="hidden" name="rider_name" value="${result.value.riderName}">
             <input type="hidden" name="plate_number" value="${result.value.plateNumber}">
             <input type="hidden" name="transaction_number" value="${result.value.transactionNumber}">
             <input type="hidden" name="update_status" value="1">
@@ -2278,11 +2335,12 @@ foreach ($statuses as $status) {
       });
     }
 
-    function viewOrderDetails(orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate) {
+    function viewOrderDetails(orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate, applicationName, riderName, plateNumber, transactionNumber) {
       // Debug: Log the received data
       console.log('Order Details Data:', {
         orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, 
-        items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate
+        items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate,
+        applicationName, riderName, plateNumber, transactionNumber
       });
       
       // Populate modal with order data
@@ -2306,7 +2364,10 @@ foreach ($statuses as $status) {
       document.getElementById('modalOrderStatus').innerHTML = statusBadge;
       
       document.getElementById('modalTotalAmount').innerHTML = `<strong>₱${parseFloat(totalAmount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>`;
-      document.getElementById('modalDeliveryOption').textContent = deliveryOption ? deliveryOption.charAt(0).toUpperCase() + deliveryOption.slice(1) : 'N/A';
+      document.getElementById('modalApplicationName').textContent = applicationName || 'N/A';
+      document.getElementById('modalRiderName').textContent = riderName || 'N/A';
+      document.getElementById('modalPlateNumber').textContent = plateNumber || 'N/A';
+      document.getElementById('modalTransactionNumber').textContent = transactionNumber || 'N/A';
       
       // Format order date
       const date = new Date(orderDate);
@@ -2847,7 +2908,7 @@ foreach ($statuses as $status) {
             </td>
             <td>
               <div class="d-flex gap-1 flex-wrap">
-                <button type="button" class="action-btn" style="background: #6c757d; color: white;" onclick="event.stopPropagation(); viewOrderDetails(${order.id || 0}, '${(order.username || '').replace(/'/g, "\\'")}', '${(order.email || '').replace(/'/g, "\\'")}', '${(order.phone || '').replace(/'/g, "\\'")}', '${(order.address_line || '').replace(/'/g, "\\'")}', '${(order.address_line2 || '').replace(/'/g, "\\'")}', '${(order.city || '').replace(/'/g, "\\'")}', '${(order.state || '').replace(/'/g, "\\'")}', '${(order.postal_code || '').replace(/'/g, "\\'")}', '${(order.country || '').replace(/'/g, "\\'")}', '${(order.items || '').replace(/'/g, "\\'")}', '${order.total_amount || 0}', '${(order.payment_method || '').replace(/'/g, "\\'")}', '${(order.payment_proof || '').replace(/'/g, "\\'")}', '${(order.gcash_transaction_id || '').replace(/'/g, "\\'")}', '${(order.status || '').replace(/'/g, "\\'")}', '${(order.delivery_option || '').replace(/'/g, "\\'")}', '${order.created_at || ''}')">
+                <button type="button" class="action-btn" style="background: #6c757d; color: white;" onclick="event.stopPropagation(); viewOrderDetails(${order.id || 0}, '${(order.username || '').replace(/'/g, "\\'")}', '${(order.email || '').replace(/'/g, "\\'")}', '${(order.phone || '').replace(/'/g, "\\'")}', '${(order.address_line || '').replace(/'/g, "\\'")}', '${(order.address_line2 || '').replace(/'/g, "\\'")}', '${(order.city || '').replace(/'/g, "\\'")}', '${(order.state || '').replace(/'/g, "\\'")}', '${(order.postal_code || '').replace(/'/g, "\\'")}', '${(order.country || '').replace(/'/g, "\\'")}', '${(order.items || '').replace(/'/g, "\\'")}', '${order.total_amount || 0}', '${(order.payment_method || '').replace(/'/g, "\\'")}', '${(order.payment_proof || '').replace(/'/g, "\\'")}', '${(order.gcash_transaction_id || '').replace(/'/g, "\\'")}', '${(order.status || '').replace(/'/g, "\\'")}', '${(order.delivery_option || '').replace(/'/g, "\\'")}', '${order.created_at || ''}', '${(order.application_name || '').replace(/'/g, "\\'")}', '${(order.rider_name || '').replace(/'/g, "\\'")}', '${(order.plate_number || '').replace(/'/g, "\\'")}', '${(order.transaction_number || '').replace(/'/g, "\\'")}')">
                   <i class="fas fa-eye me-1"></i>View Details
                 </button>
                 ${generateActionButtons(order, isSuperAdmin)}

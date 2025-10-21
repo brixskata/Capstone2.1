@@ -37,7 +37,7 @@ $sidebar_sections = [
         'permissions' => [1, 2, 3, 4, 5] // user permissions only (Promo Messages is always visible)
     ],
     'analytics' => [
-        'title' => 'Analytics',
+        'title' => 'Monitoring',
         'icon' => 'chart-line',
         'description' => 'Reports, Activity Log',
         'permissions' => [35, 36, 37, 42, 43] // reports + history permissions
@@ -141,6 +141,13 @@ if (isset($_POST['assign_role_permissions'])) {
     
     header("Location: user_permissions.php");
     exit;
+}
+
+// Handle clearing new role session variables
+if (isset($_POST['clear_new_role_session'])) {
+    unset($_SESSION['new_role_id']);
+    unset($_SESSION['new_role_name']);
+    exit; // Exit to prevent page reload
 }
 
 // Handle role deletion
@@ -457,6 +464,21 @@ function getAdminHash(PDO $pdo, string $username): ?string {
         .swal2-popup-rounded .swal2-actions {
             border-radius: 0 0 20px 20px !important;
         }
+        
+        /* Minimal Permission Item Styles */
+        .permission-item-minimal:hover {
+            background: rgba(127, 23, 52, 0.05) !important;
+            border-color: rgba(127, 23, 52, 0.2) !important;
+            transform: translateY(-1px);
+        }
+        
+        .permission-item-minimal input[type="checkbox"]:checked + label .section-icon-minimal {
+            background: rgba(127, 23, 52, 0.15) !important;
+        }
+        
+        .permission-item-minimal input[type="checkbox"]:checked + label h6 {
+            color: #7F1734 !important;
+        }
     </style>
 </head>
 <body>
@@ -483,8 +505,8 @@ function getAdminHash(PDO $pdo, string $username): ?string {
             <div class="page-header">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h2><i class="fas fa-user-shield me-2"></i>User Permissions & Roles</h2>
-                        <p class="mb-0 opacity-75">Manage user roles and sidebar section access</p>
+                        <h2><i class="fas fa-user-shield me-2"></i>Roles</h2>
+                        <p class="mb-0 opacity-75">Manage user roles</p>
                     </div>
                     <button class="btn text-white fw-bold px-4" 
                             style="background-color: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);" 
@@ -659,38 +681,62 @@ function getAdminHash(PDO $pdo, string $username): ?string {
     <div class="modal fade" id="assignRolePermissionsModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <form action="user_permissions.php" method="POST">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Assign Permissions to Role: <span id="newRoleName"></span></h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-content" style="border-radius: 16px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">
+                    <div class="modal-header" style="background: #7F1734; color: white; border-radius: 16px 16px 0 0; border: none; padding: 1.5rem;">
+                        <h5 class="modal-title mb-0 fw-bold">
+                            <i class="fas fa-user-shield me-2"></i>
+                            Assign Permissions to: <span id="newRoleName" class="text-warning"></span>
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body">
+                    <div class="modal-body" style="padding: 2rem;">
                         <input type="hidden" name="role_id" id="newRoleId">
                         
-                        
-                        <?php foreach ($sidebar_sections as $section_key => $section): ?>
-                            <div class="permission-card">
-                                <div class="module-header">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" 
-                                               name="sections[]" 
-                                               value="<?php echo $section_key; ?>"
-                                               id="role_section_<?php echo $section_key; ?>">
-                                        <label class="form-check-label w-100" for="role_section_<?php echo $section_key; ?>">
-                                            <h6 class="mb-1">
-                                                <i class="fa fa-<?php echo $section['icon']; ?> me-2"></i>
-                                                <?php echo htmlspecialchars($section['title']); ?>
-                                            </h6>
-                                            <small class="text-light opacity-75"><?php echo htmlspecialchars($section['description']); ?></small>
-                                        </label>
+                        <div class="row g-3">
+                            <?php foreach ($sidebar_sections as $section_key => $section): ?>
+                                <div class="col-md-6">
+                                    <div class="permission-item-minimal" style="background: #f8f9fa; border-radius: 12px; padding: 1rem; border: 2px solid transparent; transition: all 0.3s ease; cursor: pointer;" onclick="toggleCheckbox('role_section_<?php echo $section_key; ?>')">
+                                        <div class="form-check mb-0">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="sections[]" 
+                                                   value="<?php echo $section_key; ?>"
+                                                   id="role_section_<?php echo $section_key; ?>"
+                                                   style="transform: scale(1.2); margin-top: 0.1rem;">
+                                            <label class="form-check-label w-100 ms-2" for="role_section_<?php echo $section_key; ?>">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="section-icon-minimal me-3" style="width: 40px; height: 40px; background: rgba(127, 23, 52, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                                        <i class="fa fa-<?php echo $section['icon']; ?>" style="color: #7F1734; font-size: 1.1rem;"></i>
+                                                    </div>
+                                                    <div>
+                                                        <h6 class="mb-1 fw-semibold" style="color: #2c3e50; font-size: 0.95rem;">
+                                                            <?php echo htmlspecialchars($section['title']); ?>
+                                                        </h6>
+                                                        <small class="text-muted" style="font-size: 0.8rem; line-height: 1.3;">
+                                                            <?php echo htmlspecialchars($section['description']); ?>
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        <?php endforeach; ?>
+                            <?php endforeach; ?>
+                        </div>
+                        
+                        <div class="mt-4 p-3" style="background: rgba(127, 23, 52, 0.05); border-radius: 8px; border-left: 4px solid #7F1734;">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1" style="color: #7F1734;"></i>
+                                Select the sections this role should have access to. Each section includes multiple related permissions.
+                            </small>
+                        </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="assign_role_permissions" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">Assign Permissions</button>
+                    <div class="modal-footer" style="background: #f8f9fa; border-radius: 0 0 16px 16px; border: none; padding: 1.5rem;">
+                        <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal" style="border-radius: 8px;">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </button>
+                        <button type="submit" name="assign_role_permissions" class="btn px-4 fw-bold" style="background-color: #7F1734; color: white; border-radius: 8px; border: none;">
+                            <i class="fas fa-check me-2"></i>Assign Permissions
+                        </button>
                     </div>
                 </div>
             </form>
@@ -701,38 +747,62 @@ function getAdminHash(PDO $pdo, string $username): ?string {
     <div class="modal fade" id="manageAccessModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <form action="user_permissions.php" method="POST">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Manage Access for Role: <span id="manageRoleName"></span></h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-content" style="border-radius: 16px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">
+                    <div class="modal-header" style="background: #7F1734; color: white; border-radius: 16px 16px 0 0; border: none; padding: 1.5rem;">
+                        <h5 class="modal-title mb-0 fw-bold">
+                            <i class="fas fa-cog me-2"></i>
+                            Manage Access for: <span id="manageRoleName" class="text-warning"></span>
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body">
+                    <div class="modal-body" style="padding: 2rem;">
                         <input type="hidden" name="role_id" id="manageRoleId">
                         
-                        
-                        <?php foreach ($sidebar_sections as $section_key => $section): ?>
-                            <div class="permission-card">
-                                <div class="module-header">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" 
-                                               name="sections[]" 
-                                               value="<?php echo $section_key; ?>"
-                                               id="manage_section_<?php echo $section_key; ?>">
-                                        <label class="form-check-label w-100" for="manage_section_<?php echo $section_key; ?>">
-                                            <h6 class="mb-1">
-                                                <i class="fa fa-<?php echo $section['icon']; ?> me-2"></i>
-                                                <?php echo htmlspecialchars($section['title']); ?>
-                                            </h6>
-                                            <small class="text-light opacity-75"><?php echo htmlspecialchars($section['description']); ?></small>
-                                        </label>
+                        <div class="row g-3">
+                            <?php foreach ($sidebar_sections as $section_key => $section): ?>
+                                <div class="col-md-6">
+                                    <div class="permission-item-minimal" style="background: #f8f9fa; border-radius: 12px; padding: 1rem; border: 2px solid transparent; transition: all 0.3s ease; cursor: pointer;" onclick="toggleCheckbox('manage_section_<?php echo $section_key; ?>')">
+                                        <div class="form-check mb-0">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="sections[]" 
+                                                   value="<?php echo $section_key; ?>"
+                                                   id="manage_section_<?php echo $section_key; ?>"
+                                                   style="transform: scale(1.2); margin-top: 0.1rem;">
+                                            <label class="form-check-label w-100 ms-2" for="manage_section_<?php echo $section_key; ?>">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="section-icon-minimal me-3" style="width: 40px; height: 40px; background: rgba(127, 23, 52, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                                        <i class="fa fa-<?php echo $section['icon']; ?>" style="color: #7F1734; font-size: 1.1rem;"></i>
+                                                    </div>
+                                                    <div>
+                                                        <h6 class="mb-1 fw-semibold" style="color: #2c3e50; font-size: 0.95rem;">
+                                                            <?php echo htmlspecialchars($section['title']); ?>
+                                                        </h6>
+                                                        <small class="text-muted" style="font-size: 0.8rem; line-height: 1.3;">
+                                                            <?php echo htmlspecialchars($section['description']); ?>
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        <?php endforeach; ?>
+                            <?php endforeach; ?>
+                        </div>
+                        
+                        <div class="mt-4 p-3" style="background: rgba(127, 23, 52, 0.05); border-radius: 8px; border-left: 4px solid #7F1734;">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1" style="color: #7F1734;"></i>
+                                Modify the sections this role should have access to. Changes will be applied immediately.
+                            </small>
+                        </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="assign_role_permissions" class="btn text-white fw-bold px-4" style="background-color: #7F1734; border-radius: 8px;">Update Permissions</button>
+                    <div class="modal-footer" style="background: #f8f9fa; border-radius: 0 0 16px 16px; border: none; padding: 1.5rem;">
+                        <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal" style="border-radius: 8px;">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </button>
+                        <button type="submit" name="assign_role_permissions" class="btn px-4 fw-bold" style="background-color: #7F1734; color: white; border-radius: 8px; border: none;">
+                            <i class="fas fa-save me-2"></i>Update Permissions
+                        </button>
                     </div>
                 </div>
             </form>
@@ -840,6 +910,15 @@ function getAdminHash(PDO $pdo, string $username): ?string {
             });
         }
         
+        // Toggle checkbox when clicking on permission item
+        function toggleCheckbox(checkboxId) {
+            const checkbox = document.getElementById(checkboxId);
+            checkbox.checked = !checkbox.checked;
+            
+            // Trigger change event for any listeners
+            checkbox.dispatchEvent(new Event('change'));
+        }
+        
         // Auto-show permission modal after role creation
         document.addEventListener('DOMContentLoaded', function() {
             <?php if (isset($_SESSION['new_role_id']) && isset($_SESSION['new_role_name'])): ?>
@@ -850,6 +929,20 @@ function getAdminHash(PDO $pdo, string $username): ?string {
                 // Show the permission assignment modal
                 const permissionModal = new bootstrap.Modal(document.getElementById('assignRolePermissionsModal'));
                 permissionModal.show();
+                
+                // Clear session variables when modal is hidden (cancelled or closed)
+                document.getElementById('assignRolePermissionsModal').addEventListener('hidden.bs.modal', function() {
+                    // Send AJAX request to clear session variables
+                    fetch('user_permissions.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: 'clear_new_role_session=1'
+                    }).catch(error => {
+                        console.log('Session cleared');
+                    });
+                });
             <?php endif; ?>
         });
     </script>
