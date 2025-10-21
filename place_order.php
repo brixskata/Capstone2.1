@@ -204,9 +204,9 @@ if ($payment_method === 'GCash') {
         header('Location: checkout.php');
         exit;
     }
-    // Validate transaction ID format (should be exactly 13 digits)
-    if (!preg_match('/^[0-9]{13}$/', $gcash_transaction_id)) {
-        $_SESSION['upload_error'] = "GCash transaction ID must be exactly 13 digits.";
+    // Validate transaction ID format (should be 1 to 13 digits)
+    if (!preg_match('/^[0-9]{1,13}$/', $gcash_transaction_id)) {
+        $_SESSION['upload_error'] = "GCash transaction ID must be 1 to 13 digits.";
         header('Location: checkout.php');
         exit;
     }

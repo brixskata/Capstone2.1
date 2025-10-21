@@ -91,14 +91,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             throw new Exception("Invalid status transition from {$status_names[$current_status]} to {$status_names[$new_status]}. Valid transitions: " . implode(', ', array_map(function($s) use ($status_names) { return $status_names[$s]; }, $valid_transitions[$current_status])));
         }
         
-        // If changing to "Received" (status 2), get actual received quantity
+        // If changing to "Received" (status 2), get actual received quantity, unit cost, and expiration date
         $actual_quantity_received = $restock['quantity_added']; // Default to ordered quantity
+        $unit_cost = null;
+        $expiration_date = null;
+        
         if ($new_status == 2 && isset($_POST['actual_quantity_received'])) {
             $actual_quantity_received = (float)$_POST['actual_quantity_received'];
+            $unit_cost = isset($_POST['unit_cost']) ? (float)$_POST['unit_cost'] : null;
+            $expiration_date = isset($_POST['expiration_date']) ? $_POST['expiration_date'] : null;
             
             // Validate received quantity
             if ($actual_quantity_received < 0) {
                 throw new Exception("Received quantity cannot be negative.");
+            }
+            
+            // Validate unit cost
+            if (!$unit_cost || $unit_cost <= 0) {
+                throw new Exception("Unit cost must be greater than 0.");
+            }
+            
+            // Validate expiration date
+            if (!$expiration_date) {
+                throw new Exception("Expiration date is required.");
+            }
+            
+            // Validate expiration date is in the future
+            if (strtotime($expiration_date) <= strtotime(date('Y-m-d'))) {
+                throw new Exception("Expiration date must be in the future.");
+            }
+            
+            // Validate expiration date is at least 3 months from today
+            $days_until_expiry = floor((strtotime($expiration_date) - strtotime(date('Y-m-d'))) / (60 * 60 * 24));
+            if ($days_until_expiry < 90) {
+                throw new Exception("Expiration date must be at least 3 months (90 days) from today. Current: {$days_until_expiry} days.");
             }
             
             // Allow over-delivery but warn if significantly more than ordered
@@ -108,16 +134,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             }
         }
         
-        // Update status and actual received quantity
-        $stmt = $pdo->prepare("UPDATE restocking SET status_id = ?, actual_quantity_received = ? WHERE restocking_id = ?");
-        $stmt->execute([$new_status, $actual_quantity_received, $restock_id]);
+        // Update status, actual received quantity, unit cost, and expiration date
+        $stmt = $pdo->prepare("UPDATE restocking SET status_id = ?, actual_quantity_received = ?, cost_per_unit = ?, total_cost = ?, expiration_date = ? WHERE restocking_id = ?");
+        $total_cost = $unit_cost ? $actual_quantity_received * $unit_cost : null;
+        $stmt->execute([$new_status, $actual_quantity_received, $unit_cost, $total_cost, $expiration_date, $restock_id]);
         
         // If changing to "Received" (status 2), update stock and create batch
         if ($new_status == 2 && $restock['status_id'] != 2) {
-            // Get cost from product_pricing table (fallback only)
-            $stmt = $pdo->prepare("SELECT cost_price FROM product_pricing WHERE product_id = ?");
-            $stmt->execute([$restock['product_id']]);
-            $cost_price = $stmt->fetchColumn() ?: 0;
+            // Use the unit cost from the form, or fallback to product_pricing table
+            $cost_price = $unit_cost;
+            if (!$cost_price) {
+                $stmt = $pdo->prepare("SELECT cost_price FROM product_pricing WHERE product_id = ?");
+                $stmt->execute([$restock['product_id']]);
+                $cost_price = $stmt->fetchColumn() ?: 0;
+            }
             
            
             // Get brand_id from the restocking record if available, otherwise use the first available brand for this product
@@ -137,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                 'brand_id' => $brand_id,
                 'quantity_received' => $actual_quantity_received, // Use actual received quantity
                 'unit_cost' => $cost_price,
-                'expiration_date' => $restock['expiration_date'] ?? calculateDefaultExpirationDate(),
+                'expiration_date' => $expiration_date ?? $restock['expiration_date'] ?? calculateDefaultExpirationDate(),
                 'received_date' => $restock['restock_date'],
                 'created_by' => $_SESSION['user_id'],
                 'reference_type' => 'restock',
@@ -151,9 +181,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
             $stmt = $pdo->prepare("UPDATE restocking SET batch_id = ? WHERE restocking_id = ?");
             $stmt->execute([$batch_id, $restock_id]);
             
-            // Update product_stock current_stock and last_restock_date
-            $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ? WHERE product_id = ?");
-            $stmt->execute([$actual_quantity_received, $restock['restock_date'], $restock['product_id']]);
+            // Update product_stock current_stock, last_restock_date, and expiration_date
+            $stmt = $pdo->prepare("UPDATE product_stock SET current_stock = COALESCE(current_stock,0) + ?, last_restock_date = ?, expiration_date = ? WHERE product_id = ?");
+            $final_expiration_date = $expiration_date ?? $restock['expiration_date'] ?? calculateDefaultExpirationDate();
+            $stmt->execute([$actual_quantity_received, $restock['restock_date'], $final_expiration_date, $restock['product_id']]);
             
             // Get new current stock
             $stmt = $pdo->prepare("SELECT current_stock FROM product_stock WHERE product_id = ?");
@@ -390,6 +421,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_po_details' && isset($_GET
             p.product_name,
             b.name as brand_name,
             u.name as uom_name,
+            s.name as supplier_name,
             COALESCE(r.cost_per_unit, pp.cost_price, 0) as unit_cost,
             COALESCE(r.total_cost, r.quantity_added * COALESCE(r.cost_per_unit, pp.cost_price, 0), 0) as total_cost,
             CASE 
@@ -402,6 +434,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_po_details' && isset($_GET
         LEFT JOIN products p ON r.product_id = p.product_id
         LEFT JOIN brands b ON r.brand_id = b.id
         LEFT JOIN uom u ON p.uom_id = u.uom_id
+        LEFT JOIN suppliers s ON r.supplier_id = s.supplier_id
         LEFT JOIN product_pricing pp ON r.product_id = pp.product_id
         WHERE r.po_number = ?
         ORDER BY p.product_name
@@ -1043,7 +1076,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Brand <span class="text-danger">*</span></label>
-                                <select name="brand_id" class="form-select" required>
+                                <select name="brand_id" id="brandSelect" class="form-select" required>
                                     <option value="">Select Brand</option>
                                     <?php foreach ($brands as $brand): ?>
                                         <option value="<?= $brand['id'] ?>"><?= htmlspecialchars($brand['name']) ?></option>
@@ -1127,6 +1160,26 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                             </div>
                         </div>
                         
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Unit Cost (₱) <span class="text-danger">*</span></label>
+                            <input type="number" name="unit_cost" id="adjust_unit_cost" 
+                                   class="form-control" min="0.01" step="0.01" required>
+                            <div class="form-text">
+                                <i class="fa fa-info-circle me-1"></i>
+                                Enter the actual cost per unit from supplier
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Expiration Date <span class="text-danger">*</span></label>
+                            <input type="date" name="expiration_date" id="adjust_expiration_date" 
+                                   class="form-control" required>
+                            <div class="form-text">
+                                <i class="fa fa-info-circle me-1"></i>
+                                Must be at least 3 months (90 days) from today
+                            </div>
+                        </div>
+                        
                         <div class="alert alert-info">
                             <i class="fa fa-info-circle me-2"></i>
                             <strong>Note:</strong> This will update your inventory with the actual received quantity.
@@ -1148,10 +1201,18 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title fw-bold">
-                        <i class="fa fa-file-invoice me-2" style="color: #7F1734;"></i>Purchase Order Details: <span id="view_po_number"></span>
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div>
+                        <h5 class="modal-title fw-bold">
+                            <i class="fa fa-file-invoice me-2" style="color: #7F1734;"></i>Purchase Order Details: <span id="view_po_number"></span>
+                        </h5>
+                        <p class="mb-0 text-muted">Supplier: <span id="view_supplier_name" class="fw-semibold"></span></p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="printPODetails()">
+                            <i class="fa fa-print me-1"></i>Print PDF
+                        </button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
                 </div>
                 <div class="modal-body">
                     <div class="table-responsive">
@@ -1413,6 +1474,24 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                          console.error('Error initializing Supplier Select2:', error);
                      }
                  }
+                 
+                 // Initialize Select2 on brand dropdown
+                 const brandSelect = document.querySelector('#restockModal select[name="brand_id"]');
+                 if (brandSelect && !$(brandSelect).hasClass('select2-hidden-accessible')) {
+                     try {
+                         $(brandSelect).select2({
+                             theme: 'bootstrap-5',
+                             placeholder: 'Search and select a brand...',
+                             allowClear: true,
+                             width: '100%',
+                             dropdownParent: $('#restockModal')
+                         });
+                         
+                         console.log('Brand Select2 initialized successfully');
+                     } catch (error) {
+                         console.error('Error initializing Brand Select2:', error);
+                     }
+                 }
              });
              
              // Clean up Select2 when modal is hidden
@@ -1425,6 +1504,11 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                  const supplierSelect = document.querySelector('#restockModal select[name="supplier_id"]');
                  if (supplierSelect && $(supplierSelect).hasClass('select2-hidden-accessible')) {
                      $(supplierSelect).select2('destroy');
+                 }
+                 
+                 const brandSelect = document.querySelector('#restockModal select[name="brand_id"]');
+                 if (brandSelect && $(brandSelect).hasClass('select2-hidden-accessible')) {
+                     $(brandSelect).select2('destroy');
                  }
              });
              
@@ -1512,8 +1596,13 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                      const tbody = document.getElementById('po_items_body');
                      tbody.innerHTML = '';
                      let grandTotal = 0;
+                     let supplierName = '';
                      
                      if (data.items && data.items.length > 0) {
+                         // Set supplier name from first item
+                         supplierName = data.items[0].supplier_name || 'Unknown Supplier';
+                         document.getElementById('view_supplier_name').textContent = supplierName;
+                         
                          data.items.forEach(item => {
                              const statusClass = item.status_id == 1 ? 'warning' : (item.status_id == 2 ? 'success' : 'danger');
                              tbody.innerHTML += `
@@ -1544,6 +1633,89 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                          confirmButtonColor: '#7F1734'
                      });
                  });
+         }
+         
+         function printPODetails() {
+             const poNumber = document.getElementById('view_po_number').textContent;
+             const supplierName = document.getElementById('view_supplier_name').textContent;
+             
+             // Create a new window for printing
+             const printWindow = window.open('', '_blank', 'width=800,height=600');
+             
+             // Get the modal content
+             const modalContent = document.querySelector('#viewPOModal .modal-content').cloneNode(true);
+             
+             // Remove the header buttons and close button
+             const headerButtons = modalContent.querySelector('.d-flex.gap-2');
+             if (headerButtons) headerButtons.remove();
+             
+             // Create print-friendly HTML
+             const printHTML = `
+                 <!DOCTYPE html>
+                 <html>
+                 <head>
+                     <title>Purchase Order - ${poNumber}</title>
+                     <style>
+                         body { font-family: Arial, sans-serif; margin: 20px; }
+                         .header { text-align: center; margin-bottom: 30px; }
+                         .header h1 { color: #7F1734; margin: 0; }
+                         .header h2 { color: #666; margin: 5px 0; }
+                         .po-info { margin-bottom: 20px; }
+                         .po-info p { margin: 5px 0; }
+                         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                         th { background-color: #f8f9fa; font-weight: bold; }
+                         .total { text-align: right; font-weight: bold; font-size: 18px; margin-top: 20px; }
+                         .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+                         .bg-warning { background-color: #ffc107; color: #000; }
+                         .bg-success { background-color: #198754; color: #fff; }
+                         .bg-danger { background-color: #dc3545; color: #fff; }
+                         .bg-secondary { background-color: #6c757d; color: #fff; }
+                         @media print {
+                             body { margin: 0; }
+                             .no-print { display: none; }
+                         }
+                     </style>
+                 </head>
+                 <body>
+                     <div class="header">
+                         <h1>PURCHASE ORDER</h1>
+                         <h2>${poNumber}</h2>
+                         <p><strong>Supplier:</strong> ${supplierName}</p>
+                         <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+                     </div>
+                     
+                     <table>
+                         <thead>
+                             <tr>
+                                 <th>Product</th>
+                                 <th>Brand</th>
+                                 <th>Quantity</th>
+                                 <th>Unit Cost</th>
+                                 <th>Total</th>
+                                 <th>Status</th>
+                             </tr>
+                         </thead>
+                         <tbody>
+                             ${document.getElementById('po_items_body').innerHTML}
+                         </tbody>
+                     </table>
+                     
+                     <div class="total">
+                         <strong>Grand Total: ₱${document.getElementById('po_grand_total').textContent}</strong>
+                     </div>
+                 </body>
+                 </html>
+             `;
+             
+             printWindow.document.write(printHTML);
+             printWindow.document.close();
+             
+             // Wait for content to load, then print
+             printWindow.onload = function() {
+                 printWindow.print();
+                 printWindow.close();
+             };
          }
          
          function updateRestockStatus(restockingId, newStatus) {
@@ -1583,6 +1755,15 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                          document.getElementById('adjust_product_name').value = data.product_name;
                          document.getElementById('adjust_ordered_qty').value = data.quantity_added;
                          document.getElementById('adjust_received_qty').value = data.quantity_added; // Default to ordered quantity
+                         
+                         // Set default expiration date (3 months from today)
+                         const today = new Date();
+                         const expirationDate = new Date(today);
+                         expirationDate.setMonth(expirationDate.getMonth() + 3);
+                         document.getElementById('adjust_expiration_date').value = expirationDate.toISOString().split('T')[0];
+                         
+                         // Clear unit cost field
+                         document.getElementById('adjust_unit_cost').value = '';
                          
                          new bootstrap.Modal(document.getElementById('quantityAdjustmentModal')).show();
                      } else {
@@ -1648,6 +1829,8 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                  quantityForm.addEventListener('submit', function(e) {
                      const receivedQty = parseFloat(document.getElementById('adjust_received_qty').value);
                      const orderedQty = parseFloat(document.getElementById('adjust_ordered_qty').value);
+                     const unitCost = parseFloat(document.getElementById('adjust_unit_cost').value);
+                     const expirationDate = document.getElementById('adjust_expiration_date').value;
                      
                      if (receivedQty < 0) {
                          e.preventDefault();
@@ -1655,6 +1838,44 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                              icon: 'error',
                              title: 'Invalid Quantity',
                              text: 'Received quantity cannot be negative.',
+                             confirmButtonColor: '#7F1734'
+                         });
+                         return false;
+                     }
+                     
+                     if (!unitCost || unitCost <= 0) {
+                         e.preventDefault();
+                         Swal.fire({
+                             icon: 'error',
+                             title: 'Invalid Unit Cost',
+                             text: 'Please enter a valid unit cost greater than 0.',
+                             confirmButtonColor: '#7F1734'
+                         });
+                         return false;
+                     }
+                     
+                     if (!expirationDate) {
+                         e.preventDefault();
+                         Swal.fire({
+                             icon: 'error',
+                             title: 'Missing Expiration Date',
+                             text: 'Please enter an expiration date.',
+                             confirmButtonColor: '#7F1734'
+                         });
+                         return false;
+                     }
+                     
+                     // Validate expiration date is at least 3 months from today
+                     const today = new Date();
+                     const expDate = new Date(expirationDate);
+                     const daysUntilExpiry = Math.floor((expDate - today) / (1000 * 60 * 60 * 24));
+                     
+                     if (daysUntilExpiry < 90) {
+                         e.preventDefault();
+                         Swal.fire({
+                             icon: 'error',
+                             title: 'Invalid Expiration Date',
+                             text: `Expiration date must be at least 3 months (90 days) from today. Current: ${daysUntilExpiry} days.`,
                              confirmButtonColor: '#7F1734'
                          });
                          return false;

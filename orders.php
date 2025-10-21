@@ -1776,7 +1776,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                                 </div>
                                                             </div>
                                                             <div class="mb-2">
-                                                                <textarea class="form-control form-control-sm" name="review-<?= $order['id'] ?>" placeholder="Write a review (optional)" rows="2" maxlength="500"></textarea>
+                                                                <textarea class="form-control form-control-sm" name="review-<?= $order['id'] ?>" placeholder="Write a review (optional, max 150 characters)" rows="2" maxlength="150"></textarea>
                                                             </div>
                                                             <button type="submit" class="btn btn-sm btn-primary">
                                                                 <i class="fas fa-star me-1"></i>Submit Rating

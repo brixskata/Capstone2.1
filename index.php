@@ -20,6 +20,16 @@ try {
             b.name AS brand_name,
             uom.name AS uom_name,
             COALESCE(ps.current_stock, 0) AS stock,
+            -- DEBUG: Add individual components for debugging
+            COALESCE(pp.markup_price, 0) AS markup_price,
+            COALESCE(pp.cost_price, 0) AS cost_price,
+            (SELECT pb.unit_cost 
+             FROM product_batches pb 
+             WHERE pb.product_id = p.product_id 
+             AND pb.quantity_remaining > 0 
+             AND pb.is_active = 1
+             ORDER BY pb.received_date DESC, pb.unit_cost DESC 
+             LIMIT 1) AS batch_unit_cost,
             -- Calculate total price: markup_price + (best available cost from batches or general cost_price)
             COALESCE(pp.markup_price, 0) + COALESCE((
                 SELECT COALESCE(
@@ -28,7 +38,7 @@ try {
                      WHERE pb.product_id = p.product_id 
                      AND pb.quantity_remaining > 0 
                      AND pb.is_active = 1
-                     ORDER BY pb.received_date DESC 
+                     ORDER BY pb.received_date DESC, pb.unit_cost DESC 
                      LIMIT 1),
                     pp.cost_price, 
                     0
@@ -41,7 +51,7 @@ try {
                  WHERE pb.product_id = p.product_id 
                  AND pb.quantity_remaining > 0 
                  AND pb.is_active = 1
-                 ORDER BY pb.received_date DESC 
+                 ORDER BY pb.received_date DESC, pb.unit_cost DESC 
                  LIMIT 1),
                 pp.cost_price, 
                 0
@@ -104,7 +114,7 @@ try {
         FROM order_ratings o
         JOIN users u ON o.user_id = u.user_id
         LEFT JOIN user_info ui ON u.user_id = ui.user_id
-        WHERE o.review IS NOT NULL AND TRIM(o.review) != '' AND o.rating = 5
+        WHERE o.review IS NOT NULL AND TRIM(o.review) != '' AND o.rating >= 4
         ORDER BY o.created_at DESC
         LIMIT 10
     ");
@@ -124,6 +134,16 @@ try {
             b.name AS brand_name,
             uom.name AS uom_name,
             COALESCE(ps.current_stock, 0) AS stock,
+            -- DEBUG: Add individual components for debugging
+            COALESCE(pp.markup_price, 0) AS markup_price,
+            COALESCE(pp.cost_price, 0) AS cost_price,
+            (SELECT pb.unit_cost 
+             FROM product_batches pb 
+             WHERE pb.product_id = p.product_id 
+             AND pb.quantity_remaining > 0 
+             AND pb.is_active = 1
+             ORDER BY pb.received_date DESC, pb.unit_cost DESC 
+             LIMIT 1) AS batch_unit_cost,
             -- Calculate total price: markup_price + (best available cost from batches or general cost_price)
             COALESCE(pp.markup_price, 0) + COALESCE((
                 SELECT COALESCE(
@@ -132,7 +152,7 @@ try {
                      WHERE pb.product_id = p.product_id 
                      AND pb.quantity_remaining > 0 
                      AND pb.is_active = 1
-                     ORDER BY pb.received_date DESC 
+                     ORDER BY pb.received_date DESC, pb.unit_cost DESC 
                      LIMIT 1),
                     pp.cost_price, 
                     0
@@ -169,6 +189,16 @@ try {
             b.name AS brand_name,
             uom.name AS uom_name,
             COALESCE(ps.current_stock, 0) AS stock,
+            -- DEBUG: Add individual components for debugging
+            COALESCE(pp.markup_price, 0) AS markup_price,
+            COALESCE(pp.cost_price, 0) AS cost_price,
+            (SELECT pb.unit_cost 
+             FROM product_batches pb 
+             WHERE pb.product_id = p.product_id 
+             AND pb.quantity_remaining > 0 
+             AND pb.is_active = 1
+             ORDER BY pb.received_date DESC, pb.unit_cost DESC 
+             LIMIT 1) AS batch_unit_cost,
             -- Current price (original price)
             COALESCE(pp.markup_price, 0) + COALESCE((
                 SELECT COALESCE(
@@ -177,7 +207,7 @@ try {
                      WHERE pb.product_id = p.product_id 
                      AND pb.quantity_remaining > 0 
                      AND pb.is_active = 1
-                     ORDER BY pb.received_date DESC 
+                     ORDER BY pb.received_date DESC, pb.unit_cost DESC 
                      LIMIT 1),
                     pp.cost_price, 
                     0
@@ -191,7 +221,7 @@ try {
                      WHERE pb.product_id = p.product_id 
                      AND pb.quantity_remaining > 0 
                      AND pb.is_active = 1
-                     ORDER BY pb.received_date DESC 
+                     ORDER BY pb.received_date DESC, pb.unit_cost DESC 
                      LIMIT 1),
                     pp.cost_price, 
                     0
@@ -2265,16 +2295,6 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                                     referrerpolicy="no-referrer-when-downgrade">
                                 </iframe>
                             </div>
-                            <div class="map-info">
-                                <div class="map-address">
-                                    <i class="fas fa-map-marker-alt text-primary"></i>
-                                    <div>
-                                        <strong>MikeMadz Frozen Product Store</strong><br>
-                                        BIR Village Block 9 Lot 5 Franchise St.<br>
-                                        Brgy. Sauyo, Quezon City
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                         
                         <div class="about-actions mt-4">
@@ -2298,11 +2318,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                     <div class="food-image-container">
                         <div class="food-plate">
                             <img src="images/homepage-chicken.png" alt="Fresh Chicken Drumsticks" class="food-image">
-            </div>
-                        <!-- Background decorative elements -->
-                        <div class="bg-decoration bg-decoration-1"></div>
-                        <div class="bg-decoration bg-decoration-2"></div>
-                        <div class="bg-decoration bg-decoration-3"></div>
+                        </div>
                                     </div>
                                 </div>
 
@@ -2353,11 +2369,11 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                                                 "<?= htmlspecialchars($testimonial['review']) ?>"
                                             </p>
                                     <div class="testimonial-rating">
-                                                <i class="fas fa-star active"></i>
-                                                <i class="fas fa-star active"></i>
-                                                <i class="fas fa-star active"></i>
-                                                <i class="fas fa-star active"></i>
-                                                <i class="fas fa-star active"></i>
+                                                <?php 
+                                                $rating = (int)$testimonial['rating'];
+                                                for ($i = 1; $i <= 5; $i++): ?>
+                                                    <i class="fas fa-star <?= $i <= $rating ? 'active' : '' ?>"></i>
+                                                <?php endfor; ?>
                                     </div>
                                             <div class="testimonial-author">
                                                 <div class="author-avatar">
@@ -3313,11 +3329,9 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
                             "${testimonial.text}"
                         </p>
                         <div class="testimonial-rating">
-                            <i class="fas fa-star active"></i>
-                            <i class="fas fa-star active"></i>
-                            <i class="fas fa-star active"></i>
-                            <i class="fas fa-star active"></i>
-                            <i class="fas fa-star active"></i>
+                            ${Array.from({length: 5}, (_, i) => 
+                                `<i class="fas fa-star ${i < testimonial.rating ? 'active' : ''}"></i>`
+                            ).join('')}
                         </div>
                         <div class="testimonial-author">
                             <div class="author-avatar">
@@ -3365,12 +3379,12 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             showTestimonial(nextIndex);
         }
         
-        // Auto-rotate testimonials every 5 seconds
+        // Auto-rotate testimonials every 6 seconds
         function startTestimonialRotation() {
             if (testimonials.length > 1) {
                 setInterval(() => {
                     nextTestimonial();
-                }, 5000);
+                }, 6000);
             }
         }
         

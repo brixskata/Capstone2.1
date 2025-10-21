@@ -1046,14 +1046,14 @@ foreach ($gcash_defaults as $key => $default_value) {
                                         <div class="col-12">
                                             <label class="form-label fw-bold">GCash Reference Number *</label>
                                             <input type="text" name="gcash_transaction_id" class="form-control" 
-                                                   placeholder="Enter your GCash Reference Number (13 digits)" 
-                                                   pattern="[0-9]{13}" 
+                                                   placeholder="Enter your GCash Reference Number (up to 13 digits)" 
+                                                   pattern="[0-9]{1,13}" 
                                                    maxlength="13"
-                                                   minlength="13"
-                                                   title="Please enter exactly 13 digits for your GCash Reference Number">
+                                                   minlength="1"
+                                                   title="Please enter 1 to 13 digits for your GCash Reference Number">
                                             <small class="form-text text-muted">
                                                 <i class="fas fa-info-circle me-1"></i>
-                                                Enter exactly 13 digits from your GCash Reference Number
+                                                Enter 1 to 13 digits from your GCash Reference Number
                                             </small>
                                         </div>
                                         <div class="col-12">
@@ -1663,11 +1663,11 @@ foreach ($gcash_defaults as $key => $default_value) {
                     return;
                 }
                 
-                if (!transactionIdField.value || transactionIdField.value.length !== 13) {
+                if (!transactionIdField.value || transactionIdField.value.length === 0 || transactionIdField.value.length > 13) {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Missing Information',
-                        text: 'Please enter a valid 13-digit GCash transaction ID',
+                        text: 'Please enter a valid GCash transaction ID (1-13 digits)',
                         confirmButtonColor: '#7F1734'
                     });
                     return;
@@ -1793,8 +1793,8 @@ foreach ($gcash_defaults as $key => $default_value) {
                 
                 // Validate on blur
                 transactionIdInput.addEventListener('blur', function() {
-                    if (this.value.length > 0 && this.value.length !== 13) {
-                        this.setCustomValidity('GCash Transaction ID must be exactly 13 digits');
+                    if (this.value.length > 0 && (this.value.length < 1 || this.value.length > 13)) {
+                        this.setCustomValidity('GCash Transaction ID must be 1 to 13 digits');
                         this.reportValidity();
                     } else {
                         this.setCustomValidity('');
@@ -1803,7 +1803,7 @@ foreach ($gcash_defaults as $key => $default_value) {
                 
                 // Clear validation on input
                 transactionIdInput.addEventListener('input', function() {
-                    if (this.value.length === 13) {
+                    if (this.value.length >= 1 && this.value.length <= 13) {
                         this.setCustomValidity('');
                     }
                 });

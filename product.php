@@ -1,4 +1,9 @@
 <?php
+// Enable error logging for debugging
+ini_set('log_errors', 1);
+ini_set('error_log', 'C:\xampp\apache\logs\error.log'); // Adjust path if needed
+error_reporting(E_ALL);
+
 session_start();
 include 'includes/db.php';
 
@@ -10,9 +15,9 @@ if (empty($_SESSION['csrf_token'])) {
 $products = [];
 $categories = [];
 
-try {
-    // Fetch all categories for the sidebar
-    $categories = $pdo->query("SELECT category_id, category_name FROM categories")->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        // Fetch all categories for the sidebar
+        $categories = $pdo->query("SELECT category_id, category_name FROM categories")->fetchAll(PDO::FETCH_ASSOC);
     
     // Get user's favorite products if logged in
     $user_favorites = [];
@@ -22,11 +27,18 @@ try {
         $user_favorites = $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
+    // Simple search term (for minimalist search)
+    $searchTerm = isset($_GET['q']) ? trim($_GET['q']) : '';
+    $hasSearch = $searchTerm !== '';
+
     // Check if a category is selected
     if (isset($_GET['category'])) {
         $selectedCategory = $_GET['category'];
 
         if ($selectedCategory === 'all') {
+            // DEBUG: Log the query for Chicken Wings
+            error_log("PRODUCT.PHP: Executing 'all' category query");
+            
             // Fetch all products (one card per product, not per brand)
             $products = $pdo->query("
                 SELECT 
@@ -34,12 +46,19 @@ try {
                     p.product_name AS name,
                     p.product_description AS description,
                     uom.name AS uom_name,
-                    -- Get newest batch price for this specific brand
+                    -- DEBUG: Add individual components for debugging
+                    COALESCE(pp.markup_price, 0) AS markup_price,
+                    COALESCE(pp.cost_price, 0) AS cost_price,
+                    (SELECT pb.unit_cost FROM product_batches pb 
+                     WHERE pb.product_id = p.product_id 
+                     AND pb.quantity_remaining > 0 AND pb.is_active = 1
+                     ORDER BY pb.received_date DESC, pb.unit_cost DESC LIMIT 1) AS batch_unit_cost,
+                    -- Get newest batch price (FIXED: prioritize non-zero unit_cost when dates are same)
                     COALESCE(pp.markup_price, 0) + COALESCE(
                         (SELECT pb.unit_cost FROM product_batches pb 
-                         WHERE pb.product_id = p.product_id AND pb.brand_id = b.id 
+                         WHERE pb.product_id = p.product_id 
                          AND pb.quantity_remaining > 0 AND pb.is_active = 1
-                         ORDER BY pb.received_date DESC LIMIT 1),
+                         ORDER BY pb.received_date DESC, pb.unit_cost DESC LIMIT 1),
                         pp.cost_price, 0
                     ) AS price,
                     -- Total stock from all brands combined
@@ -80,6 +99,20 @@ try {
                 GROUP BY p.product_id, p.product_name, p.product_description, uom.name
                 ORDER BY stock DESC, name ASC
             ")->fetchAll(PDO::FETCH_ASSOC);
+            
+            // DEBUG: Log Chicken Wings pricing data
+            foreach ($products as $product) {
+                if (stripos($product['name'], 'Chicken Wings') !== false) {
+                    error_log("PRODUCT.PHP CHICKEN WINGS DEBUG:");
+                    error_log("- Product ID: " . $product['id']);
+                    error_log("- Product Name: " . $product['name']);
+                    error_log("- Markup Price: " . $product['markup_price']);
+                    error_log("- Cost Price: " . $product['cost_price']);
+                    error_log("- Batch Unit Cost: " . $product['batch_unit_cost']);
+                    error_log("- Final Price: " . $product['price']);
+                    error_log("- Stock: " . $product['stock']);
+                }
+            }
         } else {
             // Get the selected category's ID
             $stmt = $pdo->prepare("SELECT category_id FROM categories WHERE category_name = :name");
@@ -87,6 +120,9 @@ try {
             $categoryData = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($categoryData) {
+                // DEBUG: Log the category query for Chicken Wings
+                error_log("PRODUCT.PHP: Executing category query for: " . $selectedCategory);
+                
                 // Fetch products for selected category (one card per product, not per brand)
                 $stmt = $pdo->prepare("
                     SELECT 
@@ -94,12 +130,19 @@ try {
                         p.product_name AS name,
                         p.product_description AS description,
                         uom.name AS uom_name,
-                        -- Get newest batch price for this specific brand
+                        -- DEBUG: Add individual components for debugging
+                        COALESCE(pp.markup_price, 0) AS markup_price,
+                        COALESCE(pp.cost_price, 0) AS cost_price,
+                        (SELECT pb.unit_cost FROM product_batches pb 
+                         WHERE pb.product_id = p.product_id 
+                         AND pb.quantity_remaining > 0 AND pb.is_active = 1
+                         ORDER BY pb.received_date DESC, pb.unit_cost DESC LIMIT 1) AS batch_unit_cost,
+                        -- Get newest batch price (FIXED: prioritize non-zero unit_cost when dates are same)
                         COALESCE(pp.markup_price, 0) + COALESCE(
                             (SELECT pb.unit_cost FROM product_batches pb 
-                             WHERE pb.product_id = p.product_id AND pb.brand_id = b.id 
+                             WHERE pb.product_id = p.product_id 
                              AND pb.quantity_remaining > 0 AND pb.is_active = 1
-                             ORDER BY pb.received_date DESC LIMIT 1),
+                             ORDER BY pb.received_date DESC, pb.unit_cost DESC LIMIT 1),
                             pp.cost_price, 0
                         ) AS price,
                         -- Total stock from all brands combined
@@ -142,9 +185,26 @@ try {
                 ");
                 $stmt->execute(['category_id' => $categoryData['category_id']]);
                 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                // DEBUG: Log Chicken Wings pricing data for category query
+                foreach ($products as $product) {
+                    if (stripos($product['name'], 'Chicken Wings') !== false) {
+                        error_log("PRODUCT.PHP CATEGORY CHICKEN WINGS DEBUG:");
+                        error_log("- Product ID: " . $product['id']);
+                        error_log("- Product Name: " . $product['name']);
+                        error_log("- Markup Price: " . $product['markup_price']);
+                        error_log("- Cost Price: " . $product['cost_price']);
+                        error_log("- Batch Unit Cost: " . $product['batch_unit_cost']);
+                        error_log("- Final Price: " . $product['price']);
+                        error_log("- Stock: " . $product['stock']);
+                    }
+                }
             }
         }
     } else {
+        // DEBUG: Log the default query for Chicken Wings
+        error_log("PRODUCT.PHP: Executing default query (no category selected)");
+        
         // Fetch all products by default (one card per product, not per brand)
         $products = $pdo->query("
             SELECT 
@@ -152,12 +212,19 @@ try {
                 p.product_name AS name,
                 p.product_description AS description,
                 uom.name AS uom_name,
-                -- Get newest batch price for this specific brand
+                -- DEBUG: Add individual components for debugging
+                COALESCE(pp.markup_price, 0) AS markup_price,
+                COALESCE(pp.cost_price, 0) AS cost_price,
+                (SELECT pb.unit_cost FROM product_batches pb 
+                 WHERE pb.product_id = p.product_id 
+                 AND pb.quantity_remaining > 0 AND pb.is_active = 1
+                 ORDER BY pb.received_date DESC, pb.unit_cost DESC LIMIT 1) AS batch_unit_cost,
+                -- Get newest batch price (FIXED: prioritize non-zero unit_cost when dates are same)
                 COALESCE(pp.markup_price, 0) + COALESCE(
                     (SELECT pb.unit_cost FROM product_batches pb 
-                     WHERE pb.product_id = p.product_id AND pb.brand_id = b.id 
+                     WHERE pb.product_id = p.product_id 
                      AND pb.quantity_remaining > 0 AND pb.is_active = 1
-                     ORDER BY pb.received_date DESC LIMIT 1),
+                     ORDER BY pb.received_date DESC, pb.unit_cost DESC LIMIT 1),
                     pp.cost_price, 0
                 ) AS price,
                 -- Total stock from all brands combined
@@ -198,6 +265,86 @@ try {
             GROUP BY p.product_id, p.product_name, p.product_description, uom.name
             ORDER BY stock DESC, name ASC
         ")->fetchAll(PDO::FETCH_ASSOC);
+        
+            // DEBUG: Log Chicken Wings pricing data for default query
+            foreach ($products as $product) {
+                if (stripos($product['name'], 'Chicken Wings') !== false) {
+                    error_log("PRODUCT.PHP DEFAULT CHICKEN WINGS DEBUG:");
+                    error_log("- Product ID: " . $product['id']);
+                    error_log("- Product Name: " . $product['name']);
+                    error_log("- Markup Price: " . $product['markup_price']);
+                    error_log("- Cost Price: " . $product['cost_price']);
+                    error_log("- Batch Unit Cost: " . $product['batch_unit_cost']);
+                    error_log("- Final Price: " . $product['price']);
+                    error_log("- Stock: " . $product['stock']);
+                    
+                    // DEBUG: Check what batches exist for this product
+                    $batchCheckStmt = $pdo->prepare("
+                        SELECT 
+                            pb.batch_id,
+                            pb.product_id,
+                            pb.brand_id,
+                            pb.unit_cost,
+                            pb.quantity_remaining,
+                            pb.is_active,
+                            pb.received_date,
+                            b.name as brand_name
+                        FROM product_batches pb
+                        LEFT JOIN brands b ON pb.brand_id = b.id
+                        WHERE pb.product_id = ?
+                        ORDER BY pb.received_date DESC
+                    ");
+                    $batchCheckStmt->execute([$product['id']]);
+                    $allBatches = $batchCheckStmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    error_log("PRODUCT.PHP BATCH CHECK FOR CHICKEN WINGS:");
+                    error_log("- Total batches found: " . count($allBatches));
+                    foreach ($allBatches as $batch) {
+                        error_log("  Batch ID: " . $batch['batch_id'] . 
+                                ", Brand: " . $batch['brand_name'] . 
+                                ", Unit Cost: " . $batch['unit_cost'] . 
+                                ", Stock: " . $batch['quantity_remaining'] . 
+                                ", Active: " . $batch['is_active'] . 
+                                ", Date: " . $batch['received_date']);
+                    }
+                    
+                    // DEBUG: Test the exact batch selection query used in the main query
+                    $batchSelectStmt = $pdo->prepare("
+                        SELECT pb.unit_cost 
+                        FROM product_batches pb 
+                        WHERE pb.product_id = ? 
+                        AND pb.quantity_remaining > 0 AND pb.is_active = 1
+                        ORDER BY pb.received_date DESC, pb.unit_cost DESC
+                        LIMIT 1
+                    ");
+                    error_log("PRODUCT.PHP TESTING FIXED BATCH SELECTION QUERY:");
+                    error_log("- Query: SELECT pb.unit_cost FROM product_batches pb WHERE pb.product_id = ? AND pb.quantity_remaining > 0 AND pb.is_active = 1 ORDER BY pb.received_date DESC, pb.unit_cost DESC LIMIT 1");
+                    error_log("- Product ID: " . $product['id']);
+                    
+                    // Test the fixed query
+                    $batchSelectStmt->execute([$product['id']]);
+                    $testResult = $batchSelectStmt->fetch(PDO::FETCH_ASSOC);
+                    error_log("- Fixed Query Result: " . ($testResult['unit_cost'] ?? 'NULL'));
+                    
+                    // Check what brands are available for this product
+                    $brandCheckStmt = $pdo->prepare("
+                        SELECT DISTINCT b.id, b.name 
+                        FROM brands b 
+                        WHERE b.is_archived = 0
+                        AND EXISTS (
+                            SELECT 1 FROM product_batches pb 
+                            WHERE pb.product_id = ? AND pb.brand_id = b.id AND pb.is_active = 1
+                        )
+                    ");
+                    $brandCheckStmt->execute([$product['id']]);
+                    $availableBrands = $brandCheckStmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    error_log("PRODUCT.PHP AVAILABLE BRANDS FOR CHICKEN WINGS:");
+                    foreach ($availableBrands as $brand) {
+                        error_log("  Brand ID: " . $brand['id'] . ", Brand Name: " . $brand['name']);
+                    }
+                }
+            }
     }
 } catch (PDOException $e) {
     echo "Error fetching data: " . $e->getMessage();
@@ -214,7 +361,7 @@ foreach ($_SESSION['cart'] ?? [] as $product_id => $cart_item) {
                 COALESCE(pp.markup_price, 0) + COALESCE(
                     (SELECT pb.unit_cost FROM product_batches pb 
                      WHERE pb.product_id = p.product_id AND pb.quantity_remaining > 0 
-                     ORDER BY pb.received_date DESC LIMIT 1),
+                     ORDER BY pb.received_date DESC, pb.unit_cost DESC LIMIT 1),
                     pp.cost_price, 0
                 ) AS price,
                 COALESCE(ps.current_stock, 0) AS stock
@@ -374,6 +521,44 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
             border-color: var(--brand-primary);
             box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
             outline: none;
+        }
+
+        /* Search input minimal style */
+        .search-input {
+            border: 2px solid #e9ecef;
+            border-radius: 0.75rem;
+            padding: 0.55rem 0.9rem;
+            transition: all 0.2s ease;
+        }
+        .search-input:focus {
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.15);
+            outline: none;
+        }
+        .btn-search {
+            background: linear-gradient(135deg, #7F1734 0%, #a91d42 100%);
+            color: #fff;
+            border: none;
+            border-radius: 0.75rem;
+            padding: 0.55rem 0.9rem;
+            font-weight: 600;
+        }
+
+        .btn-all {
+            background: #ffffff;
+            color: var(--brand-primary);
+            border: 2px solid var(--brand-primary);
+            border-radius: 0.75rem;
+            padding: 0.55rem 0.9rem;
+            font-weight: 700;
+        }
+        .btn-all:hover {
+            background: var(--brand-primary);
+            color: #ffffff;
+        }
+        .btn-all.active {
+            background: var(--brand-primary);
+            color: #ffffff;
         }
 
         /* Product Cards */
@@ -751,14 +936,7 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
         <div class="category-section">
             <div class="row align-items-center">
                 <div class="col-md-8">
-                    <?php if (isset($_GET['category'])): ?>
-                        <h1 class="category-title">Category: <?= htmlspecialchars(ucfirst($_GET['category'])) ?></h1>
-                    <?php else: ?>
-                        <h1 class="category-title">All Products</h1>
-                    <?php endif; ?>
-                </div>
-                <div class="col-md-4">
-                    <form method="get">
+                    <form method="get" class="d-flex">
                         <select name="category" class="form-select category-select" onchange="this.form.submit()">
                             <option value="all" <?= !isset($_GET['category']) || $_GET['category'] === 'all' ? 'selected' : '' ?>>All Products</option>
                             <?php foreach ($categories as $category): ?>
@@ -769,18 +947,44 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
                         </select>
                     </form>
                 </div>
+                <div class="col-md-4">
+                    <form method="get" class="d-flex gap-2">
+                        <input type="text" name="q" value="<?= htmlspecialchars($_GET['q'] ?? '') ?>" class="form-control search-input" placeholder="Search...">
+                        <button type="submit" class="btn btn-search"><i class="fas fa-search"></i></button>
+                    </form>
+                </div>
             </div>
         </div>
 
         <!-- Products Grid -->
-        <div class="row g-4">
-            <?php foreach ($products as $product): ?>
+        <div id="productsSection">
+            <?php if (!empty($_GET['q'])): ?>
+                <div class="mb-3 text-muted">
+                    <small>Search results for: <strong><?= htmlspecialchars($_GET['q']) ?></strong></small>
+                </div>
+            <?php endif; ?>
+            <div class="row g-4">
+            <?php 
+            // Client-side filtering fallback if backend SQL not yet adjusted
+            if ($hasSearch ?? false) {
+                $filtered = [];
+                foreach ($products as $p) {
+                    $haystack = strtolower(($p['name'] ?? '') . ' ' . ($p['description'] ?? ''));
+                    if (strpos($haystack, strtolower($searchTerm)) !== false) {
+                        $filtered[] = $p;
+                    }
+                }
+                $productsToRender = $filtered;
+            } else {
+                $productsToRender = $products;
+            }
+            foreach ($productsToRender as $product): ?>
                 <!-- Debug: Product ID = <?= $product['id'] ?> -->
                 <div class="col-md-6 col-lg-4 col-xl-3">
                     <div class="product-card">
                         <!-- Stock Badge -->
                         <?php if ((float)$product['stock'] > 10): ?>
-                            <span class="product-badge in-stock">In Stock</span>
+                            <span class="product-badge in-stock">Sufficient Stock</span>
                         <?php elseif ((float)$product['stock'] > 0): ?>
                             <span class="product-badge low-stock">Low Stock</span>
                         <?php else: ?>
@@ -856,6 +1060,7 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
                     </div>
                 </div>
             <?php endforeach; ?>
+            </div>
         </div>
     </div>
 
@@ -870,6 +1075,7 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
     <script>
         // Global variables for cart management
         let isAddingToCart = false;
+        let liveSearchController = null;
 
         // Initialize Swiper
         document.addEventListener("DOMContentLoaded", function () {
@@ -905,7 +1111,165 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
             updateCartBadge();
             initializeCartButtons();
             initializeCartRefresh();
+
+            // Initialize live search
+            initializeLiveSearch();
         });
+
+        // Live search with debounce
+        function initializeLiveSearch() {
+            const searchInput = document.querySelector('input[name="q"]');
+            const categorySelect = document.querySelector('select[name="category"]');
+            if (!searchInput) return;
+
+            let debounceTimer = null;
+            const triggerSearch = () => {
+                const q = searchInput.value.trim();
+                const params = new URLSearchParams(window.location.search);
+                if (categorySelect) {
+                    const cat = categorySelect.value || 'all';
+                    params.set('category', cat);
+                }
+                if (q) { params.set('q', q); } else { params.delete('q'); }
+
+                // Abort previous
+                if (liveSearchController) liveSearchController.abort();
+                liveSearchController = new AbortController();
+
+                fetch(window.location.pathname + '?' + params.toString(), { signal: liveSearchController.signal })
+                    .then(r => r.text())
+                    .then(html => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const newSection = doc.querySelector('#productsSection');
+                        const currSection = document.querySelector('#productsSection');
+                        if (newSection && currSection) {
+                            currSection.replaceWith(newSection);
+                            // Re-init interactive components
+                            reinitializeDynamicUI();
+                        }
+                        // Update URL without reloading
+                        const newUrl = window.location.pathname + '?' + params.toString();
+                        window.history.replaceState({}, '', newUrl);
+                    })
+                    .catch(err => {
+                        if (err.name !== 'AbortError') {
+                            console.error('Live search error:', err);
+                        }
+                    });
+            };
+
+            const debounce = (fn, delay) => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(fn, delay);
+            };
+
+            searchInput.addEventListener('input', () => debounce(triggerSearch, 300));
+            if (categorySelect) {
+                categorySelect.addEventListener('change', triggerSearch);
+            }
+        }
+
+        // Expose triggerLiveSearch globally for the All Products button
+        window.triggerLiveSearch = function(category) {
+            const searchInput = document.querySelector('input[name="q"]');
+            const categorySelect = document.querySelector('select[name="category"]');
+            if (!searchInput) return;
+
+            const q = searchInput.value.trim();
+            const params = new URLSearchParams(window.location.search);
+            params.set('category', category);
+            if (q) { params.set('q', q); } else { params.delete('q'); }
+
+            // Abort previous
+            if (liveSearchController) liveSearchController.abort();
+            liveSearchController = new AbortController();
+
+            fetch(window.location.pathname + '?' + params.toString(), { signal: liveSearchController.signal })
+                .then(r => r.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const newSection = doc.querySelector('#productsSection');
+                    const currSection = document.querySelector('#productsSection');
+                    if (newSection && currSection) {
+                        currSection.replaceWith(newSection);
+                        // Re-init interactive components
+                        reinitializeDynamicUI();
+                    }
+                    // Update URL without reloading
+                    const newUrl = window.location.pathname + '?' + params.toString();
+                    window.history.replaceState({}, '', newUrl);
+                })
+                .catch(err => {
+                    if (err.name !== 'AbortError') {
+                        console.error('Live search error:', err);
+                    }
+                });
+        };
+
+        function reinitializeDynamicUI() {
+            // Re-init Swiper for newly injected cards
+            document.querySelectorAll('.mySwiper').forEach((el) => {
+                const productId = el.getAttribute('data-product-id');
+                new Swiper(el, {
+                    loop: true,
+                    autoplay: { delay: 2000, disableOnInteraction: false },
+                    pagination: { el: el.querySelector('.swiper-pagination'), clickable: true },
+                    on: {
+                        click: function(swiper, event) {
+                            if (productId) {
+                                window.location.href = 'product_detail.php?id=' + productId;
+                            }
+                        }
+                    }
+                });
+                el.removeAttribute('onclick');
+            });
+
+            // Rebind cart and favorites
+            initializeCartButtons();
+            document.querySelectorAll('.btn-favorite').forEach(btn => {
+                // Avoid duplicate handlers by cloning
+                const clone = btn.cloneNode(true);
+                btn.parentNode.replaceChild(clone, btn);
+            });
+            // Reattach favorite listeners
+            document.querySelectorAll('.btn-favorite').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const productId = this.getAttribute('data-product-id');
+                    const isFavorited = this.classList.contains('favorited');
+                    const productCard = this.closest('.product-card');
+                    const productName = productCard ? productCard.querySelector('.product-title')?.textContent || 'Product' : 'Product';
+                    Swal.fire({ title: 'Processing...', text: isFavorited ? 'Removing from favorites...' : 'Adding to favorites...', allowOutsideClick: false, showConfirmButton: false, didOpen: () => { Swal.showLoading(); }, customClass: { popup: 'swal2-info' } });
+                    fetch('favorite.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'product_id=' + productId + '&csrf_token=<?= $_SESSION['csrf_token'] ?? '' ?>' })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.is_favorite) {
+                                Swal.fire({ title: 'Added to Favorites!', text: 'Item has been successfully added to your favorites.', icon: 'success', confirmButtonColor: '#198754', confirmButtonText: '<i class="fas fa-check me-1"></i>Great!', customClass: { popup: 'swal2-success', confirmButton: 'swal2-confirm' } });
+                                this.classList.add('favorited');
+                                this.style.background = 'var(--bs-danger)';
+                                this.style.color = 'white';
+                                this.style.borderColor = 'var(--bs-danger)';
+                            } else if (data.success && !data.is_favorite) {
+                                Swal.fire({ title: 'Removed from Favorites', text: 'Item has been successfully removed from your favorites.', icon: 'success', confirmButtonColor: '#198754', confirmButtonText: '<i class="fas fa-check me-1"></i>Got it!', customClass: { popup: 'swal2-success', confirmButton: 'swal2-confirm' } });
+                                this.classList.remove('favorited');
+                                this.style.background = 'white';
+                                this.style.color = 'var(--bs-secondary)';
+                                this.style.borderColor = 'var(--bs-secondary)';
+                            } else if (!data.success && data.message && data.message.includes('log in')) {
+                                Swal.fire({ title: 'Login Required', html: '<div class="text-center"><i class="fas fa-user-lock text-primary mb-3" style="font-size: 3rem;"></i><p>You need to be logged in to manage your favorites.</p><p class="text-muted">Please log in or create an account to continue.</p></div>', showCancelButton: true, confirmButtonColor: '#7F1734', cancelButtonColor: '#6c757d', confirmButtonText: '<i class="fas fa-sign-in-alt me-1"></i>Login', cancelButtonText: '<i class="fas fa-user-plus me-1"></i>Register', customClass: { popup: 'swal2-popup', confirmButton: 'swal2-confirm', cancelButton: 'swal2-cancel' } }).then((result) => { if (result.isConfirmed) { window.location.href = 'login.php'; } else if (result.dismiss === Swal.DismissReason.cancel) { window.location.href = 'register.php'; } });
+                            } else {
+                                Swal.fire({ title: 'Error', text: data.message || 'Something went wrong. Please try again.', icon: 'error', confirmButtonColor: '#dc3545', confirmButtonText: '<i class="fas fa-times me-1"></i>OK', customClass: { popup: 'swal2-danger', confirmButton: 'swal2-confirm' } });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            Swal.fire({ title: 'Connection Error', html: '<div class="text-center"><i class="fas fa-wifi text-danger mb-3" style="font-size: 3rem;"></i><p>Unable to update favorites.</p><p class="text-muted">Please check your internet connection and try again.</p></div>', showCancelButton: true, confirmButtonColor: '#dc3545', cancelButtonColor: '#6c757d', confirmButtonText: '<i class="fas fa-redo me-1"></i>Try Again', cancelButtonText: '<i class="fas fa-times me-1"></i>Cancel', customClass: { popup: 'swal2-danger', confirmButton: 'swal2-confirm', cancelButton: 'swal2-cancel' } }).then((result) => { if (result.isConfirmed) { this.click(); } });
+                        });
+                });
+            });
+        }
 
         // Function to refresh cart content
         function refreshCartContent() {

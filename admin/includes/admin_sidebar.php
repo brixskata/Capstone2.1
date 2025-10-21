@@ -323,6 +323,15 @@ try {
           <span>Promo Messages</span>
           <div class="nav-indicator"></div>
         </a>
+        <?php if (isSuperAdmin($pdo) || hasPermission($pdo, 'faq_manage')): ?>
+        <a href="manage_faq.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'manage_faq.php' ? 'active' : ''; ?>">
+          <div class="nav-icon">
+            <i class="fas fa-question-circle"></i>
+          </div>
+          <span>FAQ Management</span>
+          <div class="nav-indicator"></div>
+        </a>
+        <?php endif; ?>
         <?php if (hasModuleAccess($pdo, 'users')): ?>
         <a href="gcash_settings.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'gcash_settings.php' ? 'active' : ''; ?>">
           <div class="nav-icon">

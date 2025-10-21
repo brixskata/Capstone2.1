@@ -88,7 +88,7 @@ try {
                 <h5 class="footer-title">Support</h5>
                 <ul class="footer-links">
                     <li><a href="#" data-bs-toggle="modal" data-bs-target="#contactModal">Contact Us</a></li>
-                    <li><a href="#" data-bs-toggle="modal" data-bs-target="#faqModal">FAQ</a></li>
+                    <li><a href="faq.php">FAQ</a></li>
                     <li><a href="#" data-bs-toggle="modal" data-bs-target="#shippingModal">Shipping Info</a></li>
                     <li><a href="#" data-bs-toggle="modal" data-bs-target="#returnsModal">Returns</a></li>
                 </ul>

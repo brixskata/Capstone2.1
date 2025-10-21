@@ -78,7 +78,7 @@ if ($product_id <= 0) {
                     WHERE pb.product_id = p.product_id 
                     AND pb.quantity_remaining > 0 
                     AND pb.is_active = 1
-                    ORDER BY pb.received_date DESC 
+                    ORDER BY pb.received_date DESC, pb.unit_cost DESC 
                     LIMIT 1
                 ), (
                     SELECT pp.cost_price
@@ -144,7 +144,7 @@ if ($product_id <= 0) {
                     AND pb.quantity_remaining > 0 
                     AND pb.is_active = 1
                     AND b.is_archived = 0
-                    ORDER BY pb.received_date DESC, pb.batch_id DESC
+                    ORDER BY pb.received_date DESC, pb.unit_cost DESC, pb.batch_id DESC
                 ");
                 $brand_stmt->execute([$product_id]);
                 $alternative_brands = $brand_stmt->fetchAll(PDO::FETCH_ASSOC);

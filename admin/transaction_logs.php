@@ -252,7 +252,7 @@ if ($search) {
     $query .= " AND (u.username LIKE '%$s%' OR o.orders_id LIKE '%$s%')";
 }
 
-$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at DESC";
+$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at ASC";
 
 try {
     $orders = $pdo->query($query)->fetchAll();
@@ -323,7 +323,7 @@ foreach ($statuses as $status) {
         ) oc ON oc.order_id = o.orders_id
         WHERE os.status_name = :status
         GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at 
-        ORDER BY o.created_at DESC
+        ORDER BY o.created_at ASC
     ";
     
     $stmt = $pdo->prepare($statusQuery);

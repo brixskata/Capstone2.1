@@ -151,35 +151,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
             $brand_id = (int)$brand_id;
             
             $quantity = (float)$_POST["quantity_{$product_key}"];
-            $cost = (float)$_POST["cost_{$product_key}"];
-            $expiration_date = $_POST["expiration_{$product_key}"];
-            $total_cost = $quantity * $cost;
             
             // Debug logging
-            error_log("PO Creation Debug - Product: $product_id, Brand: $brand_id, Quantity: $quantity, Cost: $cost, Expiration: $expiration_date, Total: $total_cost");
+            error_log("PO Creation Debug - Product: $product_id, Brand: $brand_id, Quantity: $quantity");
             
             if ($quantity <= 0) {
                 throw new Exception("Quantity must be greater than 0 for all products.");
             }
             
-            if ($cost <= 0) {
-                throw new Exception("Cost per unit must be greater than 0 for all products. Product ID: $product_id, Brand ID: $brand_id");
-            }
-            
-            if (empty($expiration_date)) {
-                throw new Exception("Expiration date is required for all products. Product ID: $product_id, Brand ID: $brand_id");
-            }
-            
-            // Validate expiration date is in the future
-            if (strtotime($expiration_date) <= strtotime($expected_delivery)) {
-                throw new Exception("Expiration date must be after delivery date for Product ID: $product_id, Brand ID: $brand_id");
-            }
-            
-            // Insert into restocking table
+            // Insert into restocking table (cost and expiration will be added during receipt)
             $stmt = $pdo->prepare("
                 INSERT INTO restocking 
                 (po_number, is_purchase_order, product_id, supplier_id, brand_id, quantity_added, cost_per_unit, total_cost, restock_date, expiration_date, status_id, notes, created_by)
-                VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                VALUES (?, 1, ?, ?, ?, ?, NULL, NULL, ?, NULL, 1, ?, ?)
             ");
             $stmt->execute([
                 $po_number,
@@ -187,10 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                 $supplier_id,
                 $brand_id,
                 $quantity,
-                $cost,
-                $total_cost,
                 $expected_delivery,
-                $expiration_date,
                 $po_notes,
                 $_SESSION['user_id']
             ]);
@@ -445,6 +426,8 @@ foreach ($archivedSuppliers as $supplier) {
   <title>Manage Suppliers - Admin Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
   <?php include 'includes/admin_styles.php'; ?>
   <style>
     :root {
@@ -666,6 +649,56 @@ foreach ($archivedSuppliers as $supplier) {
     
     .products-container::-webkit-scrollbar-thumb:hover {
       background: #7F1734;
+    }
+    
+    /* Select2 Custom Styling */
+    .select2-container--bootstrap-5 .select2-selection {
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+        min-height: 38px;
+    }
+    
+    .select2-container--bootstrap-5 .select2-selection--single {
+        height: 38px;
+        padding: 0.375rem 0.75rem;
+    }
+    
+    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+        line-height: 1.5;
+        padding-left: 0;
+        padding-right: 0;
+    }
+    
+    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__arrow {
+        height: 36px;
+        right: 8px;
+    }
+    
+    .select2-container--bootstrap-5 .select2-dropdown {
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    
+    .select2-container--bootstrap-5 .select2-search--dropdown .select2-search__field {
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+        padding: 0.375rem 0.75rem;
+    }
+    
+    .select2-container--bootstrap-5 .select2-results__option--highlighted[aria-selected] {
+        background-color: #7F1734;
+        color: white;
+    }
+    
+    .select2-container--bootstrap-5 .select2-results__option[aria-selected=true] {
+        background-color: #7F1734;
+        color: white;
+    }
+    
+    .select2-container--bootstrap-5 .select2-selection--single:focus {
+        border-color: #7F1734;
+        box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
     }
     
     @media (max-width: 768px) {
@@ -1264,6 +1297,10 @@ foreach ($archivedSuppliers as $supplier) {
                   </option>
                 <?php endforeach; ?>
               </select>
+              <div class="form-text">
+                <i class="fa fa-info-circle me-1"></i>
+                Search and select a product to assign to this supplier
+              </div>
             </div>
             
           </div>
@@ -1317,14 +1354,12 @@ foreach ($archivedSuppliers as $supplier) {
                     <th>Current Stock</th>
                     <th>Reorder Point</th>
                     <th style="width: 100px;">Quantity <span class="text-danger">*</span></th>
-                    <th style="width: 120px;">Unit Cost <span class="text-danger">*</span></th>
-                    <th style="width: 120px;">Expiration Date <span class="text-danger">*</span></th>
                     <th style="width: 120px;">Subtotal</th>
                   </tr>
                 </thead>
                 <tbody id="po_products_body">
                   <tr>
-                    <td colspan="8" class="text-center py-4">
+                    <td colspan="6" class="text-center py-4">
                       <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                       </div>
@@ -1344,8 +1379,8 @@ foreach ($archivedSuppliers as $supplier) {
             
             <div class="alert alert-light mt-3 mb-0">
               <div class="d-flex justify-content-between align-items-center">
-                <span class="fw-bold fs-5">Total Amount:</span>
-                <span class="fw-bold fs-4 text-primary">₱<span id="po_total">0.00</span></span>
+                <span class="fw-bold fs-5">Total Items:</span>
+                <span class="fw-bold fs-4 text-primary"><span id="po_total">0</span> kilos</span>
               </div>
             </div>
           </div>
@@ -1360,7 +1395,9 @@ foreach ($archivedSuppliers as $supplier) {
     </div>
   </div>
 
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
   <?php include 'includes/admin_scripts.php'; ?>
   <script>
     function openEditSupplierModal(btn) {
@@ -1395,6 +1432,34 @@ foreach ($archivedSuppliers as $supplier) {
       
       const modal = new bootstrap.Modal(document.getElementById('assignProductsModal'));
       modal.show();
+      
+      // Initialize Select2 when modal is shown
+      $('#assignProductsModal').on('shown.bs.modal', function () {
+        const productSelect = document.querySelector('#assignProductsModal select[name="product_id"]');
+        if (productSelect && !$(productSelect).hasClass('select2-hidden-accessible')) {
+          try {
+            $(productSelect).select2({
+              theme: 'bootstrap-5',
+              placeholder: 'Search and select a product...',
+              allowClear: true,
+              width: '100%',
+              dropdownParent: $('#assignProductsModal')
+            });
+            
+            console.log('Assign Product Select2 initialized successfully');
+          } catch (error) {
+            console.error('Error initializing Assign Product Select2:', error);
+          }
+        }
+      });
+      
+      // Clean up Select2 when modal is hidden
+      $('#assignProductsModal').on('hidden.bs.modal', function () {
+        const productSelect = document.querySelector('#assignProductsModal select[name="product_id"]');
+        if (productSelect && $(productSelect).hasClass('select2-hidden-accessible')) {
+          $(productSelect).select2('destroy');
+        }
+      });
     }
 
     function toggleProductsView(supplierId) {
@@ -1438,7 +1503,7 @@ foreach ($archivedSuppliers as $supplier) {
           if (data.length === 0) {
             document.getElementById('po_products_body').innerHTML = `
               <tr>
-                <td colspan="8" class="text-center py-4">
+                <td colspan="6" class="text-center py-4">
                   <i class="fa fa-check-circle display-4 text-success mb-3"></i>
                   <h6 class="text-muted">No Low Stock Products</h6>
                   <p class="text-muted">All products from this supplier have adequate stock levels.</p>
@@ -1459,7 +1524,7 @@ foreach ($archivedSuppliers as $supplier) {
           console.error('Error loading low stock products:', error);
           document.getElementById('po_products_body').innerHTML = `
             <tr>
-              <td colspan="8" class="text-center py-4">
+              <td colspan="6" class="text-center py-4">
                 <i class="fa fa-exclamation-triangle display-4 text-danger mb-3"></i>
                 <h6 class="text-danger">Error Loading Products</h6>
                 <p class="text-muted">Please try again or contact support if the issue persists.</p>
@@ -1490,51 +1555,14 @@ foreach ($archivedSuppliers as $supplier) {
                    class="form-control form-control-sm qty-input" min="1" step="0.01"
                    value="${Math.ceil(product.suggested_qty)}" required>
           </td>
-          <td>
-            <input type="number" name="cost_${product.product_id}_${product.brand_id}" 
-                   class="form-control form-control-sm cost-input" min="0.01" step="0.01"
-                   value="${product.last_cost > 0 ? parseFloat(product.last_cost).toFixed(2) : ''}" 
-                   placeholder="Enter cost" required>
-          </td>
-          <td>
-            <input type="date" name="expiration_${product.product_id}_${product.brand_id}" 
-                   class="form-control form-control-sm expiration-input" required>
-          </td>
           <td class="subtotal fw-bold">₱0.00</td>
         `;
         tbody.appendChild(row);
       });
       
       // Add event listeners for auto-calculation
-      document.querySelectorAll('.qty-input, .cost-input').forEach(input => {
+      document.querySelectorAll('.qty-input').forEach(input => {
         input.addEventListener('input', calculatePOTotal);
-      });
-      
-      // Set default expiration dates (3 months from today)
-      document.querySelectorAll('.expiration-input').forEach(input => {
-        const today = new Date();
-        const expirationDate = new Date(today);
-        expirationDate.setMonth(expirationDate.getMonth() + 3);
-        input.value = expirationDate.toISOString().split('T')[0];
-        
-        // Add validation
-        input.addEventListener('change', function() {
-          const selectedDate = new Date(this.value);
-          const today = new Date();
-          const minDate = new Date(today);
-          minDate.setMonth(minDate.getMonth() + 1); // At least 1 month from today
-          
-          if (selectedDate <= today) {
-            this.style.borderColor = '#dc3545';
-            alert('Expiration date must be in the future');
-            this.focus();
-          } else if (selectedDate < minDate) {
-            this.style.borderColor = '#ffc107';
-            // Warning but allow it
-          } else {
-            this.style.borderColor = '';
-          }
-        });
       });
       
       document.querySelectorAll('.po-product-checkbox').forEach(checkbox => {
@@ -1563,29 +1591,26 @@ foreach ($archivedSuppliers as $supplier) {
     }
 
     function calculatePOTotal() {
-      let total = 0;
+      let totalItems = 0;
       document.querySelectorAll('#po_products_body tr').forEach(row => {
         const checkbox = row.querySelector('.po-product-checkbox');
         if (checkbox && checkbox.checked) {
           const qtyInput = row.querySelector('.qty-input');
-          const costInput = row.querySelector('.cost-input');
           const subtotalCell = row.querySelector('.subtotal');
           
-          if (qtyInput && costInput) {
+          if (qtyInput) {
             const qty = parseFloat(qtyInput.value) || 0;
-            const cost = parseFloat(costInput.value) || 0;
-            const subtotal = qty * cost;
-            subtotalCell.textContent = `₱${subtotal.toFixed(2)}`;
-            total += subtotal;
+            subtotalCell.textContent = `${qty} kilos`;
+            totalItems += qty;
           }
         } else {
           const subtotalCell = row.querySelector('.subtotal');
           if (subtotalCell) {
-            subtotalCell.textContent = '₱0.00';
+            subtotalCell.textContent = '0 kilos';
           }
         }
       });
-      document.getElementById('po_total').textContent = total.toFixed(2);
+      document.getElementById('po_total').textContent = totalItems.toFixed(0);
     }
 
     // Form validation
@@ -1597,48 +1622,8 @@ foreach ($archivedSuppliers as $supplier) {
         return false;
       }
       
-      // Validate cost fields and expiration dates
-      let hasEmptyCost = false;
-      let hasInvalidExpiration = false;
-      
-      checkedProducts.forEach(checkbox => {
-        const row = checkbox.closest('tr');
-        const costInput = row.querySelector('.cost-input');
-        const expirationInput = row.querySelector('.expiration-input');
-        
-        // Validate cost
-        if (costInput && (!costInput.value || parseFloat(costInput.value) <= 0)) {
-          hasEmptyCost = true;
-          costInput.style.borderColor = '#dc3545';
-        } else if (costInput) {
-          costInput.style.borderColor = '';
-        }
-        
-        // Validate expiration date
-        if (expirationInput) {
-          const selectedDate = new Date(expirationInput.value);
-          const today = new Date();
-          
-          if (!expirationInput.value || selectedDate <= today) {
-            hasInvalidExpiration = true;
-            expirationInput.style.borderColor = '#dc3545';
-          } else {
-            expirationInput.style.borderColor = '';
-          }
-        }
-      });
-      
-      if (hasEmptyCost) {
-        e.preventDefault();
-        alert('Please enter a valid cost (greater than 0) for all selected products.');
-        return false;
-      }
-      
-      if (hasInvalidExpiration) {
-        e.preventDefault();
-        alert('Please enter valid expiration dates (in the future) for all selected products.');
-        return false;
-      }
+      // No additional validation needed for PO creation
+      // Cost and expiration date will be entered during receipt
     });
 
   </script>
