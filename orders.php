@@ -1161,6 +1161,24 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
             100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
         }
+        
+        /* Rating Image Styles */
+        .swal2-popup-large {
+            width: 80% !important;
+            max-width: 800px !important;
+        }
+        
+        .rating-image img {
+            transition: transform 0.2s ease;
+        }
+        
+        .rating-image img:hover {
+            transform: scale(1.05);
+        }
+        
+        .image-preview img {
+            border-radius: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -1741,9 +1759,17 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <div class="rating-section mt-3" id="rating-section-<?= $order['id'] ?>">
                                                 <?php
                                                 // Check if user has already rated this order
-                                                $rating_stmt = $pdo->prepare("SELECT rating, review FROM order_ratings WHERE order_id = ? AND user_id = ?");
+                                                $rating_stmt = $pdo->prepare("SELECT rating_id, rating, review FROM order_ratings WHERE order_id = ? AND user_id = ?");
                                                 $rating_stmt->execute([$order['id'], $user_id]);
                                                 $existing_rating = $rating_stmt->fetch(PDO::FETCH_ASSOC);
+                                                
+                                                // Fetch images from rating_images table if rating exists
+                                                $rating_images = [];
+                                                if ($existing_rating) {
+                                                    $img_stmt = $pdo->prepare("SELECT image_path FROM rating_images WHERE rating_id = ? ORDER BY image_order ASC");
+                                                    $img_stmt->execute([$existing_rating['rating_id']]);
+                                                    $rating_images = $img_stmt->fetchAll(PDO::FETCH_COLUMN);
+                                                }
                                                 ?>
                                                 
                                                 <?php if ($existing_rating): ?>
@@ -1763,12 +1789,24 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                                 <p class="mb-0"><?= htmlspecialchars($existing_rating['review']) ?></p>
                                                             </div>
                                                         <?php endif; ?>
+                                                        <?php if (!empty($rating_images)): ?>
+                                                            <div class="rating-images mt-2">
+                                                                <small class="text-muted">Your Photos:</small>
+                                                                <div class="row mt-1">
+                                                                    <?php foreach ($rating_images as $index => $image): ?>
+                                                                    <div class="col-md-4 mb-2">
+                                                                        <img src="<?= htmlspecialchars($image) ?>" alt="Rating photo <?= $index + 1 ?>" class="img-thumbnail" style="max-width: 100%; max-height: 150px; cursor: pointer;" onclick="openImageModal('<?= htmlspecialchars($image) ?>')">
+                                                                    </div>
+                                                                    <?php endforeach; ?>
+                                                                </div>
+                                                            </div>
+                                                        <?php endif; ?>
                                                     </div>
                                                 <?php else: ?>
                                                     <!-- Show rating form -->
                                                     <div class="rating-form">
                                                         <h6 class="mb-2">Rate this order:</h6>
-                                                        <form class="rating-form-inline" onsubmit="submitRating(event, <?= $order['id'] ?>)">
+                                                        <form class="rating-form-inline" enctype="multipart/form-data" onsubmit="submitRating(event, <?= $order['id'] ?>)">
                                                             <div class="rating-input mb-2">
                                                                 <div class="star-rating">
                                                                     <input type="radio" name="rating-<?= $order['id'] ?>" value="5" id="star5-<?= $order['id'] ?>">
@@ -1785,6 +1823,28 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                             </div>
                                                             <div class="mb-2">
                                                                 <textarea class="form-control form-control-sm" name="review-<?= $order['id'] ?>" placeholder="Write a review (optional, max 150 characters)" rows="2" maxlength="150"></textarea>
+                                                            </div>
+                                                            <div class="mb-2">
+                                                                <label class="form-label small text-muted">
+                                                                    <i class="fas fa-camera me-1"></i>Add photos (optional, max 3)
+                                                                </label>
+                                                                <div class="row">
+                                                                    <?php for ($i = 1; $i <= 3; $i++): ?>
+                                                                    <div class="col-md-4 mb-2">
+                                                                        <input type="file" class="form-control form-control-sm" 
+                                                                               id="rating-image-<?= $order['id'] ?>-<?= $i ?>" 
+                                                                               name="rating_image_<?= $i ?>" 
+                                                                               accept="image/*" 
+                                                                               onchange="previewRatingImage(this, <?= $order['id'] ?>, <?= $i ?>)">
+                                                                        <div id="image-preview-<?= $order['id'] ?>-<?= $i ?>" class="mt-1" style="display: none;">
+                                                                            <img id="preview-img-<?= $order['id'] ?>-<?= $i ?>" src="" alt="Preview" class="img-thumbnail" style="max-width: 100%; max-height: 100px;">
+                                                                            <button type="button" class="btn btn-sm btn-outline-danger mt-1" onclick="removeImagePreview(<?= $order['id'] ?>, <?= $i ?>)">
+                                                                                <i class="fas fa-times"></i> Remove
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <?php endfor; ?>
+                                                                </div>
                                                             </div>
                                                             <button type="submit" class="btn btn-sm btn-primary">
                                                                 <i class="fas fa-star me-1"></i>Submit Rating
@@ -2191,8 +2251,9 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="form-group">
-                                                    <label class="form-label">Phone Number</label>
+                                                    <label class="form-label">GCash Number</label>
                                                     <input type="tel" name="phone" value="<?= htmlspecialchars($user['phone'] ?? '') ?>" class="form-control">
+                                                    <small class="text-muted"><i class="fas fa-info-circle me-1"></i>for Refund Purposes</small>
                                                     <div data-error="phone"></div>
                                                 </div>
                                             </div>
@@ -2671,6 +2732,69 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?php endif; ?>
         });
 
+        // Image preview functions for rating
+        function previewRatingImage(input, orderId, imageNumber) {
+            const file = input.files[0];
+            const previewDiv = document.getElementById(`image-preview-${orderId}-${imageNumber}`);
+            const previewImg = document.getElementById(`preview-img-${orderId}-${imageNumber}`);
+            
+            if (file) {
+                // Validate file type
+                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+                if (!allowedTypes.includes(file.type)) {
+                    Swal.fire({
+                        title: 'Invalid File Type',
+                        text: 'Please select a valid image file (JPEG, PNG, GIF, or WebP).',
+                        icon: 'error',
+                        confirmButtonColor: '#dc3545',
+                        confirmButtonText: 'OK'
+                    });
+                    input.value = '';
+                    return;
+                }
+                
+                // Validate file size (5MB max)
+                const maxSize = 5 * 1024 * 1024; // 5MB
+                if (file.size > maxSize) {
+                    Swal.fire({
+                        title: 'File Too Large',
+                        text: 'Please select an image smaller than 5MB.',
+                        icon: 'error',
+                        confirmButtonColor: '#dc3545',
+                        confirmButtonText: 'OK'
+                    });
+                    input.value = '';
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    previewDiv.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        function removeImagePreview(orderId, imageNumber) {
+            const previewDiv = document.getElementById(`image-preview-${orderId}-${imageNumber}`);
+            const input = document.getElementById(`rating-image-${orderId}-${imageNumber}`);
+            previewDiv.style.display = 'none';
+            input.value = '';
+        }
+        
+        function openImageModal(imageSrc) {
+            Swal.fire({
+                title: 'Rating Photo',
+                html: `<img src="${imageSrc}" alt="Rating photo" style="max-width: 100%; max-height: 80vh; object-fit: contain;">`,
+                showConfirmButton: false,
+                showCloseButton: true,
+                customClass: {
+                    popup: 'swal2-popup-large'
+                }
+            });
+        }
+
         // Rating functionality
         function submitRating(event, orderId) {
             event.preventDefault();
@@ -2698,6 +2822,15 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             const rating = ratingInput.value;
             const review = reviewTextarea ? reviewTextarea.value.trim() : '';
             
+            // Check if images are selected
+            const hasImages = [];
+            for (let i = 1; i <= 3; i++) {
+                const imageInput = form.querySelector(`input[name="rating_image_${i}"]`);
+                if (imageInput && imageInput.files[0]) {
+                    hasImages.push(i);
+                }
+            }
+            
             // Show confirmation SweetAlert
             Swal.fire({
                 title: 'Submit Rating?',
@@ -2712,6 +2845,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <p class="mt-2 mb-0"><strong>${rating} Star${rating > 1 ? 's' : ''}</strong></p>
                         </div>
                         ${review ? `<div class="alert alert-light text-start"><strong>Review:</strong><br>${review}</div>` : ''}
+                        ${hasImages.length > 0 ? `<div class="alert alert-info text-start"><strong>Photos:</strong> ${hasImages.length} image${hasImages.length > 1 ? 's' : ''} will be included with your rating</div>` : ''}
                         <p class="text-muted small">This rating will be submitted for Order #${orderId}</p>
                     </div>
                 `,
@@ -2750,6 +2884,14 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     formData.append('rating', rating);
                     formData.append('review', review);
                     
+                    // Add images if selected
+                    for (let i = 1; i <= 3; i++) {
+                        const imageInput = form.querySelector(`input[name="rating_image_${i}"]`);
+                        if (imageInput && imageInput.files[0]) {
+                            formData.append(`rating_image_${i}`, imageInput.files[0]);
+                        }
+                    }
+                    
                     fetch('submit_rating.php', {
                         method: 'POST',
                         body: formData
@@ -2781,6 +2923,8 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 },
                                 buttonsStyling: true
                             }).then(() => {
+                                // Set flag for product detail page to refresh
+                                localStorage.setItem('lastRatingSubmission', Date.now().toString());
                                 // Reload the page to show the updated rating
                                 window.location.reload();
                             });

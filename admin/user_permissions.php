@@ -504,7 +504,7 @@ function getAdminHash(PDO $pdo, string $username): ?string {
 
             <div class="page-header">
                 <div class="d-flex justify-content-between align-items-center">
-                    <div>
+                    <div>   
                         <h2><i class="fas fa-user-shield me-2"></i>Roles</h2>
                         <p class="mb-0 opacity-75">Manage user roles</p>
                     </div>

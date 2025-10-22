@@ -442,10 +442,17 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                                 </small>
                             </div>
                             
-                            <div class="d-flex gap-2">
+                            <div class="d-flex gap-2 flex-wrap">
                                 <button class="btn btn-sm" style="background: #cce5ff; color: #004085; border-radius: 8px;" onclick="viewBatchDetails(<?= $batch['batch_id'] ?>)">
                                     <i class="fa fa-eye me-1"></i>Details
                                 </button>
+                                
+                                <?php if ($batch['quantity_remaining'] > 0 && $batch['days_until_expiry'] < 0): ?>
+                                    <button class="btn btn-sm" style="background: #f8d7da; color: #721c24; border-radius: 8px;" onclick="pullOutBatch(<?= $batch['batch_id'] ?>, '<?= htmlspecialchars($batch['batch_number']) ?>', <?= $batch['quantity_remaining'] ?>)">
+                                        <i class="fa fa-box-open me-1"></i>Pull Out
+                                    </button>
+                                <?php endif; ?>
+                                
                                 <?php if ($batch['is_active']): ?>
                                     <form method="POST" style="display: inline;">
                                         <input type="hidden" name="action" value="deactivate_batch">
@@ -472,6 +479,68 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
         </div>
     </main>
 
+    <!-- Pull Out Modal -->
+    <div class="modal fade" id="pullOutModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fa fa-box-open me-2" style="color: #dc3545;"></i>Pull Out Batch
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="pullOutForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="pullout_batch_id" name="batch_id">
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Batch Number</label>
+                            <input type="text" id="pullout_batch_number" class="form-control" readonly>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Quantity to Pull Out</label>
+                            <input type="number" id="pullout_quantity" class="form-control" min="0.1" step="0.1" required>
+                            <div class="form-text">
+                                <i class="fa fa-info-circle me-1"></i>
+                                Enter the quantity to pull out from this batch
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Reason <span class="text-danger">*</span></label>
+                            <select name="reason" id="pullout_reason" class="form-select" required>
+                                <option value="">Select Reason</option>
+                                <option value="Expired">Expired</option>
+                                <option value="Damaged Items">Damaged Items</option>
+                                <option value="Theft/Loss">Theft/Loss</option>
+                                <option value="Quality Issue">Quality Issue</option>
+                                <option value="Return to Supplier">Return to Supplier</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Notes</label>
+                            <textarea name="notes" id="pullout_notes" class="form-control" rows="3" placeholder="Additional details about this pull out..."></textarea>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <i class="fa fa-exclamation-triangle me-2"></i>
+                            <strong>Warning:</strong> This action will remove the specified quantity from inventory and add it to the pull-out reports. This action cannot be undone.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger fw-bold">
+                            <i class="fa fa-box-open me-2"></i>Pull Out Batch
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Batch Details Modal -->
     <div class="modal fade" id="batchDetailsModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -490,6 +559,7 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <?php include 'includes/admin_scripts.php'; ?>
     <script>
         function viewBatchDetails(batchId) {
@@ -505,6 +575,82 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                     alert('Error loading batch details');
                 });
         }
+        
+        function pullOutBatch(batchId, batchNumber, maxQuantity) {
+            // Set form values
+            document.getElementById('pullout_batch_id').value = batchId;
+            document.getElementById('pullout_batch_number').value = batchNumber;
+            document.getElementById('pullout_quantity').value = maxQuantity;
+            document.getElementById('pullout_quantity').max = maxQuantity;
+            
+            // Clear previous values
+            document.getElementById('pullout_reason').value = '';
+            document.getElementById('pullout_notes').value = '';
+            
+            // Show modal
+            new bootstrap.Modal(document.getElementById('pullOutModal')).show();
+        }
+        
+        // Handle pull out form submission
+        document.getElementById('pullOutForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            formData.append('action', 'manual_pullout');
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Processing...';
+            submitBtn.disabled = true;
+            
+            fetch('expired_batch_handler.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: 'Batch pulled out successfully and added to pull-out reports.',
+                        confirmButtonColor: '#7F1734'
+                    }).then(() => {
+                        // Close modal and reload page
+                        bootstrap.Modal.getInstance(document.getElementById('pullOutModal')).hide();
+                        location.reload();
+                    });
+                } else {
+                    throw new Error(data.error || 'Unknown error occurred');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: error.message || 'Failed to pull out batch. Please try again.',
+                    confirmButtonColor: '#7F1734'
+                });
+            })
+            .finally(() => {
+                // Restore button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
+        });
+        
+        // Auto-select reason based on batch status
+        document.getElementById('pullOutModal').addEventListener('shown.bs.modal', function() {
+            const batchNumber = document.getElementById('pullout_batch_number').value;
+            
+            // Check if batch is expired (you can enhance this logic)
+            if (batchNumber.includes('EXPIRED') || batchNumber.includes('expired')) {
+                document.getElementById('pullout_reason').value = 'Expired';
+            }
+        });
     </script>
 </body>
 </html>

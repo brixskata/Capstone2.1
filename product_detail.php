@@ -184,6 +184,79 @@ if ($product_id <= 0) {
             error_log("Final product data: " . print_r($product, true));
             error_log("Product ID after image query: " . $product_id);
             error_log("Product ID type after image query: " . gettype($product_id));
+            
+            // Fetch customer ratings for this product with pagination
+            $customer_ratings = [];
+            $ratings_per_page = 5; // Show 5 ratings per page
+            $current_page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+            $offset = ($current_page - 1) * $ratings_per_page;
+            
+            try {
+                // Get total count of ratings for this product
+                $count_stmt = $pdo->prepare("
+                    SELECT COUNT(DISTINCT orate.rating_id) as total_ratings
+                    FROM order_ratings orate
+                    INNER JOIN orders o ON orate.order_id = o.orders_id
+                    INNER JOIN order_items oi ON oi.order_id = o.orders_id AND oi.product_id = ?
+                ");
+                $count_stmt->execute([$product_id]);
+                $total_ratings = $count_stmt->fetch(PDO::FETCH_ASSOC)['total_ratings'];
+                
+                // Calculate total pages
+                $total_pages = ceil($total_ratings / $ratings_per_page);
+                
+                error_log("Total ratings for product $product_id: " . $total_ratings);
+                error_log("Current page: $current_page, Total pages: $total_pages");
+                
+                $ratings_stmt = $pdo->prepare("
+                    SELECT DISTINCT
+                        orate.rating_id,
+                        orate.rating,
+                        orate.review,
+                        orate.created_at,
+                        COALESCE(ui.first_name, u.username) as customer_name,
+                        COALESCE(ui.last_name, '') as customer_last_name,
+                        oi.quantity,
+                        'kilos' as unit_name
+                    FROM order_ratings orate
+                    INNER JOIN orders o ON orate.order_id = o.orders_id
+                    INNER JOIN order_items oi ON oi.order_id = o.orders_id AND oi.product_id = ?
+                    LEFT JOIN users u ON orate.user_id = u.user_id
+                    LEFT JOIN user_info ui ON u.user_id = ui.user_id
+                    ORDER BY orate.created_at DESC
+                    LIMIT " . (int)$ratings_per_page . " OFFSET " . (int)$offset
+                );
+                $ratings_stmt->execute([$product_id]);
+                $customer_ratings = $ratings_stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                // Fetch images for each rating
+                foreach ($customer_ratings as &$rating) {
+                    $img_stmt = $pdo->prepare("
+                        SELECT image_path 
+                        FROM rating_images 
+                        WHERE rating_id = ? 
+                        ORDER BY image_order ASC
+                    ");
+                    $img_stmt->execute([$rating['rating_id']]);
+                    $rating['images'] = $img_stmt->fetchAll(PDO::FETCH_COLUMN);
+                }
+                
+                error_log("Customer ratings found for product $product_id: " . count($customer_ratings));
+                error_log("Ratings data: " . print_r($customer_ratings, true));
+            } catch (Exception $e) {
+                error_log("Error fetching customer ratings: " . $e->getMessage());
+                $customer_ratings = [];
+                $total_ratings = 0;
+                $total_pages = 0;
+            }
+            
+            $product['customer_ratings'] = $customer_ratings;
+            $product['ratings_pagination'] = [
+                'current_page' => $current_page,
+                'total_pages' => $total_pages,
+                'total_ratings' => $total_ratings,
+                'ratings_per_page' => $ratings_per_page
+            ];
         }
     } catch (PDOException $e) {
         $error = 'Database error: ' . $e->getMessage();
@@ -201,6 +274,11 @@ if ($product_id <= 0) {
     <link rel="icon" type="image/png" href="favicon.png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Cache busting meta tags -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     
     <!-- SweetAlert2 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -910,6 +988,242 @@ if ($product_id <= 0) {
                 font-size: 1.1rem;
             }
         }
+        
+        /* Customer Ratings Styles */
+        .ratings-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .rating-card {
+            background: #f8f9fa;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            border: 1px solid rgba(127, 23, 52, 0.1);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .rating-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(127, 23, 52, 0.15);
+            border-color: var(--brand-primary);
+        }
+        
+        .rating-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        
+        .customer-info {
+            flex: 1;
+        }
+        
+        .customer-name {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--brand-primary);
+            margin-bottom: 0.25rem;
+        }
+        
+        .order-quantity {
+            font-size: 0.85rem;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+        }
+        
+        .order-quantity i {
+            color: var(--brand-primary);
+        }
+        
+        .rating-stars {
+            display: flex;
+            gap: 0.25rem;
+            margin-left: 1rem;
+        }
+        
+        .rating-stars i {
+            font-size: 1rem;
+        }
+        
+        .rating-review {
+            background: white;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-left: 3px solid var(--brand-primary);
+            flex: 1;
+        }
+        
+        .rating-review p {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #495057;
+            margin: 0;
+        }
+        
+        .rating-images {
+            margin-bottom: 1rem;
+        }
+        
+        .rating-photo {
+            max-width: 100%;
+            max-height: 150px;
+            width: auto;
+            height: auto;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            object-fit: cover;
+        }
+        
+        .rating-photo:hover {
+            transform: scale(1.05);
+        }
+        
+        .rating-date {
+            margin-top: auto;
+            text-align: right;
+        }
+        
+        .rating-date small {
+            font-size: 0.8rem;
+        }
+        
+        .rating-date i {
+            color: var(--brand-primary);
+        }
+        
+        /* Pagination Styles */
+        .ratings-pagination {
+            background: #f8f9fa;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            border: 1px solid rgba(127, 23, 52, 0.1);
+        }
+        
+        .pagination-info {
+            font-weight: 600;
+            color: var(--brand-primary);
+        }
+        
+        .pagination .page-link {
+            color: var(--brand-primary);
+            border: 2px solid transparent;
+            border-radius: 0.5rem;
+            margin: 0 0.25rem;
+            padding: 0.5rem 0.75rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .pagination .page-link:hover {
+            color: white;
+            background: var(--brand-primary);
+            border-color: var(--brand-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(127, 23, 52, 0.3);
+        }
+        
+        .pagination .page-item.active .page-link {
+            color: white;
+            background: var(--brand-gradient);
+            border-color: var(--brand-primary);
+            box-shadow: 0 4px 15px rgba(127, 23, 52, 0.3);
+        }
+        
+        .pagination .page-item.disabled .page-link {
+            color: #6c757d;
+            background: #e9ecef;
+            border-color: #e9ecef;
+            cursor: not-allowed;
+        }
+        
+        .pagination .page-item.disabled .page-link:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Responsive ratings */
+        @media (max-width: 768px) {
+            .rating-card {
+                padding: 1rem;
+            }
+            
+            .rating-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .rating-stars {
+                margin-left: 0;
+                margin-top: 0.5rem;
+            }
+            
+            .customer-name {
+                font-size: 0.9rem;
+            }
+            
+            .order-quantity {
+                font-size: 0.8rem;
+            }
+            
+            .rating-review {
+                padding: 0.75rem;
+            }
+            
+            .rating-review p {
+                font-size: 0.85rem;
+            }
+            
+            .ratings-pagination {
+                padding: 1rem;
+            }
+            
+            .pagination-controls {
+                margin-top: 1rem;
+            }
+            
+            .pagination {
+                justify-content: center;
+            }
+            
+            .pagination .page-link {
+                padding: 0.4rem 0.6rem;
+                font-size: 0.9rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .rating-card {
+                padding: 0.75rem;
+            }
+            
+            .rating-photo {
+                max-height: 150px;
+            }
+            
+            .ratings-pagination {
+                padding: 0.75rem;
+            }
+            
+            .pagination-info {
+                text-align: center;
+                margin-bottom: 1rem;
+            }
+            
+            .pagination .page-link {
+                padding: 0.3rem 0.5rem;
+                font-size: 0.8rem;
+                margin: 0 0.1rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -937,7 +1251,7 @@ if ($product_id <= 0) {
                 $ratingStmt = $pdo->prepare("
                     SELECT 
                         AVG(orate.rating) AS avg_rating,
-                        COUNT(orate.rating_id) AS rating_count
+                        COUNT(DISTINCT orate.rating_id) AS rating_count
                     FROM order_ratings orate
                     INNER JOIN orders o ON orate.order_id = o.orders_id
                     INNER JOIN order_items oi ON oi.order_id = o.orders_id
@@ -1093,6 +1407,168 @@ if ($product_id <= 0) {
                     </div>
                 </div>
             </div>
+            
+            <!-- Customer Ratings Section -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="product-card">
+                        <h3 class="mb-4">
+                            <i class="fas fa-star text-warning me-2"></i>
+                            Customer Reviews
+                        </h3>
+                        
+                        <?php if (!empty($product['customer_ratings'])): ?>
+                        <div class="ratings-container">
+                            <?php foreach ($product['customer_ratings'] as $rating): ?>
+                            <div class="rating-card mb-4">
+                                <div class="rating-header">
+                                    <div class="customer-info">
+                                        <div class="customer-name">
+                                            <?= htmlspecialchars($rating['customer_name']) ?>
+                                            <?php if ($rating['customer_last_name']): ?>
+                                                <?= htmlspecialchars($rating['customer_last_name']) ?>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="order-quantity">
+                                            <i class="fas fa-shopping-bag me-1"></i>
+                                            Ordered <?= number_format($rating['quantity'], 1) ?> <?= htmlspecialchars($rating['unit_name'] ?? 'kilos') ?>
+                                        </div>
+                                    </div>
+                                    <div class="rating-stars">
+                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                            <i class="fas fa-star <?= $i <= $rating['rating'] ? 'text-warning' : 'text-muted' ?>"></i>
+                                        <?php endfor; ?>
+                                    </div>
+                                </div>
+                                
+                                <?php if ($rating['review']): ?>
+                                <div class="rating-review">
+                                    <p class="mb-0"><?= htmlspecialchars($rating['review']) ?></p>
+                                </div>
+                                <?php endif; ?>
+                                
+                                <?php if (!empty($rating['images'])): ?>
+                                <div class="rating-images">
+                                    <div class="row">
+                                        <?php foreach ($rating['images'] as $index => $image): ?>
+                                        <div class="col-md-4 mb-2">
+                                            <img src="<?= htmlspecialchars($image) ?>" 
+                                                 alt="Customer photo <?= $index + 1 ?>" 
+                                                 class="img-thumbnail rating-photo"
+                                                 onclick="openRatingImageModal('<?= htmlspecialchars($image) ?>')">
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                                
+                                <div class="rating-date">
+                                    <small class="text-muted">
+                                        <i class="fas fa-calendar me-1"></i>
+                                        <?= date('M d, Y', strtotime($rating['created_at'])) ?>
+                                    </small>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        
+                        <?php if (!empty($product['customer_ratings']) && $product['ratings_pagination']['total_pages'] > 1): ?>
+                        <!-- Pagination Controls -->
+                        <div class="ratings-pagination mt-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="pagination-info">
+                                    <small class="text-muted">
+                                        Showing <?= (($product['ratings_pagination']['current_page'] - 1) * $product['ratings_pagination']['ratings_per_page']) + 1 ?>-<?= min($product['ratings_pagination']['current_page'] * $product['ratings_pagination']['ratings_per_page'], $product['ratings_pagination']['total_ratings']) ?> of <?= $product['ratings_pagination']['total_ratings'] ?> reviews
+                                    </small>
+                                </div>
+                                <div class="pagination-controls">
+                                    <nav aria-label="Ratings pagination">
+                                        <ul class="pagination pagination-sm mb-0">
+                                            <!-- Previous Button -->
+                                            <?php if ($product['ratings_pagination']['current_page'] > 1): ?>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?id=<?= $product_id ?>&page=<?= $product['ratings_pagination']['current_page'] - 1 ?>" aria-label="Previous">
+                                                    <i class="fas fa-chevron-left"></i>
+                                                </a>
+                                            </li>
+                                            <?php else: ?>
+                                            <li class="page-item disabled">
+                                                <span class="page-link" aria-label="Previous">
+                                                    <i class="fas fa-chevron-left"></i>
+                                                </span>
+                                            </li>
+                                            <?php endif; ?>
+                                            
+                                            <!-- Page Numbers -->
+                                            <?php
+                                            $start_page = max(1, $product['ratings_pagination']['current_page'] - 2);
+                                            $end_page = min($product['ratings_pagination']['total_pages'], $product['ratings_pagination']['current_page'] + 2);
+                                            
+                                            // Show first page if not in range
+                                            if ($start_page > 1): ?>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?id=<?= $product_id ?>&page=1">1</a>
+                                            </li>
+                                            <?php if ($start_page > 2): ?>
+                                            <li class="page-item disabled">
+                                                <span class="page-link">...</span>
+                                            </li>
+                                            <?php endif; ?>
+                                            <?php endif; ?>
+                                            
+                                            <!-- Current range of pages -->
+                                            <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                                            <li class="page-item <?= $i == $product['ratings_pagination']['current_page'] ? 'active' : '' ?>">
+                                                <a class="page-link" href="?id=<?= $product_id ?>&page=<?= $i ?>"><?= $i ?></a>
+                                            </li>
+                                            <?php endfor; ?>
+                                            
+                                            <!-- Show last page if not in range -->
+                                            <?php if ($end_page < $product['ratings_pagination']['total_pages']): ?>
+                                            <?php if ($end_page < $product['ratings_pagination']['total_pages'] - 1): ?>
+                                            <li class="page-item disabled">
+                                                <span class="page-link">...</span>
+                                            </li>
+                                            <?php endif; ?>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?id=<?= $product_id ?>&page=<?= $product['ratings_pagination']['total_pages'] ?>"><?= $product['ratings_pagination']['total_pages'] ?></a>
+                                            </li>
+                                            <?php endif; ?>
+                                            
+                                            <!-- Next Button -->
+                                            <?php if ($product['ratings_pagination']['current_page'] < $product['ratings_pagination']['total_pages']): ?>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?id=<?= $product_id ?>&page=<?= $product['ratings_pagination']['current_page'] + 1 ?>" aria-label="Next">
+                                                    <i class="fas fa-chevron-right"></i>
+                                                </a>
+                                            </li>
+                                            <?php else: ?>
+                                            <li class="page-item disabled">
+                                                <span class="page-link" aria-label="Next">
+                                                    <i class="fas fa-chevron-right"></i>
+                                                </span>
+                                            </li>
+                                            <?php endif; ?>
+                                        </ul>
+                                    </nav>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <?php else: ?>
+                        <!-- No ratings yet - show placeholder -->
+                        <div class="text-center py-5">
+                            <div class="mb-3">
+                                <i class="fas fa-star text-muted" style="font-size: 3rem;"></i>
+                            </div>
+                            <h5 class="text-muted mb-2">No Reviews Yet</h5>
+                            <p class="text-muted mb-0">Be the first to review this product!</p>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
         <?php endif; ?>
     </div>
 
@@ -1120,6 +1596,26 @@ if ($product_id <= 0) {
             
             // Initialize brand selection
             initializeBrandSelection();
+            
+            // Initialize pagination
+            initializePagination();
+            
+            // Handle pagination refresh
+            handlePaginationRefresh();
+            
+            // Refresh page when user returns from orders page (after rating submission)
+            window.addEventListener('focus', function() {
+                // Check if we should refresh (e.g., if user just submitted a rating)
+                const lastActivity = localStorage.getItem('lastRatingSubmission');
+                if (lastActivity) {
+                    const timeSinceLastActivity = Date.now() - parseInt(lastActivity);
+                    // If less than 30 seconds ago, refresh the page
+                    if (timeSinceLastActivity < 30000) {
+                        console.log('Detected recent rating submission, refreshing page...');
+                        window.location.reload();
+                    }
+                }
+            });
             
             // Quantity validation
             const quantityInput = document.getElementById('quantity');
@@ -1684,6 +2180,19 @@ if ($product_id <= 0) {
                 }
             }
         }
+        
+        // Function to open rating image modal
+        function openRatingImageModal(imageSrc) {
+            Swal.fire({
+                title: 'Customer Photo',
+                html: `<img src="${imageSrc}" alt="Customer photo" style="max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 0.5rem;">`,
+                showConfirmButton: false,
+                showCloseButton: true,
+                customClass: {
+                    popup: 'swal2-popup-large'
+                }
+            });
+        }
 
         // Add touch event listeners to main image container
         document.addEventListener('DOMContentLoaded', function() {
@@ -1699,6 +2208,70 @@ if ($product_id <= 0) {
                 });
             }
         });
+
+        // Pagination Functions
+        function initializePagination() {
+            const paginationLinks = document.querySelectorAll('.pagination .page-link');
+            
+            paginationLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    // Add loading state to pagination
+                    const paginationContainer = document.querySelector('.ratings-pagination');
+                    if (paginationContainer) {
+                        paginationContainer.style.opacity = '0.7';
+                        paginationContainer.style.pointerEvents = 'none';
+                    }
+                    
+                    // Show loading indicator
+                    const ratingsContainer = document.querySelector('.ratings-container');
+                    if (ratingsContainer) {
+                        ratingsContainer.innerHTML = `
+                            <div class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="mt-3 text-muted">Loading reviews...</p>
+                            </div>
+                        `;
+                    }
+                });
+            });
+        }
+
+        function handlePaginationRefresh() {
+            // Smooth scroll to ratings section when pagination is used
+            const urlParams = new URLSearchParams(window.location.search);
+            const page = urlParams.get('page');
+            
+            if (page && page !== '1') {
+                // Scroll to ratings section after a short delay
+                setTimeout(() => {
+                    const ratingsSection = document.querySelector('.ratings-container');
+                    if (ratingsSection) {
+                        ratingsSection.scrollIntoView({ 
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                }, 500);
+            }
+        }
+
+        // Enhanced pagination with smooth transitions
+        function goToPage(pageNumber) {
+            const currentUrl = new URL(window.location);
+            currentUrl.searchParams.set('page', pageNumber);
+            
+            // Add loading state
+            const ratingsContainer = document.querySelector('.ratings-container');
+            if (ratingsContainer) {
+                ratingsContainer.style.opacity = '0.5';
+                ratingsContainer.style.transition = 'opacity 0.3s ease';
+            }
+            
+            // Navigate to new page
+            window.location.href = currentUrl.toString();
+        }
     </script>
 </body>
 </html>

@@ -389,6 +389,167 @@ class BatchManager {
     }
     
     /**
+     * Restore stock to batches when orders are cancelled
+     */
+    public function restoreStock($order_id, $created_by = null, $notes = null) {
+        // Check if there's already an active transaction
+        $has_transaction = $this->pdo->inTransaction();
+        
+        try {
+            // Only start a transaction if there isn't one already
+            if (!$has_transaction) {
+                $this->pdo->beginTransaction();
+            }
+            
+            // Get order items with batch information
+            $stmt = $this->pdo->prepare("
+                SELECT 
+                    oi.product_id,
+                    oi.brand_id,
+                    oi.batch_id,
+                    oi.quantity,
+                    pb.batch_number,
+                    pb.expiration_date
+                FROM order_items oi
+                LEFT JOIN product_batches pb ON oi.batch_id = pb.batch_id
+                WHERE oi.order_id = ?
+            ");
+            $stmt->execute([$order_id]);
+            $order_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            if (empty($order_items)) {
+                throw new Exception("No order items found for order ID: $order_id");
+            }
+            
+            $restored_items = [];
+            
+            foreach ($order_items as $item) {
+                $product_id = $item['product_id'];
+                $brand_id = $item['brand_id'];
+                $batch_id = $item['batch_id'];
+                $quantity = $item['quantity'];
+                
+                if ($batch_id) {
+                    // Restore to specific batch
+                    $stmt = $this->pdo->prepare("
+                        UPDATE product_batches 
+                        SET quantity_remaining = quantity_remaining + ? 
+                        WHERE batch_id = ? AND is_active = 1
+                    ");
+                    $stmt->execute([$quantity, $batch_id]);
+                    
+                    if ($stmt->rowCount() == 0) {
+                        throw new Exception("Failed to restore stock to batch ID: $batch_id");
+                    }
+                    
+                    // Record batch movement
+                    $this->recordBatchMovement([
+                        'batch_id' => $batch_id,
+                        'product_id' => $product_id,
+                        'movement_type' => 'restore',
+                        'quantity' => $quantity,
+                        'reference_type' => 'order_cancellation',
+                        'reference_id' => $order_id,
+                        'created_by' => $created_by,
+                        'notes' => $notes ?: "Order cancellation - stock restored"
+                    ]);
+                    
+                    $restored_items[] = [
+                        'batch_id' => $batch_id,
+                        'batch_number' => $item['batch_number'],
+                        'quantity_restored' => $quantity,
+                        'expiration_date' => $item['expiration_date']
+                    ];
+                } else {
+                    // If no specific batch, restore to the most recent batch for this product-brand combination
+                    $stmt = $this->pdo->prepare("
+                        SELECT batch_id, batch_number, expiration_date
+                        FROM product_batches 
+                        WHERE product_id = ? 
+                        AND brand_id = ? 
+                        AND is_active = 1 
+                        AND quantity_remaining > 0
+                        ORDER BY received_date DESC, batch_id DESC
+                        LIMIT 1
+                    ");
+                    $stmt->execute([$product_id, $brand_id]);
+                    $target_batch = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($target_batch) {
+                        $stmt = $this->pdo->prepare("
+                            UPDATE product_batches 
+                            SET quantity_remaining = quantity_remaining + ? 
+                            WHERE batch_id = ?
+                        ");
+                        $stmt->execute([$quantity, $target_batch['batch_id']]);
+                        
+                        // Record batch movement
+                        $this->recordBatchMovement([
+                            'batch_id' => $target_batch['batch_id'],
+                            'product_id' => $product_id,
+                            'movement_type' => 'restore',
+                            'quantity' => $quantity,
+                            'reference_type' => 'order_cancellation',
+                            'reference_id' => $order_id,
+                            'created_by' => $created_by,
+                            'notes' => $notes ?: "Order cancellation - stock restored (no specific batch)"
+                        ]);
+                        
+                        $restored_items[] = [
+                            'batch_id' => $target_batch['batch_id'],
+                            'batch_number' => $target_batch['batch_number'],
+                            'quantity_restored' => $quantity,
+                            'expiration_date' => $target_batch['expiration_date']
+                        ];
+                    }
+                }
+                
+                // Update product_stock table
+                $stmt = $this->pdo->prepare("
+                    UPDATE product_stock 
+                    SET current_stock = current_stock + ? 
+                    WHERE product_id = ?
+                ");
+                $stmt->execute([$quantity, $product_id]);
+                
+                // Record stock movement
+                $stmt = $this->pdo->prepare("
+                    INSERT INTO stock_movements 
+                    (product_id, stockmovementtype_id, quantity, previous_stock, new_stock, reason, reference_id, reference_type, created_by) 
+                    VALUES (?, 3, ?, 
+                        (SELECT current_stock FROM product_stock WHERE product_id = ?) - ?, 
+                        (SELECT current_stock FROM product_stock WHERE product_id = ?), 
+                        ?, ?, 'order_cancellation', ?)
+                ");
+                $stmt->execute([
+                    $product_id, 
+                    $quantity, 
+                    $product_id, 
+                    $quantity, 
+                    $product_id, 
+                    $notes ?: "Order cancellation - stock restored", 
+                    $order_id, 
+                    $created_by
+                ]);
+            }
+            
+            // Only commit if we started the transaction
+            if (!$has_transaction) {
+                $this->pdo->commit();
+            }
+            
+            return $restored_items;
+            
+        } catch (Exception $e) {
+            // Only rollback if we started the transaction
+            if (!$has_transaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /**
      * Get batch movement history
      */
     public function getBatchMovements($batch_id) {

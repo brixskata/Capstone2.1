@@ -1,6 +1,7 @@
 <?php
 include '../includes/db.php';
 include '../includes/permissions.php';
+include_once '../includes/batch_manager.php';
 session_start();
 
 // Ensure user is logged in and not a customer
@@ -15,6 +16,9 @@ if (isCustomer($pdo)) {
     header("Location: login_admin.php");
     exit;
 }
+
+// Initialize batch manager
+$batchManager = new BatchManager($pdo);
 
 // Handle order status updates
 if (isset($_POST['update_status'])) {
@@ -152,6 +156,21 @@ if (isset($_POST['cancel_order'])) {
                                     SET o.orderstatus_id = os.orderstatus_id
                                     WHERE o.orders_id = :order_id");
             $stmt->execute(['order_id' => $order_id]);
+
+            // Restore stock to batches when order is cancelled
+            try {
+                $restored_items = $batchManager->restoreStock(
+                    $order_id, 
+                    $_SESSION['user_id'], 
+                    "Order cancellation: " . $reason
+                );
+                
+                // Log successful stock restoration
+                error_log("Stock restored for cancelled order #$order_id: " . json_encode($restored_items));
+            } catch (Exception $e) {
+                // Log error but don't fail the cancellation
+                error_log("Failed to restore stock for cancelled order #$order_id: " . $e->getMessage());
+            }
 
             // Log cancellation reason
             $adminName = $_SESSION['username'] ?? 'admin';

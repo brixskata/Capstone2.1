@@ -28,7 +28,8 @@ $notification_counts = [
     'notifications' => 0,
     'messages' => 0,
     'pending_verifications' => 0,
-    'low_stock' => 0
+    'low_stock' => 0,
+    'expiring_products' => 0
 ];
 
 try {
@@ -53,6 +54,16 @@ try {
     $stmt = $pdo->query("SELECT COUNT(*) as count FROM orders WHERE status IN ('Pending', 'Processing')");
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     $notification_counts['messages'] = $result['count'] ?? 0;
+    
+    // Count expiring products (within 7 days) and expired batches
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM product_batches pb
+                        WHERE pb.expiration_date IS NOT NULL 
+                        AND pb.expiration_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+                        AND pb.quantity_remaining > 0
+                        AND pb.is_active = 1
+                        AND pb.is_processed_expired = 0");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $notification_counts['expiring_products'] = $result['count'] ?? 0;
     
 } catch (Exception $e) {
     // Keep default values if queries fail
@@ -110,12 +121,14 @@ if ($user_info) {
     </a>
   </div>
 
-  <!-- Center Section - Search & Quick Actions -->
+  <!-- Center Section - Live Clock -->
   <div class="navbar-center">
-    <div class="search-container">
-      <i class="fas fa-search search-icon"></i>
-      <input type="text" class="search-input" placeholder="Search products, orders, users...">
-      <div class="search-shortcut">Ctrl+K</div>
+    <div class="live-clock-container">
+      <i class="fas fa-clock clock-icon"></i>
+      <div class="clock-content">
+        <span id="current-time" class="time-display">2:30 PM</span>
+        <span id="current-date" class="date-display">Jan 20, 2024</span>
+      </div>
     </div>
   </div>
 
@@ -123,26 +136,11 @@ if ($user_info) {
   <div class="navbar-right">
     <!-- Quick Actions -->
     <div class="quick-actions">
-      <button class="quick-action-btn" title="Recent Orders (24h)">
+      <button class="quick-action-btn" title="Expiring Products" onclick="showExpirationNotifications()">
         <i class="fas fa-bell"></i>
-        <?php if ($notification_counts['notifications'] > 0): ?>
-        <span class="notification-badge"><?= $notification_counts['notifications'] ?></span>
+        <?php if ($notification_counts['expiring_products'] > 0): ?>
+        <span class="notification-badge urgent"><?= $notification_counts['expiring_products'] ?></span>
         <?php endif; ?>
-      </button>
-      <button class="quick-action-btn" title="Pending Orders">
-        <i class="fas fa-envelope"></i>
-        <?php if ($notification_counts['messages'] > 0): ?>
-        <span class="notification-badge"><?= $notification_counts['messages'] ?></span>
-        <?php endif; ?>
-      </button>
-      <button class="quick-action-btn" title="Low Stock Items">
-        <i class="fas fa-exclamation-triangle"></i>
-        <?php if ($notification_counts['low_stock'] > 0): ?>
-        <span class="notification-badge urgent"><?= $notification_counts['low_stock'] ?></span>
-        <?php endif; ?>
-      </button>
-      <button class="quick-action-btn" title="Settings">
-        <i class="fas fa-cog"></i>
       </button>
     </div>
 
@@ -198,3 +196,223 @@ if ($user_info) {
     </div>
   </div>
 </nav>
+
+<!-- Expiration Notifications Modal -->
+<div class="modal fade" id="expirationNotificationsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">
+                    <i class="fa fa-bell me-2" style="color: #dc3545;"></i>Expiring Products Alert
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="expirationNotificationsContent">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading expiration notifications...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="batch_management.php?expiry_filter=expiring" class="btn btn-primary">
+                    <i class="fa fa-external-link-alt me-1"></i>View All Batches
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showExpirationNotifications() {
+    // Show modal first
+    const modal = new bootstrap.Modal(document.getElementById('expirationNotificationsModal'));
+    modal.show();
+    
+    // Load notifications
+    loadExpirationNotifications();
+}
+
+function loadExpirationNotifications() {
+    const content = document.getElementById('expirationNotificationsContent');
+    
+    fetch('expiration_notifications.php?action=get_notifications')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Notifications loaded:', data);
+            
+            const notifications = [];
+            // Flatten the grouped notifications
+            Object.values(data).forEach(group => {
+                notifications.push(...group);
+            });
+            
+            if (notifications.length === 0) {
+                content.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fa fa-check-circle text-success" style="font-size: 3rem;"></i>
+                        <h5 class="mt-3 text-success">All Good!</h5>
+                        <p class="text-muted">No products are expiring within the next 7 days.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Process notifications by severity
+            const severityOrder = ['danger', 'warning', 'info'];
+            const severityLabels = {
+                'danger': 'Expired/Critical',
+                'warning': 'Expiring Soon',
+                'info': 'Notice'
+            };
+            const severityClasses = {
+                'danger': 'alert-danger',
+                'warning': 'alert-warning',
+                'info': 'alert-info'
+            };
+            
+            let html = '<div class="row">';
+            
+            severityOrder.forEach(severity => {
+                const groupNotifications = data[severity] || [];
+                if (groupNotifications.length > 0) {
+                    html += `
+                        <div class="col-12 mb-3">
+                            <div class="alert ${severityClasses[severity]}">
+                                <h6 class="alert-heading">
+                                    <i class="fa ${groupNotifications[0].icon} me-2"></i>
+                                    ${severityLabels[severity]} (${groupNotifications.length})
+                                </h6>
+                                <div class="mt-2">
+                    `;
+                    
+                    groupNotifications.forEach(notification => {
+                        const isExpired = notification.type === 'expired_batch';
+                        const actionText = isExpired ? 'Pull Out' : 'View Batch';
+                        const buttonClass = isExpired ? 'btn-outline-danger' : 'btn-outline-warning';
+                        
+                        html += `
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <strong>${notification.product_name}</strong>
+                                    <br>
+                                    <small class="text-muted">Batch: ${notification.batch_number}</small>
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-${severity}">${notification.message}</small>
+                                    <br>
+                                    <button class="btn btn-sm ${buttonClass} mt-1" onclick="handlePullOut('${notification.batch_id}', '${notification.batch_number}', 0)">
+                                        <i class="fa fa-box-open me-1"></i>${actionText}
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            
+            html += '</div>';
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading notifications:', error);
+            document.getElementById('expirationNotificationsContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fa fa-exclamation-triangle me-2"></i>
+                    Error loading expiration notifications. Please try again.
+                </div>
+            `;
+        });
+}
+
+function handlePullOut(batchId, batchNumber, quantity) {
+    // Close the notifications modal
+    bootstrap.Modal.getInstance(document.getElementById('expirationNotificationsModal')).hide();
+    
+    // Redirect to batch management page with pull out action
+    window.location.href = `batch_management.php?batch_id=${batchId}&action=pullout`;
+}
+
+// Live Clock Functionality
+function updateClock() {
+    const now = new Date();
+    
+    // Format time (12-hour format with AM/PM)
+    const timeOptions = { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+    };
+    const timeString = now.toLocaleTimeString('en-US', timeOptions);
+    
+    // Format date
+    const dateOptions = { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+    };
+    const dateString = now.toLocaleDateString('en-US', dateOptions);
+    
+    // Update DOM elements
+    const timeElement = document.getElementById('current-time');
+    const dateElement = document.getElementById('current-date');
+    
+    if (timeElement) timeElement.textContent = timeString;
+    if (dateElement) dateElement.textContent = dateString;
+}
+
+// Initialize clock and update every second
+document.addEventListener('DOMContentLoaded', function() {
+    updateClock(); // Set initial time
+    setInterval(updateClock, 1000); // Update every second
+});
+</script>
+
+<style>
+.live-clock-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px 20px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    min-width: 200px;
+}
+
+.clock-icon {
+    color: white;
+    font-size: 18px;
+    margin-right: 12px;
+}
+
+.clock-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: white;
+}
+
+.time-display {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.date-display {
+    font-size: 12px;
+    opacity: 0.8;
+    line-height: 1.2;
+}
+</style>
