@@ -3421,7 +3421,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             console.log(`Current order card parent:`, orderCard.parentElement);
             
             // Update the order card content
-            updateOrderStatusDisplay(orderCard, newStatus);
+            updateOrderStatusDisplay(orderCard, newStatus, order);
             
             // Find the correct section container
             const targetSection = getSectionForStatus(newStatus);
@@ -3485,7 +3485,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             return section;
         }
 
-        function updateOrderStatusDisplay(orderCard, newStatus) {
+        function updateOrderStatusDisplay(orderCard, newStatus, orderData = null) {
             const statusElement = orderCard.querySelector('.order-status');
             if (!statusElement) return;
 
@@ -3496,6 +3496,11 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             const statusConfig = getStatusConfig(newStatus);
             statusElement.className += ` ${statusConfig.class}`;
             statusElement.innerHTML = `<i class="${statusConfig.icon} me-1"></i>${newStatus}`;
+            
+            // Update delivery tracking information for "Out for delivery" status
+            if (newStatus === 'Out for delivery' && orderData) {
+                updateDeliveryTrackingInfo(orderCard, orderData);
+            }
             
             // Update order actions message based on status
             const orderActions = orderCard.querySelector('.order-actions');
@@ -3518,6 +3523,20 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     } else {
                         // Hide the alert for completed orders
                         alertDiv.style.display = 'none';
+                    }
+                }
+                
+                // For "Out for delivery" status, ensure the Confirm Order Received button exists
+                if (newStatus === 'Out for delivery' && orderData) {
+                    updateOrderActionsForDelivery(orderActions, orderData);
+                    
+                    // Initialize auto-confirmation timer after order actions are set up
+                    const orderId = orderCard.getAttribute('data-order-id');
+                    if (orderId) {
+                        console.log(`Initializing auto-confirmation for order ${orderId} after order actions setup`);
+                        setTimeout(() => {
+                            fetchOutForDeliveryTimestamp(orderId, orderCard);
+                        }, 100); // Small delay to ensure DOM is updated
                     }
                 }
             }
@@ -3545,6 +3564,164 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 'Cancelled': 'alert-danger'
             };
             return alertClasses[status] || 'alert-info';
+        }
+
+        function updateDeliveryTrackingInfo(orderCard, orderData) {
+            // Check if delivery tracking info exists
+            const hasTrackingInfo = orderData.application_name || orderData.rider_name || 
+                                   orderData.plate_number || orderData.transaction_number;
+            
+            if (!hasTrackingInfo) return;
+            
+            // Find or create delivery tracking section
+            let trackingSection = orderCard.querySelector('.delivery-tracking');
+            
+            if (!trackingSection) {
+                // Create the delivery tracking section
+                trackingSection = document.createElement('div');
+                trackingSection.className = 'delivery-tracking mb-3';
+                
+                // Insert after delivery-info section
+                const deliveryInfo = orderCard.querySelector('.delivery-info');
+                if (deliveryInfo) {
+                    deliveryInfo.insertAdjacentElement('afterend', trackingSection);
+                } else {
+                    // If no delivery-info, insert after order-header
+                    const orderHeader = orderCard.querySelector('.order-header');
+                    if (orderHeader) {
+                        orderHeader.insertAdjacentElement('afterend', trackingSection);
+                    }
+                }
+            }
+            
+            // Build tracking info HTML
+            let trackingHtml = `
+                <div class="alert alert-success py-2">
+                    <small><i class="fas fa-truck me-1"></i><strong>Delivery Tracking:</strong></small>
+                    <div class="mt-1">`;
+            
+            if (orderData.application_name) {
+                trackingHtml += `<div><i class="fas fa-mobile-alt me-1"></i><strong>Application:</strong> ${escapeHtml(orderData.application_name)}</div>`;
+            }
+            if (orderData.rider_name) {
+                trackingHtml += `<div><i class="fas fa-user me-1"></i><strong>Rider:</strong> ${escapeHtml(orderData.rider_name)}</div>`;
+            }
+            if (orderData.plate_number) {
+                trackingHtml += `<div><i class="fas fa-car me-1"></i><strong>Plate Number:</strong> ${escapeHtml(orderData.plate_number)}</div>`;
+            }
+            if (orderData.transaction_number) {
+                trackingHtml += `<div><i class="fas fa-receipt me-1"></i><strong>Transaction:</strong> ${escapeHtml(orderData.transaction_number)}</div>`;
+            }
+            
+            trackingHtml += `</div></div>`;
+            
+            trackingSection.innerHTML = trackingHtml;
+            
+            // Note: Auto-confirmation timer is now initialized from updateOrderStatusDisplay
+            // to ensure proper order of operations
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function updateOrderActionsForDelivery(orderActions, orderData) {
+            // Check if Confirm Order Received button already exists
+            let confirmButton = orderActions.querySelector('.confirm-order-btn');
+            
+            if (!confirmButton) {
+                // Create the Confirm Order Received button
+                confirmButton = document.createElement('button');
+                confirmButton.type = 'button';
+                confirmButton.className = 'btn btn-success btn-sm confirm-order-btn';
+                confirmButton.setAttribute('data-bs-target', '#confirmOrderModal');
+                confirmButton.setAttribute('data-order-id', orderData.id);
+                confirmButton.setAttribute('data-order-total', `₱${parseFloat(orderData.total_price).toFixed(2)}`);
+                confirmButton.innerHTML = '<i class="fas fa-check-circle me-2"></i>Confirm Order Received';
+                
+                // Add the button after the alert div
+                orderActions.appendChild(confirmButton);
+                
+                // Re-attach event listener for the new button
+                attachConfirmOrderListener(confirmButton);
+            } else {
+                // Update existing button data
+                confirmButton.setAttribute('data-order-id', orderData.id);
+                confirmButton.setAttribute('data-order-total', `₱${parseFloat(orderData.total_price).toFixed(2)}`);
+            }
+        }
+
+        function attachConfirmOrderListener(button) {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const orderId = this.getAttribute('data-order-id');
+                const orderTotal = this.getAttribute('data-order-total');
+                
+                // Show SweetAlert confirmation
+                Swal.fire({
+                    title: 'Confirm Order Received',
+                    html: `
+                        <div class="text-center">
+                            <div class="mb-3">
+                                <i class="fas fa-handshake" style="font-size: 3rem; color: #198754;"></i>
+                            </div>
+                            <p class="mb-2">Are you sure you have received your order?</p>
+                            <p class="text-muted small">Order #${orderId} - ${orderTotal}</p>
+                        </div>
+                    `,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#198754',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: '<i class="fas fa-check me-1"></i>Yes, I received it',
+                    cancelButtonText: '<i class="fas fa-times me-1"></i>Cancel',
+                    reverseButtons: true
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Submit the confirmation
+                        const formData = new FormData();
+                        formData.append('order_id', orderId);
+                        
+                        fetch('order_received.php', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                Swal.fire({
+                                    title: 'Order Confirmed!',
+                                    text: 'Thank you for confirming your order receipt.',
+                                    icon: 'success',
+                                    confirmButtonColor: '#198754'
+                                }).then(() => {
+                                    // Refresh the page to show updated status
+                                    location.reload();
+                                });
+                            } else {
+                                Swal.fire({
+                                    title: 'Error',
+                                    text: data.message || 'Failed to confirm order receipt.',
+                                    icon: 'error',
+                                    confirmButtonColor: '#dc3545'
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            Swal.fire({
+                                title: 'Error',
+                                text: 'An error occurred while confirming your order.',
+                                icon: 'error',
+                                confirmButtonColor: '#dc3545'
+                            });
+                        });
+                    }
+                });
+            });
         }
 
         function forceHideEmptyStates() {
@@ -3748,13 +3925,17 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     console.warn(`Could not get out-for-delivery time for order ${orderId}:`, data.message);
                     console.warn(`Error details:`, data.error_details);
                     console.warn(`Error file:`, data.error_file, `Line:`, data.error_line);
-                    // If API fails, we can't determine the correct time, so don't show indicator
-                    console.log('API failed - not showing auto-confirm indicator');
+                    
+                    // Fallback: Show a default timer (48 hours from now)
+                    console.log('API failed - showing default 48-hour timer');
+                    updateAutoConfirmIndicator(orderCard, 48);
                 }
             } catch (error) {
                 console.error(`Error fetching out-for-delivery time for order ${orderId}:`, error);
-                // If API fails, we can't determine the correct time, so don't show indicator
-                console.log('API failed - not showing auto-confirm indicator');
+                
+                // Fallback: Show a default timer (48 hours from now)
+                console.log('API failed - showing default 48-hour timer');
+                updateAutoConfirmIndicator(orderCard, 48);
             }
         }
         
