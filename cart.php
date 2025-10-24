@@ -319,8 +319,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             case 'decrease':
                 if ($cart_key && isset($_SESSION['cart'][$cart_key])) {
                     $new_quantity = $_SESSION['cart'][$cart_key]['quantity'] - 0.1;
-                    if ($new_quantity < 0.1) {
-                        echo json_encode(['success' => false, 'message' => 'Minimum quantity is 0.1']);
+                    if ($new_quantity < 1.0) {
+                        echo json_encode(['success' => false, 'message' => 'Minimum quantity is 1.0']);
                         exit;
                     }
                     $_SESSION['cart'][$cart_key]['quantity'] = $new_quantity;
@@ -358,7 +358,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
 
             case 'set_quantity':
-                $quantity = max(0.1, floatval($_POST['quantity'] ?? 1));
+                $quantity = floatval($_POST['quantity'] ?? 1);
+                // Ensure minimum quantity is 1.0
+                if ($quantity < 1.0) {
+                    $quantity = 1.0;
+                }
                 
                 if ($cart_key && isset($_SESSION['cart'][$cart_key])) {
                         $_SESSION['cart'][$cart_key]['quantity'] = $quantity;
@@ -896,7 +900,12 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
             const min = 0.1;
             const max = input.getAttribute('max') ? parseFloat(input.getAttribute('max')) : Number.POSITIVE_INFINITY;
             if (isNaN(value)) value = min;
-            value = Math.max(min, Math.min(max, value));
+            // Only enforce minimum if value is below 0.1, otherwise preserve user input
+            if (value < 0.1) {
+                value = 0.1;
+            } else {
+                value = Math.min(max, value);
+            }
             value = Math.round(value * 10) / 10;
             input.value = value.toFixed(1);
             updateCartQuantityExact(productId, value, cartKey);

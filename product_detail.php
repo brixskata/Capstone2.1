@@ -1397,7 +1397,7 @@ if ($product_id <= 0) {
                         
                         <div class="mb-3">
                             <label class="quantity-label">Quantity (kilos):</label>
-                            <input type="number" id="quantity" class="quantity-input" value="1" min="0.1" step="0.1" max="<?= htmlspecialchars($product['current_stock'] ?? 0) ?>">
+                            <input type="number" id="quantity" class="quantity-input" value="1" min="1.0" step="0.1" max="<?= htmlspecialchars($product['current_stock'] ?? 0) ?>">
                         </div>
                         
                         <button type="button" class="btn-add-cart" onclick="addToCart()" <?= (float)($product['current_stock'] ?? 0) <= 0 ? 'disabled' : '' ?>>
@@ -1590,6 +1590,16 @@ if ($product_id <= 0) {
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Product detail page loaded');
             
+            // Ensure quantity input starts with default value of 1
+            const quantityInputInit = document.getElementById('quantity');
+            if (quantityInputInit) {
+                // Set to 1 if it's empty or invalid, but allow user to change to 0.1
+                const currentValue = parseFloat(quantityInputInit.value);
+                if (isNaN(currentValue) || currentValue <= 0) {
+                    quantityInputInit.value = 1;
+                }
+            }
+            
             // Initialize cart functionality
             updateCartBadge();
             initializeCartRefresh();
@@ -1618,13 +1628,30 @@ if ($product_id <= 0) {
             });
             
             // Quantity validation
-            const quantityInput = document.getElementById('quantity');
-            if (quantityInput) {
-                quantityInput.addEventListener('input', function() {
+            const quantityInputValidation = document.getElementById('quantity');
+            if (quantityInputValidation) {
+                // Validate on blur (when user finishes typing) instead of on every keystroke
+                quantityInputValidation.addEventListener('blur', function() {
                     const max = parseFloat(this.getAttribute('max'));
                     const value = parseFloat(this.value);
                     
-                    if (value > max) {
+                    // Round to 1 decimal place to avoid floating point precision issues
+                    const roundedValue = Math.round(value * 10) / 10;
+                    
+                    if (isNaN(value) || roundedValue < 1.0) {
+                        this.value = 1.0;
+                        Swal.fire({
+                            title: 'Invalid Quantity',
+                            text: 'Minimum quantity is 1.0 kilos',
+                            icon: 'warning',
+                            confirmButtonColor: '#ffc107',
+                            confirmButtonText: '<i class="fas fa-check me-1"></i>Got it!',
+                            customClass: {
+                                popup: 'swal2-warning',
+                                confirmButton: 'swal2-confirm'
+                            }
+                        });
+                    } else if (roundedValue > max) {
                         this.value = max;
                         Swal.fire({
                             title: 'Maximum Quantity',
@@ -1637,10 +1664,20 @@ if ($product_id <= 0) {
                                 confirmButton: 'swal2-confirm'
                             }
                         });
+                    } else {
+                        // Ensure the value is properly formatted
+                        this.value = roundedValue.toFixed(1);
                     }
+                });
+                
+                // Also validate on input for maximum value only (to prevent exceeding max immediately)
+                quantityInputValidation.addEventListener('input', function() {
+                    const max = parseFloat(this.getAttribute('max'));
+                    const value = parseFloat(this.value);
                     
-                    if (value < 0.1) {
-                        this.value = 0.1;
+                    // Only check maximum on input, allow typing minimum values
+                    if (!isNaN(value) && value > max) {
+                        this.value = max;
                     }
                 });
             }
@@ -1792,10 +1829,30 @@ if ($product_id <= 0) {
             if (quantityInput) {
                 quantityInput.setAttribute('max', stock);
                 
-                // If current value exceeds new max, adjust it
-                if (parseFloat(quantityInput.value) > parseFloat(stock)) {
-                    quantityInput.value = Math.min(parseFloat(stock), 1);
+                // If current value exceeds new max, adjust it to the maximum available stock
+                // But preserve the user's input if it's valid (between min and max)
+                const currentValue = parseFloat(quantityInput.value);
+                const maxStock = parseFloat(stock);
+                const minValue = 0.1;
+                
+                // Round to 1 decimal place to avoid floating point precision issues
+                const roundedCurrentValue = Math.round(currentValue * 10) / 10;
+                
+                // Only adjust values if they're actually invalid
+                if (roundedCurrentValue > maxStock) {
+                    // Only adjust if current value exceeds stock
+                    quantityInput.value = Math.max(minValue, maxStock).toFixed(1);
+                } else if (roundedCurrentValue < minValue && roundedCurrentValue > 0) {
+                    // Only adjust if current value is below minimum but not empty
+                    quantityInput.value = minValue.toFixed(1);
+                } else if (isNaN(roundedCurrentValue) || roundedCurrentValue <= 0) {
+                    // Only set to minimum if value is invalid/empty
+                    quantityInput.value = minValue.toFixed(1);
+                } else {
+                    // Ensure the value is properly formatted
+                    quantityInput.value = roundedCurrentValue.toFixed(1);
                 }
+                // Don't change the value if it's already valid (including 0.1, 0.5, 0.9, etc.)
             }
             
             if (addButton) {
@@ -1924,10 +1981,10 @@ if ($product_id <= 0) {
                 return;
             }
             
-            if (quantity < 0.1) {
+            if (quantity < 1.0) {
                 Swal.fire({
                     title: 'Invalid Quantity',
-                    text: 'Please enter a valid quantity (minimum 0.1 kilos)',
+                    text: 'Please enter a valid quantity (minimum 1.0 kilos)',
                     icon: 'error',
                     confirmButtonColor: '#dc3545',
                     confirmButtonText: '<i class="fas fa-times me-1"></i>OK',
@@ -2051,7 +2108,7 @@ if ($product_id <= 0) {
                         updateCartFooter();
                     }
                     
-                    // Reset quantity to 1
+                    // Reset quantity to default value (1) after adding to cart
                     document.getElementById('quantity').value = 1;
                 } else {
                     const errorMessage = data.error || data.message || 'Failed to add product to cart';

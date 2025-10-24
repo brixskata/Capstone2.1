@@ -1487,10 +1487,10 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
                     let quantity = qtyInput ? parseFloat(qtyInput.value) : 1;
                     
                     if (isNaN(quantity)) quantity = 1;
-                    if (quantity < 1) {
+                    if (quantity < 1.0) {
                         Swal.fire({
                             title: 'Invalid Quantity',
-                            text: 'Minimum quantity is 1. Please enter a valid quantity.',
+                            text: 'Minimum quantity is 1.0. Please enter a valid quantity.',
                             icon: 'warning',
                             confirmButtonColor: '#ffc107',
                             confirmButtonText: '<i class="fas fa-check me-1"></i>OK',
@@ -1503,7 +1503,7 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
                     }
                     
                     // Enforce min, max, and normalize to 1 decimal place
-                    const min = qtyInput && qtyInput.getAttribute('min') ? parseFloat(qtyInput.getAttribute('min')) : 0.1;
+                    const min = qtyInput && qtyInput.getAttribute('min') ? parseFloat(qtyInput.getAttribute('min')) : 1.0;
                     const max = qtyInput && qtyInput.getAttribute('max') ? parseFloat(qtyInput.getAttribute('max')) : Number.POSITIVE_INFINITY;
                     quantity = Math.max(min, Math.min(max, quantity));
                     quantity = Math.round(quantity * 10) / 10; // one decimal place

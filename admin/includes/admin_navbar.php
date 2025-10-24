@@ -121,19 +121,22 @@ if ($user_info) {
     </a>
   </div>
 
-  <!-- Center Section - Live Clock -->
+  <!-- Center Section - Empty for future use -->
   <div class="navbar-center">
-    <div class="live-clock-container">
-      <i class="fas fa-clock clock-icon"></i>
-      <div class="clock-content">
-        <span id="current-time" class="time-display">2:30 PM</span>
-        <span id="current-date" class="date-display">Jan 20, 2024</span>
-      </div>
-    </div>
+    <!-- Can be used for breadcrumbs, alerts, or other content -->
   </div>
 
   <!-- Right Section -->
   <div class="navbar-right">
+    <!-- Live Clock - Moved here -->
+    <div class="live-clock-container">
+      <div class="clock-content">
+        <span id="current-time" class="time-display">2:30 PM</span>
+        <span class="clock-separator">•</span>
+        <span id="current-date" class="date-display">Jan 20, 2024</span>
+      </div>
+    </div>
+
     <!-- Quick Actions -->
     <div class="quick-actions">
       <button class="quick-action-btn" title="Expiring Products" onclick="showExpirationNotifications()">
@@ -379,39 +382,51 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
+/* Right Section Layout */
+.navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
 .live-clock-container {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 12px 20px;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    min-width: 200px;
+    padding: 8px 12px;
+    min-width: 160px;
+    order: 1; /* Clock first */
 }
 
-.clock-icon {
-    color: white;
-    font-size: 18px;
-    margin-right: 12px;
+.quick-actions {
+    order: 2; /* Quick actions second */
+}
+
+.admin-profile-dropdown {
+    order: 3; /* Profile last */
 }
 
 .clock-content {
     display: flex;
-    flex-direction: column;
     align-items: center;
     color: white;
+    gap: 8px;
 }
 
 .time-display {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 14px;
+    opacity: 0.8;
     line-height: 1.2;
 }
 
+.clock-separator {
+    font-size: 14px;
+    opacity: 0.6;
+    font-weight: 300;
+}
+
 .date-display {
-    font-size: 12px;
+    font-size: 14px;
     opacity: 0.8;
     line-height: 1.2;
 }

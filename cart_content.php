@@ -305,10 +305,10 @@ $_SESSION['cart_total'] = $cart_total;
                 <div class="item-controls">
                     <div class="quantity-controls">
                         <button class="quantity-btn decrease-cart" data-product-id="<?= $item['product']['id'] ?>" data-cart-key="<?= htmlspecialchars($item['cart_key']) ?>"
-                                <?= (float)$item['quantity'] <= 0.1 ? 'disabled' : '' ?>>
+                                <?= (float)$item['quantity'] <= 1.0 ? 'disabled' : '' ?>>
                             <i class="fas fa-minus"></i>
                         </button>
-                        <input type="number" class="quantity-display quantity-input" value="<?= number_format((float)$item['quantity'], 1, '.', '') ?>" step="0.1" min="0.1" max="<?= (float)$item['product']['stock'] ?>" data-product-id="<?= $item['product']['id'] ?>" data-cart-key="<?= htmlspecialchars($item['cart_key']) ?>" inputmode="decimal" aria-label="Quantity" />
+                        <input type="number" class="quantity-display quantity-input" value="<?= number_format((float)$item['quantity'], 1, '.', '') ?>" step="0.1" min="1.0" max="<?= (float)$item['product']['stock'] ?>" data-product-id="<?= $item['product']['id'] ?>" data-cart-key="<?= htmlspecialchars($item['cart_key']) ?>" inputmode="decimal" aria-label="Quantity" />
                         <button class="quantity-btn increase-cart" data-product-id="<?= $item['product']['id'] ?>" data-cart-key="<?= htmlspecialchars($item['cart_key']) ?>"
                                 <?= (float)$item['quantity'] >= (float)$item['product']['stock'] ? 'disabled' : '' ?>>
                             <i class="fas fa-plus"></i>
