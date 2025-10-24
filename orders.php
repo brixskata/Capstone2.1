@@ -297,14 +297,9 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your Profile & Orders</title>
+    <title>Your Profile & Orders - MikeMadz</title>
     <link rel="icon" type="image/png" href="favicon.png">
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <?php include 'includes/user_head.php'; ?>
     
     <!-- SweetAlert2 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -330,14 +325,14 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         body {
             font-family: 'Inter', sans-serif;
             line-height: 1.6;
-            color: var(--bs-dark);
-            background: var(--bs-light);
+            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             min-height: 100vh;
         }
 
         /* Promo Banner */
         .promo-banner {
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
             padding: 0.75rem 0;
             font-weight: 500;
@@ -353,11 +348,11 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         /* Sidebar */
         .profile-sidebar {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
             padding: 2rem;
-            box-shadow: 0 4px 20px rgba(127, 23, 52, 0.08);
-            border: 1px solid rgba(127, 23, 52, 0.1);
+            box-shadow: 0 4px 20px var(--shadow-medium);
+            border: 1px solid var(--border-light);
             height: fit-content;
             position: sticky;
             top: 2rem;
@@ -368,14 +363,14 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             height: 100px;
             border-radius: 50%;
             object-fit: cover;
-            border: 3px solid var(--bs-secondary);
+            border: 3px solid var(--brand-primary);
             margin-bottom: 1rem;
         }
 
         .profile-name {
             font-size: 1.2rem;
             font-weight: 700;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             margin-bottom: 2rem;
             text-align: center;
         }
@@ -396,7 +391,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             padding: 0.75rem 1rem;
             border: none;
             background: transparent;
-            color: #6c757d;
+            color: var(--text-secondary);
             text-decoration: none;
             border-radius: 0.5rem;
             transition: all 0.3s ease;
@@ -405,7 +400,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         .nav-link-btn:hover,
         .nav-link-btn.active {
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
             transform: translateX(5px);
         }
@@ -417,11 +412,11 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         /* Content Area */
         .content-area {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
             padding: 2rem;
-            box-shadow: 0 4px 20px rgba(127, 23, 52, 0.08);
-            border: 1px solid rgba(127, 23, 52, 0.1);
+            box-shadow: 0 4px 20px var(--shadow-medium);
+            border: 1px solid var(--border-light);
         }
 
         .content-section {
@@ -435,7 +430,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .section-title {
             font-size: 1.5rem;
             font-weight: 700;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
@@ -467,26 +462,30 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         .form-label {
             font-weight: 600;
-            color: var(--bs-dark);
+            color: var(--text-primary);
             margin-bottom: 0.5rem;
             display: block;
         }
 
         .form-control {
-            border: 2px solid #e9ecef;
+            border: 2px solid var(--border-light);
             border-radius: 0.5rem;
             padding: 0.75rem 1rem;
             font-weight: 500;
             transition: all 0.3s ease;
+            background: var(--input-bg);
+            color: var(--text-primary);
         }
 
         .form-control:focus {
-            border-color: var(--bs-secondary);
+            border-color: var(--brand-primary);
             box-shadow: 0 0 0 0.2rem rgba(127,23,52,0.25);
+            background: var(--input-bg);
+            color: var(--text-primary);
         }
 
         .btn-primary {
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             border: none;
             padding: 0.75rem 2rem;
             border-radius: 0.5rem;
@@ -495,7 +494,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
         .btn-primary:hover {
-            background: #6b1429;
+            background: var(--brand-secondary);
             transform: translateY(-2px);
         }
 
@@ -506,9 +505,9 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             gap: 1rem;
             margin-bottom: 2rem;
             padding: 1rem;
-            background: rgba(127, 23, 52, 0.05);
+            background: var(--bg-tertiary);
             border-radius: 0.5rem;
-            border: 1px solid rgba(127, 23, 52, 0.1);
+            border: 1px solid var(--border-light);
         }
 
         .upload-preview {
@@ -516,24 +515,24 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             height: 80px;
             border-radius: 50%;
             object-fit: cover;
-            border: 2px solid var(--bs-secondary);
+            border: 2px solid var(--brand-primary);
         }
 
         /* Order Cards */
         .order-card {
-            background: white;
-            border: 1px solid rgba(127, 23, 52, 0.1);
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
             border-radius: 0.75rem;
             padding: 1.5rem;
             margin-bottom: 1rem;
             transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(127, 23, 52, 0.05);
+            box-shadow: 0 2px 8px var(--shadow-light);
         }
 
         .order-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(127, 23, 52, 0.12);
-            border-color: rgba(127, 23, 52, 0.2);
+            box-shadow: 0 8px 25px var(--shadow-medium);
+            border-color: var(--border-medium);
         }
 
         .order-header {
@@ -542,17 +541,17 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             align-items: center;
             margin-bottom: 1rem;
             padding-bottom: 1rem;
-            border-bottom: 1px solid rgba(127, 23, 52, 0.1);
+            border-bottom: 1px solid var(--border-light);
         }
 
         .order-number {
             font-weight: 700;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-size: 1.1rem;
         }
 
         .order-date {
-            color: #6c757d;
+            color: var(--text-secondary);
             font-size: 0.9rem;
         }
 
@@ -602,7 +601,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             justify-content: space-between;
             align-items: center;
             padding: 0.5rem 0;
-            border-bottom: 1px solid rgba(127, 23, 52, 0.05);
+            border-bottom: 1px solid var(--border-light);
         }
 
         .order-item:last-child {
@@ -611,22 +610,22 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         .item-name {
             font-weight: 500;
-            color: var(--bs-dark);
+            color: var(--text-primary);
         }
 
         .item-price {
             font-weight: 600;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
         }
 
         .order-total {
             text-align: right;
             font-size: 1.1rem;
             font-weight: 700;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             padding-top: 1rem;
-            border-top: 2px solid var(--bs-secondary);
-            background: rgba(127, 23, 52, 0.05);
+            border-top: 2px solid var(--brand-primary);
+            background: var(--bg-tertiary);
             margin-top: 1rem;
             padding: 1rem;
             border-radius: 0.5rem;
@@ -636,7 +635,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .order-actions {
             text-align: right;
             padding-top: 1rem;
-            border-top: 1px solid rgba(127, 23, 52, 0.1);
+            border-top: 1px solid var(--border-light);
         }
 
         .order-actions .btn {
@@ -657,22 +656,22 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .empty-state {
             text-align: center;
             padding: 3rem 2rem;
-            color: #6c757d;
+            color: var(--text-secondary);
         }
 
         .empty-state i {
             font-size: 3rem;
             margin-bottom: 1rem;
-            color: #dee2e6;
+            color: var(--text-muted);
         }
 
         .empty-state h3 {
             margin-bottom: 1rem;
-            color: var(--bs-dark);
+            color: var(--text-primary);
         }
 
         .empty-state a {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             text-decoration: none;
             font-weight: 600;
         }
@@ -728,18 +727,18 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
         .address-card {
-            background: white;
-            border: 1px solid rgba(127, 23, 52, 0.1);
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
             border-radius: 0.75rem;
             padding: 1.5rem;
             transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(127, 23, 52, 0.05);
+            box-shadow: 0 2px 8px var(--shadow-light);
         }
 
         .address-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(127, 23, 52, 0.12);
-            border-color: rgba(127, 23, 52, 0.2);
+            box-shadow: 0 8px 25px var(--shadow-medium);
+            border-color: var(--border-medium);
         }
 
         .address-header {
@@ -773,7 +772,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         .address-content p {
             margin: 0.25rem 0;
-            color: var(--bs-dark);
+            color: var(--text-primary);
         }
 
         .address-content p:first-child {
@@ -782,11 +781,25 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         /* Account Styles */
         .account-content {
-            background: white;
-            border: 1px solid rgba(127, 23, 52, 0.1);
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
             border-radius: 0.75rem;
             padding: 2rem;
-            box-shadow: 0 2px 8px rgba(127, 23, 52, 0.05);
+            box-shadow: 0 2px 8px var(--shadow-light);
+        }
+
+        .account-content .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+        }
+
+        .account-content .card-body {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .account-content .text-muted {
+            color: var(--text-primary) !important;
         }
 
         .profile-picture-section {
@@ -829,11 +842,12 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .modal-content {
             border-radius: 1rem;
             border: none;
-            box-shadow: 0 20px 40px rgba(127, 23, 52, 0.15);
+            box-shadow: 0 20px 40px var(--shadow-dark);
+            background: var(--bg-card);
         }
 
         .modal-header {
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
             border-radius: 1rem 1rem 0 0;
         }
@@ -872,7 +886,8 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         #confirmOrderModal .modal-content {
             border-radius: 1rem;
             border: none;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            box-shadow: 0 20px 40px var(--shadow-dark);
+            background: var(--bg-card);
         }
 
         #confirmOrderModal .modal-header {

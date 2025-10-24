@@ -256,8 +256,8 @@ try {
 
 <style>
 .footer {
-    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-    color: var(--bs-dark);
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    color: var(--text-primary);
     margin-top: auto;
     position: relative;
     overflow: hidden;
@@ -307,7 +307,7 @@ try {
 .footer-title {
     font-size: 1.1rem;
     font-weight: 700;
-    color: var(--bs-secondary);
+    color: var(--brand-primary);
     margin-bottom: 1.5rem;
     position: relative;
     text-transform: uppercase;
@@ -321,7 +321,7 @@ try {
     left: 0;
     width: 30px;
     height: 2px;
-    background: linear-gradient(90deg, var(--bs-secondary), #a91d42);
+    background: linear-gradient(90deg, var(--brand-primary), var(--brand-secondary));
     border-radius: 1px;
 }
 
@@ -336,7 +336,7 @@ try {
 }
 
 .footer-links a {
-    color: #6c757d;
+    color: var(--text-secondary);
     text-decoration: none;
     font-weight: 500;
     transition: all 0.3s ease;
@@ -345,7 +345,7 @@ try {
 }
 
 .footer-links a:hover {
-    color: var(--bs-secondary);
+    color: var(--brand-primary);
     transform: translateX(5px);
 }
 
@@ -357,7 +357,7 @@ try {
     transform: translateY(-50%);
     width: 0;
     height: 2px;
-    background: var(--bs-secondary);
+    background: var(--brand-primary);
     transition: width 0.3s ease;
 }
 
@@ -375,20 +375,20 @@ try {
     width: 45px;
     height: 45px;
     border-radius: 12px;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    color: var(--bs-secondary);
+    background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+    color: var(--brand-primary);
     display: flex;
     align-items: center;
     justify-content: center;
     text-decoration: none;
     transition: all 0.3s ease;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--border-light);
     font-size: 1.1rem;
 }
 
 .social-link:hover {
-    background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
+    color: var(--text-light);
     transform: translateY(-3px);
     box-shadow: 0 8px 25px rgba(127, 23, 52, 0.25);
 }
@@ -398,20 +398,43 @@ try {
 }
 
 .newsletter-input {
-    border: 2px solid #e9ecef;
+    border: 2px solid var(--border-light);
     border-radius: 12px 0 0 12px;
     padding: 0.75rem 1rem;
     font-weight: 500;
     transition: all 0.3s ease;
+    background-color: var(--input-bg);
+    color: var(--text-primary);
 }
 
 .newsletter-input:focus {
-    border-color: var(--bs-secondary);
+    border-color: var(--brand-primary);
     box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.15);
 }
 
+/* Placeholder text color fix for newsletter input */
+.newsletter-input::placeholder {
+    color: var(--text-secondary) !important;
+    opacity: 1;
+}
+
+.newsletter-input::-webkit-input-placeholder {
+    color: var(--text-secondary) !important;
+    opacity: 1;
+}
+
+.newsletter-input::-moz-placeholder {
+    color: var(--text-secondary) !important;
+    opacity: 1;
+}
+
+.newsletter-input:-ms-input-placeholder {
+    color: var(--text-secondary) !important;
+    opacity: 1;
+}
+
 .newsletter-btn {
-    background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
     border: none;
     color: white;
     border-radius: 0 12px 12px 0;
@@ -427,7 +450,7 @@ try {
 
 .newsletter-text {
     font-size: 0.9rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-bottom: 1rem;
     line-height: 1.5;
 }
@@ -443,26 +466,26 @@ try {
     align-items: center;
     gap: 0.75rem;
     font-size: 0.875rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-weight: 500;
 }
 
 .feature-item i {
-    color: var(--bs-secondary);
+    color: var(--brand-primary);
     font-size: 1rem;
     width: 20px;
     text-align: center;
 }
 
 .footer-bottom {
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--border-light);
     padding: 2rem 0 1.5rem;
     margin-top: 2rem;
 }
 
 .copyright-text {
     margin: 0;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-weight: 500;
     font-size: 0.9rem;
 }
@@ -474,7 +497,7 @@ try {
 }
 
 .footer-bottom-links a {
-    color: #6c757d;
+    color: var(--text-secondary);
     text-decoration: none;
     font-weight: 500;
     font-size: 0.9rem;
@@ -482,7 +505,7 @@ try {
 }
 
 .footer-bottom-links a:hover {
-    color: var(--bs-secondary);
+    color: var(--brand-primary);
 }
 
 .back-to-top {
@@ -491,7 +514,7 @@ try {
     right: 2rem;
     width: 50px;
     height: 50px;
-    background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
     color: white;
     border: none;
     border-radius: 50%;

@@ -665,48 +665,41 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Placed</title>
+    <title>Order Placed - MikeMadz</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <?php include 'includes/user_head.php'; ?>
+    
     <!-- SweetAlert2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root {
-            --bs-primary: #ffffff;
-            --bs-secondary: #7F1734;
-            --bs-success: #198754;
-            --bs-danger: #db3030;
-            --bs-warning: #ffc107;
-            --bs-info: #016bf8;
-            --bs-light: #f0f3f2;
-            --bs-dark: #001e2b;
-        }
-        
         body {
-            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             min-height: 100vh;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--text-primary);
         }
         
         /* Custom SweetAlert2 styling */
         .swal2-popup {
             border-radius: 20px !important;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            background: var(--bg-card) !important;
+            border: 1px solid var(--border-light) !important;
         }
         
         .swal2-title {
-            color: var(--bs-secondary) !important;
+            color: var(--brand-primary) !important;
             font-weight: 700 !important;
             font-size: 1.8rem !important;
         }
         
         .swal2-html-container {
-            color: var(--bs-dark) !important;
+            color: var(--text-primary) !important;
             font-size: 1rem !important;
         }
         
         .swal2-confirm {
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%) !important;
+            background: var(--brand-gradient) !important;
             border: none !important;
             border-radius: 10px !important;
             padding: 0.75rem 2rem !important;
@@ -717,13 +710,13 @@ try {
         
         .swal2-confirm:hover {
             transform: translateY(-2px) !important;
-            box-shadow: 0 8px 25px rgba(127, 23, 52, 0.3) !important;
-            background: linear-gradient(135deg, #6b1429 0%, #8b1a36 100%) !important;
+            box-shadow: 0 8px 25px var(--shadow-medium) !important;
+            background: linear-gradient(135deg, #6d1429 0%, #8f1937 100%) !important;
         }
         
         .swal2-cancel {
-            border: 2px solid var(--bs-secondary) !important;
-            color: var(--bs-secondary) !important;
+            border: 2px solid var(--brand-primary) !important;
+            color: var(--brand-primary) !important;
             border-radius: 10px !important;
             padding: 0.75rem 2rem !important;
             font-weight: 600 !important;
@@ -733,18 +726,18 @@ try {
         }
         
         .swal2-cancel:hover {
-            background: var(--bs-secondary) !important;
-            color: white !important;
+            background: var(--brand-primary) !important;
+            color: var(--text-light) !important;
             transform: translateY(-2px) !important;
-            box-shadow: 0 8px 25px rgba(127, 23, 52, 0.2) !important;
+            box-shadow: 0 8px 25px var(--shadow-medium) !important;
         }
         
         .order-details {
-            background: var(--bs-light);
+            background: var(--bg-tertiary);
             border-radius: 15px;
             padding: 1.5rem;
             margin: 1rem 0;
-            border: 1px solid #e9ecef;
+            border: 1px solid var(--border-light);
             text-align: left;
         }
         
@@ -753,19 +746,21 @@ try {
             justify-content: space-between;
             margin-bottom: 0.75rem;
             padding: 0.75rem 0;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid var(--border-light);
             align-items: center;
+            color: var(--text-primary);
         }
         
         .detail-row:last-child {
             border-bottom: none;
             font-weight: bold;
             font-size: 1.2rem;
-            color: var(--bs-secondary);
-            background: rgba(127, 23, 52, 0.05);
+            color: var(--brand-primary);
+            background: var(--bg-card);
             padding: 1rem;
             border-radius: 10px;
             margin-top: 0.5rem;
+            border: 1px solid var(--border-light);
         }
         
         .text-success {

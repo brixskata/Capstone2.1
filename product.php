@@ -427,8 +427,8 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
         body {
             font-family: 'Inter', sans-serif;
             line-height: 1.6;
-            color: var(--bs-dark);
-            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             min-height: 100vh;
             padding-bottom: 120px; /* Add space for footer */
         }
@@ -447,7 +447,7 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
         .navbar {
             background: rgba(255,255,255,0.95) !important;
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid var(--border-light);
             padding: 1rem 0;
         }
 
@@ -460,7 +460,7 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
 
         .navbar-nav .nav-link {
             font-weight: 500;
-            color: var(--bs-dark) !important;
+            color: var(--text-primary) !important;
             transition: all 0.3s ease;
             margin: 0 0.5rem;
             position: relative;
@@ -490,12 +490,12 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
 
         /* Category Section */
         .category-section {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
             padding: 2rem;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 20px rgba(127, 23, 52, 0.1);
-            border: 1px solid rgba(127, 23, 52, 0.1);
+            box-shadow: 0 4px 20px var(--shadow-medium);
+            border: 1px solid var(--border-light);
         }
 
         .category-title {
@@ -921,6 +921,32 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
         .product-meta small {
             display: inline-flex;
             align-items: center;
+        }
+
+        /* Dark mode text fixes for product meta */
+        .product-meta .text-muted {
+            color: var(--text-secondary) !important;
+        }
+
+        /* Placeholder text color fix for search input */
+        .search-input::placeholder {
+            color: var(--text-secondary) !important;
+            opacity: 1;
+        }
+
+        .search-input::-webkit-input-placeholder {
+            color: var(--text-secondary) !important;
+            opacity: 1;
+        }
+
+        .search-input::-moz-placeholder {
+            color: var(--text-secondary) !important;
+            opacity: 1;
+        }
+
+        .search-input:-ms-input-placeholder {
+            color: var(--text-secondary) !important;
+            opacity: 1;
         }
     </style>
 </head>

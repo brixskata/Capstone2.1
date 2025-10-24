@@ -271,66 +271,56 @@ foreach ($gcash_defaults as $key => $default_value) {
     <meta http-equiv="Expires" content="0">
     <title>Checkout - MikeMadz</title>
     <link rel="icon" type="image/png" href="favicon.png">
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <?php include 'includes/user_head.php'; ?>
     
     <style>
-        :root {
-            --bs-primary: #ffffff;
-            --bs-secondary: #7F1734;
-            --bs-success: #198754;
-            --bs-danger: #dc3545;
-            --bs-warning: #ffc107;
-            --bs-info: #0dcaf0;
-            --bs-light: #f8f9fa;
-            --bs-dark: #212529;
-        }
-
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             min-height: 100vh;
+            color: var(--text-primary);
         }
 
-
         .checkout-container {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 30px var(--shadow-medium);
             margin: 2rem 0;
             overflow: hidden;
+            border: 1px solid var(--border-light);
         }
 
         .checkout-header {
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
-            color: white;
+            background: var(--bg-card);
+            border-radius: 1.5rem;
             padding: 2rem;
+            box-shadow: 0 20px 40px var(--shadow-medium);
+            margin-bottom: 2rem;
             text-align: center;
         }
 
         .checkout-header h1 {
             font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            font-weight: 800;
+            color: var(--brand-primary);
+            margin: 0;
+            background: var(--brand-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .form-section {
-            background: white;
+            background: var(--bg-card);
             border-radius: 0.75rem;
             padding: 1.5rem;
             margin-bottom: 1.5rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 10px var(--shadow-light);
+            border: 1px solid var(--border-light);
         }
 
         .section-title {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-weight: 700;
             font-size: 1.25rem;
             margin-bottom: 1rem;
@@ -340,29 +330,34 @@ foreach ($gcash_defaults as $key => $default_value) {
         }
 
         .form-control {
-            border: 2px solid #e9ecef;
+            border: 2px solid var(--border-light);
             border-radius: 0.5rem;
             padding: 0.75rem;
             font-weight: 500;
             transition: all 0.3s ease;
+            background: var(--input-bg);
+            color: var(--text-primary);
         }
 
         .form-control:focus {
-            border-color: var(--bs-secondary);
+            border-color: var(--brand-primary);
             box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.15);
+            background: var(--input-bg);
+            color: var(--text-primary);
         }
 
         .form-control[readonly] {
-            background-color: #f8f9fa;
+            background-color: var(--bg-tertiary);
             cursor: not-allowed;
+            color: var(--text-secondary);
         }
 
         .cart-item {
             display: flex;
             align-items: center;
             padding: 1rem;
-            border-bottom: 1px solid #e9ecef;
-            background: #f8f9fa;
+            border-bottom: 1px solid var(--border-light);
+            background: var(--bg-tertiary);
             border-radius: 0.5rem;
             margin-bottom: 0.5rem;
         }
@@ -377,7 +372,7 @@ foreach ($gcash_defaults as $key => $default_value) {
             height: 80px;
             object-fit: cover;
             border-radius: 0.5rem;
-            border: 2px solid #e9ecef;
+            border: 2px solid var(--border-light);
         }
 
         .product-details {
@@ -387,7 +382,7 @@ foreach ($gcash_defaults as $key => $default_value) {
 
         .product-name {
             font-weight: 600;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             margin-bottom: 0.25rem;
         }
 
@@ -405,18 +400,18 @@ foreach ($gcash_defaults as $key => $default_value) {
             align-items: center;
         }
         .order-header {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-light);
             border-radius: 0.5rem;
             padding: 1rem;
             font-weight: 600;
-            color: #212529;
+            color: var(--text-primary);
             margin-bottom: 0.75rem;
         }
         .order-row {
             padding: 1rem;
-            border-bottom: 1px solid #e9ecef;
-            background: #ffffff;
+            border-bottom: 1px solid var(--border-light);
+            background: var(--bg-card);
             border-radius: 0.5rem;
         }
         .order-row:last-child { border-bottom: none; }
@@ -426,21 +421,22 @@ foreach ($gcash_defaults as $key => $default_value) {
         @media (max-width: 768px) {
             .order-header { display: none; }
             .order-row { grid-template-columns: 80px 1fr; row-gap: 0.25rem; }
-            .order-row .od-qty, .order-row .od-unit, .order-row .od-sub { display: flex; gap: 0.5rem; font-size: 0.9rem; color: #6c757d; }
+            .order-row .od-qty, .order-row .od-unit, .order-row .od-sub { display: flex; gap: 0.5rem; font-size: 0.9rem; color: var(--text-secondary); }
             .order-row .od-sub { color: var(--bs-danger); font-weight: 700; }
         }
 
         .order-summary {
-            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-card) 100%);
             border-radius: 1rem;
             padding: 2rem;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px var(--shadow-medium);
             position: sticky;
             top: 2rem;
+            border: 1px solid var(--border-light);
         }
 
         .summary-title {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-weight: 700;
             font-size: 1.5rem;
             margin-bottom: 1.5rem;
@@ -452,28 +448,30 @@ foreach ($gcash_defaults as $key => $default_value) {
             justify-content: between;
             align-items: center;
             padding: 0.5rem 0;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid var(--border-light);
+            color: var(--text-primary);
         }
 
         .summary-row:last-child {
             border-bottom: none;
             font-size: 1.25rem;
             font-weight: 700;
-            color: var(--bs-secondary);
-            border-top: 2px solid var(--bs-secondary);
+            color: var(--brand-primary);
+            border-top: 2px solid var(--brand-primary);
             padding-top: 1rem;
             margin-top: 1rem;
         }
 
         .discount-form {
-            background: #f8f9fa;
+            background: var(--bg-tertiary);
             border-radius: 0.5rem;
             padding: 1rem;
             margin-bottom: 1rem;
+            border: 1px solid var(--border-light);
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
+            background: var(--brand-gradient);
             border: none;
             padding: 0.75rem 2rem;
             border-radius: 0.5rem;
@@ -490,23 +488,23 @@ foreach ($gcash_defaults as $key => $default_value) {
         }
 
         .btn-outline-secondary {
-            border-color: var(--bs-secondary);
-            color: var(--bs-secondary);
+            border-color: var(--brand-primary);
+            color: var(--brand-primary);
             border-width: 2px;
             font-weight: 600;
         }
 
         .btn-outline-secondary:hover {
-            background-color: var(--bs-secondary);
-            border-color: var(--bs-secondary);
+            background-color: var(--brand-primary);
+            border-color: var(--brand-primary);
         }
 
         .radio-option {
             display: flex;
             align-items: center;
             padding: 1rem;
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-light);
             border-radius: 0.5rem;
             margin-bottom: 0.5rem;
             cursor: pointer;
@@ -514,27 +512,28 @@ foreach ($gcash_defaults as $key => $default_value) {
         }
 
         .radio-option:hover {
-            border-color: var(--bs-secondary);
-            background: rgba(127, 23, 52, 0.05);
+            border-color: var(--brand-primary);
+            background: var(--bg-card);
         }
 
         .radio-option input[type="radio"] {
             margin-right: 0.75rem;
-            accent-color: var(--bs-secondary);
+            accent-color: var(--brand-primary);
         }
 
         .gcash-section {
-            background: #f8f9fa;
+            background: var(--bg-tertiary);
             border-radius: 0.75rem;
             padding: 1.5rem;
             margin-top: 1rem;
             text-align: center;
+            border: 1px solid var(--border-light);
         }
 
         .gcash-qr {
             max-width: 300px;
             border-radius: 0.75rem;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px var(--shadow-medium);
             margin: 1rem auto;
         }
 
@@ -547,7 +546,7 @@ foreach ($gcash_defaults as $key => $default_value) {
 
         .gcash-section .form-text {
             font-size: 0.85rem;
-            color: #6c757d;
+            color: var(--text-secondary);
         }
 
         .gcash-section .form-text i {
@@ -557,17 +556,17 @@ foreach ($gcash_defaults as $key => $default_value) {
         .empty-cart {
             text-align: center;
             padding: 4rem 2rem;
-            color: #6c757d;
+            color: var(--text-secondary);
         }
 
         .empty-cart i {
             font-size: 4rem;
             margin-bottom: 1rem;
-            color: #dee2e6;
+            color: var(--text-muted);
         }
 
         .place-order-btn {
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
+            background: var(--brand-gradient);
             border: none;
             padding: 1rem 2rem;
             border-radius: 0.75rem;
@@ -588,16 +587,16 @@ foreach ($gcash_defaults as $key => $default_value) {
 
         /* Delivery Address Styles */
         #delivery-address-section {
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-light);
             border-radius: 0.75rem;
             padding: 1.5rem;
             margin-top: 1rem;
         }
 
         #new-address-form {
-            background: white;
-            border: 1px solid #e9ecef;
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
             border-radius: 0.5rem;
             padding: 1.5rem;
             margin-top: 1rem;
@@ -616,10 +615,10 @@ foreach ($gcash_defaults as $key => $default_value) {
         .saved-addresses {
             max-height: 400px;
             overflow-y: auto;
-            border: 1px solid #e9ecef;
+            border: 1px solid var(--border-light);
             border-radius: 0.5rem;
             padding: 1rem;
-            background: #f8f9fa;
+            background: var(--bg-tertiary);
         }
 
         .address-option {
@@ -641,11 +640,11 @@ foreach ($gcash_defaults as $key => $default_value) {
             top: 100%;
             left: 0;
             right: 0;
-            background: white;
-            border: 1px solid #e9ecef;
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
             border-top: none;
             border-radius: 0 0 0.5rem 0.5rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px var(--shadow-medium);
             max-height: 300px;
             overflow-y: auto;
             z-index: 1000;
@@ -655,21 +654,22 @@ foreach ($gcash_defaults as $key => $default_value) {
         .address-suggestion {
             padding: 0.75rem 1rem;
             cursor: pointer;
-            border-bottom: 1px solid #f8f9fa;
+            border-bottom: 1px solid var(--bg-tertiary);
             transition: background-color 0.2s ease;
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            color: var(--text-primary);
         }
 
         .address-suggestion:hover,
         .address-suggestion.active {
-            background-color: #f8f9fa;
+            background-color: var(--bg-tertiary);
         }
 
         .address-suggestion.active {
-            background-color: rgba(127, 23, 52, 0.1);
-            border-left: 3px solid var(--bs-secondary);
+            background-color: var(--bg-card);
+            border-left: 3px solid var(--brand-primary);
         }
 
         .address-suggestion:last-child {
@@ -677,7 +677,7 @@ foreach ($gcash_defaults as $key => $default_value) {
         }
 
         .address-suggestion i {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-size: 0.9rem;
         }
 
@@ -687,19 +687,19 @@ foreach ($gcash_defaults as $key => $default_value) {
 
         .address-suggestion .address-main {
             font-weight: 600;
-            color: var(--bs-dark);
+            color: var(--text-primary);
             margin-bottom: 0.25rem;
         }
 
         .address-suggestion .address-details {
             font-size: 0.85rem;
-            color: #6c757d;
+            color: var(--text-secondary);
         }
 
         .address-loading {
             padding: 1rem;
             text-align: center;
-            color: #6c757d;
+            color: var(--text-secondary);
         }
 
         .address-loading i {
@@ -709,6 +709,90 @@ foreach ($gcash_defaults as $key => $default_value) {
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        /* Dark mode text fixes */
+        .text-muted {
+            color: var(--text-secondary) !important;
+        }
+
+        .fw-semibold.text-dark {
+            color: var(--text-primary) !important;
+        }
+
+        .small.text-muted {
+            color: var(--text-secondary) !important;
+        }
+
+        .text-primary {
+            color: var(--brand-primary) !important;
+        }
+
+        .text-success {
+            color: var(--bs-success) !important;
+        }
+
+        .text-warning {
+            color: var(--bs-warning) !important;
+        }
+
+        .text-danger {
+            color: var(--bs-danger) !important;
+        }
+
+        .text-info {
+            color: var(--bs-info) !important;
+        }
+
+        .alert {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            color: var(--text-primary);
+        }
+
+        .alert-info {
+            background: var(--bg-tertiary);
+            border-color: var(--bs-info);
+            color: var(--text-primary);
+        }
+
+        .alert-warning {
+            background: var(--bg-tertiary);
+            border-color: var(--bs-warning);
+            color: var(--text-primary);
+        }
+
+        .alert-danger {
+            background: var(--bg-tertiary);
+            border-color: var(--bs-danger);
+            color: var(--text-primary);
+        }
+
+        .alert-success {
+            background: var(--bg-tertiary);
+            border-color: var(--bs-success);
+            color: var(--text-primary);
+        }
+
+        /* Placeholder text color fix */
+        .form-control::placeholder {
+            color: var(--text-secondary) !important;
+            opacity: 1;
+        }
+
+        .form-control::-webkit-input-placeholder {
+            color: var(--text-secondary) !important;
+            opacity: 1;
+        }
+
+        .form-control::-moz-placeholder {
+            color: var(--text-secondary) !important;
+            opacity: 1;
+        }
+
+        .form-control:-ms-input-placeholder {
+            color: var(--text-secondary) !important;
+            opacity: 1;
         }
 
         @media (max-width: 768px) {
@@ -1174,9 +1258,6 @@ foreach ($gcash_defaults as $key => $default_value) {
     </div>
 
     <?php include 'includes/user_footer.php'; ?>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
         // Toggle GCash upload section

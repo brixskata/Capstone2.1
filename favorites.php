@@ -123,15 +123,9 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Favorites - BeefScrap</title>
+    <title>My Favorites - MikeMadz</title>
     <link rel="icon" type="image/png" href="favicon.png">
-
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <?php include 'includes/user_head.php'; ?>
 
     <style>
         :root {
@@ -154,15 +148,15 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
         body {
             font-family: 'Inter', sans-serif;
             line-height: 1.6;
-            color: var(--bs-dark);
-            background: linear-gradient(135deg, var(--bs-light) 0%, #ffffff 100%);
+            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             min-height: 100vh;
             padding-bottom: 100px; /* Add padding to prevent footer overlap */
         }
 
         /* Promo Banner */
         .promo-banner {
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
             padding: 0.75rem 0;
             font-weight: 500;
@@ -171,57 +165,57 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         /* Navigation */
         .navbar {
-            background: rgba(255,255,255,0.95) !important;
+            background: var(--bg-card) !important;
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid var(--border-light);
             padding: 1rem 0;
         }
 
         .navbar-brand {
             font-weight: 800;
             font-size: 1.8rem;
-            color: var(--bs-secondary) !important;
+            color: var(--brand-primary) !important;
         }
 
         .navbar-nav .nav-link {
             font-weight: 500;
-            color: var(--bs-dark) !important;
+            color: var(--text-primary) !important;
             transition: all 0.3s ease;
             margin: 0 0.5rem;
         }
 
         .navbar-nav .nav-link:hover {
-            color: var(--bs-secondary) !important;
+            color: var(--brand-primary) !important;
         }
 
         /* Page Header */
         .page-header {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
             padding: 2rem;
             margin-bottom: 2rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 10px var(--shadow-light);
+            border: 1px solid var(--border-light);
         }
 
         .page-title {
             font-size: 2rem;
             font-weight: 700;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             margin-bottom: 0.5rem;
         }
 
         .page-subtitle {
-            color: #6c757d;
+            color: var(--text-secondary);
             font-size: 1.1rem;
         }
 
         /* Product Cards */
         .product-card {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
             padding: 1.5rem;
-            border: 1px solid #e9ecef;
+            border: 1px solid var(--border-light);
             transition: all 0.3s ease;
             height: 100%;
             position: relative;
@@ -230,7 +224,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         .product-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            box-shadow: 0 15px 35px var(--shadow-medium);
         }
 
         .product-card::before {
@@ -265,17 +259,17 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
             width: 100%;
             height: 200px;
             object-fit: contain;
-            background-color: var(--bs-light);
+            background-color: var(--bg-secondary);
             border-radius: 0.75rem;
             margin-bottom: 1rem;
-            border: 1px solid #e9ecef;
+            border: 1px solid var(--border-light);
         }
 
         .product-title {
             font-size: 1.1rem;
             font-weight: 600;
             margin-bottom: 0.5rem;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             display: -webkit-box;
             -webkit-line-clamp: 2;
             line-clamp: 2;
@@ -285,7 +279,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         .product-desc {
             font-size: 0.9rem;
-            color: #6c757d;
+            color: var(--text-secondary);
             margin-bottom: 1rem;
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -297,14 +291,14 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .product-price {
             font-size: 1.2rem;
             font-weight: 700;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             margin-bottom: 1rem;
         }
 
         .product-meta {
             margin-bottom: 1rem;
             font-size: 0.8rem;
-            color: #6c757d;
+            color: var(--text-secondary);
         }
 
         .product-stock {
@@ -321,7 +315,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         .product-stock i,
         .product-sold i {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-size: 0.75rem;
         }
 
@@ -334,7 +328,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
         .product-rating .text-muted {
-            color: #6c757d !important;
+            color: var(--text-secondary) !important;
         }
 
         .product-rating small {
@@ -372,33 +366,33 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .empty-state {
             text-align: center;
             padding: 4rem 2rem;
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 10px var(--shadow-light);
+            border: 1px solid var(--border-light);
         }
 
         .empty-state i {
             font-size: 4rem;
             margin-bottom: 1.5rem;
-            color: #dee2e6;
+            color: var(--text-muted);
         }
 
         .empty-state h3 {
             font-size: 1.5rem;
             font-weight: 600;
             margin-bottom: 1rem;
-            color: var(--bs-dark);
+            color: var(--text-primary);
         }
 
         .empty-state p {
-            color: #6c757d;
+            color: var(--text-secondary);
             margin-bottom: 2rem;
             font-size: 1.1rem;
         }
 
         .btn-shop-now {
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
             border: none;
             padding: 0.75rem 2rem;
@@ -412,19 +406,19 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
         .btn-shop-now:hover {
-            background: #6b1429;
+            background: var(--brand-secondary);
             color: white;
             transform: translateY(-2px);
         }
 
         /* Favorites Stats */
         .favorites-stats {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
             padding: 1.5rem;
             margin-bottom: 2rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 10px var(--shadow-light);
+            border: 1px solid var(--border-light);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -437,11 +431,11 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .stats-number {
             font-size: 2rem;
             font-weight: 700;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
         }
 
         .stats-label {
-            color: #6c757d;
+            color: var(--text-secondary);
             font-size: 0.9rem;
             font-weight: 500;
         }
@@ -601,13 +595,8 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <?php else: ?>
             <!-- Empty State -->
             <div class="empty-state">
-                <i class="fas fa-heart-broken"></i>
                 <h3>No Favorites Yet</h3>
                 <p>You haven't added any products to your favorites yet. Start browsing and add items you love!</p>
-                <a href="product.php" class="btn-shop-now">
-                    <i class="fas fa-shopping-bag"></i>
-                    Start Shopping
-                </a>
             </div>
         <?php endif; ?>
 
@@ -670,13 +659,8 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                         </div>
                                     </div>
                                     <div class="empty-state">
-                                        <i class="fas fa-heart-broken"></i>
                                         <h3>No Favorites Yet</h3>
                                         <p>You haven't added any products to your favorites yet. Start browsing and add items you love!</p>
-                                        <a href="product.php" class="btn-shop-now">
-                                            <i class="fas fa-shopping-bag"></i>
-                                            Start Shopping
-                                        </a>
                                     </div>
                                 `;
                             }

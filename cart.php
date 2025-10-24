@@ -430,12 +430,12 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             margin: 0;
             padding: 0;
             min-height: 100vh;
             line-height: 1.6;
-            color: var(--bs-dark);
+            color: var(--text-primary);
         }
 
         .cart-container {
@@ -445,10 +445,10 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
         }
 
         .main-cart-header {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1.5rem;
             padding: 2rem;
-            box-shadow: 0 20px 40px rgba(127, 23, 52, 0.1);
+            box-shadow: 0 20px 40px var(--shadow-medium);
             margin-bottom: 2rem;
             text-align: center;
         }
@@ -465,16 +465,16 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
         }
         
         .empty-cart {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1.5rem;
             padding: 4rem 2rem;
             text-align: center;
-            box-shadow: 0 20px 40px rgba(127, 23, 52, 0.1);
+            box-shadow: 0 20px 40px var(--shadow-medium);
         }
         
         .empty-cart i {
             font-size: 4rem;
-            color: var(--bs-secondary);
+            color: var(--brand-secondary);
             margin-bottom: 2rem;
             opacity: 0.7;
         }
@@ -482,13 +482,13 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
         .empty-cart h3 {
             font-size: 1.8rem;
             font-weight: 700;
-            color: var(--bs-dark);
+            color: var(--text-primary);
             margin-bottom: 1rem;
         }
 
         .empty-cart p {
             font-size: 1.1rem;
-            color: #6c757d;
+            color: var(--text-secondary);
             margin-bottom: 2rem;
         }
         
@@ -512,10 +512,10 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
         }
         
         .cart-total-section {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1.5rem;
             padding: 2rem;
-            box-shadow: 0 20px 40px rgba(127, 23, 52, 0.1);
+            box-shadow: 0 20px 40px var(--shadow-medium);
             text-align: center;
         }
         
@@ -530,7 +530,7 @@ $page_keywords = 'shopping cart, checkout, meat delivery, seafood delivery, Mike
         .total-label {
             font-size: 1.5rem;
             font-weight: 600;
-            color: var(--bs-dark);
+            color: var(--text-primary);
             margin: 0;
         }
         

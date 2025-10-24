@@ -152,15 +152,44 @@ if (!empty($_SESSION['cart'])) {
           <i class="fas fa-heart fs-5"></i>
         </a>
       <?php endif; ?>
-      <?php if (isset($_SESSION['user_id'])): ?>
-        <a class="text-dark <?php if ($current == 'orders.php') echo 'fw-bold'; ?>" href="orders.php">
-          <i class="fas fa-user fs-5"></i>
-        </a>
-      <?php else: ?>
-        <a class="text-dark" href="login.php">
-          <i class="fas fa-user fs-5"></i>
-        </a>
-      <?php endif; ?>
+      
+      <!-- Profile Dropdown -->
+      <div class="dropdown">
+        <?php if (isset($_SESSION['user_id'])): ?>
+          <button class="btn btn-link text-dark p-0 profile-dropdown-btn" type="button" id="profileDropdown" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false">
+            <i class="fas fa-user fs-5"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="profileDropdown">
+            <li><a class="dropdown-item" href="orders.php">
+              <i class="fas fa-user"></i>Profile
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><button class="dropdown-item dark-mode-toggle" type="button">
+              <i class="fas fa-moon theme-icon"></i>Dark Mode
+            </button></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><button class="dropdown-item logout-item" type="button" onclick="confirmLogout()">
+              <i class="fas fa-sign-out-alt"></i>Logout
+            </button></li>
+          </ul>
+        <?php else: ?>
+          <button class="btn btn-link text-dark p-0 profile-dropdown-btn" type="button" id="guestDropdown" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false">
+            <i class="fas fa-user fs-5"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="guestDropdown">
+            <li><a class="dropdown-item" href="login.php">
+              <i class="fas fa-sign-in-alt me-2"></i>Login
+            </a></li>
+            <li><a class="dropdown-item" href="register.php">
+              <i class="fas fa-user-plus me-2"></i>Register
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><button class="dropdown-item dark-mode-toggle" type="button">
+              <i class="fas fa-moon theme-icon"></i>Dark Mode
+            </button></li>
+          </ul>
+        <?php endif; ?>
+      </div>
       <?php if ($current == 'cart.php'): ?>
         <a class="btn p-0 text-dark position-relative" href="cart.php" title="View Full Cart">
           <i class="fas fa-shopping-cart fs-5"></i>
@@ -204,16 +233,23 @@ if (!empty($_SESSION['cart'])) {
       <a class="text-dark <?php if ($current == 'favorites.php') echo 'fw-bold'; ?>" href="favorites.php">
         <i class="fas fa-heart me-2"></i> Favorites
       </a>
-    <?php endif; ?>
-    <?php if (isset($_SESSION['user_id'])): ?>
       <a class="text-dark <?php if ($current == 'orders.php') echo 'fw-bold'; ?>" href="orders.php">
-        <i class="fas fa-user me-2"></i> Orders
+        <i class="fas fa-user me-2"></i> Profile
       </a>
     <?php else: ?>
       <a class="text-dark" href="login.php">
-        <i class="fas fa-user me-2"></i> Login
+        <i class="fas fa-sign-in-alt me-2"></i> Login
+      </a>
+      <a class="text-dark" href="register.php">
+        <i class="fas fa-user-plus me-2"></i> Register
       </a>
     <?php endif; ?>
+    
+    <hr class="my-2">
+    
+    <button class="btn btn-link text-dark text-start p-0 dark-mode-toggle">
+      <i class="fas fa-moon theme-icon me-2"></i>Dark Mode
+    </button>
     <?php if ($current == 'cart.php'): ?>
       <a class="text-dark text-start position-relative" href="cart.php">
         <i class="fas fa-shopping-cart me-2"></i> View Cart
@@ -281,7 +317,7 @@ if (!empty($_SESSION['cart'])) {
 
 .swal2-warning .swal2-confirm {
     background: #ffc107 !important; /* Yellow for warnings */
-    color: #212529 !important;
+    color: var(--text-primary) !important;
 }
 
 .swal2-danger .swal2-confirm {
@@ -837,6 +873,130 @@ if (!empty($_SESSION['cart'])) {
 <!-- Bootstrap JS (include before </body>) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
+<!-- Dark Mode JavaScript -->
+<script src="assets/js/dark-mode.js"></script>
+
+<!-- Initialize Dropdowns -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing dropdowns...');
+    
+    // Check if Bootstrap is loaded
+    if (typeof bootstrap === 'undefined') {
+        console.error('Bootstrap is not loaded!');
+        return;
+    }
+    
+    // Find all dropdown toggles
+    var dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+    console.log('Found dropdown toggles:', dropdownToggles.length);
+    
+    // Initialize each dropdown
+    dropdownToggles.forEach(function(toggle, index) {
+        console.log('Initializing dropdown', index, toggle);
+        
+        try {
+            var dropdown = new bootstrap.Dropdown(toggle);
+            console.log('Dropdown initialized successfully:', dropdown);
+            
+            // Add click event listener
+            toggle.addEventListener('click', function(e) {
+                console.log('Dropdown clicked:', e.target);
+            });
+            
+            // Add show/hide event listeners
+            toggle.addEventListener('show.bs.dropdown', function(e) {
+                console.log('Dropdown showing:', e.target);
+            });
+            
+            toggle.addEventListener('shown.bs.dropdown', function(e) {
+                console.log('Dropdown shown:', e.target);
+            });
+            
+        } catch (error) {
+            console.error('Error initializing dropdown:', error);
+        }
+    });
+    
+    // Test manual dropdown toggle
+    setTimeout(function() {
+        var testToggle = document.getElementById('profileDropdown') || document.getElementById('guestDropdown');
+        if (testToggle) {
+            console.log('Testing dropdown toggle:', testToggle);
+            
+            // Add a simple click test
+            testToggle.addEventListener('click', function(e) {
+                console.log('Button clicked!', e);
+                
+                // Try Bootstrap dropdown first
+                var dropdown = bootstrap.Dropdown.getInstance(testToggle);
+                if (dropdown) {
+                    console.log('Using existing dropdown instance');
+                    dropdown.toggle();
+                } else {
+                    console.log('Creating new dropdown instance');
+                    try {
+                        var newDropdown = new bootstrap.Dropdown(testToggle);
+                        newDropdown.toggle();
+                    } catch (error) {
+                        console.error('Bootstrap dropdown failed:', error);
+                        // Fallback: manual toggle
+                        var menu = testToggle.nextElementSibling;
+                        if (menu && menu.classList.contains('dropdown-menu')) {
+                            menu.classList.toggle('show');
+                            console.log('Manual dropdown toggle');
+                        }
+                    }
+                }
+            });
+            
+            // Test if button is clickable
+            console.log('Button clickable test:', testToggle.offsetWidth, testToggle.offsetHeight);
+        }
+    }, 1000);
+});
+
+// Logout confirmation with SweetAlert2
+function confirmLogout() {
+  Swal.fire({
+    title: 'Confirm Logout',
+    text: 'Are you sure you want to logout? You will need to sign in again to access your account.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#7F1734',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: '<i class="fas fa-sign-out-alt me-1"></i>Yes, Logout',
+    cancelButtonText: '<i class="fas fa-times me-1"></i>Cancel',
+    customClass: {
+      popup: 'swal2-success',
+      confirmButton: 'swal2-confirm',
+      cancelButton: 'swal2-cancel'
+    }
+  }).then((result) => {
+    if (result.isConfirmed) {
+      // Show loading state
+      Swal.fire({
+        title: 'Logging Out...',
+        text: 'Please wait while we log you out.',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+        customClass: {
+          popup: 'swal2-info'
+        }
+      });
+      
+      // Redirect to logout page
+      setTimeout(() => {
+        window.location.href = 'logout.php';
+      }, 1000);
+    }
+  });
+}
+</script>
+
 <!-- Custom Styles -->
 <style>
   :root {
@@ -902,11 +1062,11 @@ if (!empty($_SESSION['cart'])) {
     right: -400px; /* Start off-screen */
     width: 400px;
     height: 100vh;
-    background: white; /* Changed to white for contrast */
+    background: var(--bg-card);
     z-index: 1050;
     transition: right 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     overflow-y: auto;
-    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
+    box-shadow: -5px 0 15px var(--shadow-dark);
     display: flex;
     flex-direction: column;
   }
@@ -917,13 +1077,13 @@ if (!empty($_SESSION['cart'])) {
 
   .cart-header {
     padding: 1.5rem;
-    border-bottom: 1px solid #e9ecef;
-    background: var(--bs-light); /* Using light color for header */
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-tertiary);
     flex-shrink: 0;
   }
 
   .cart-header h4 {
-      color: var(--bs-secondary); /* Secondary color for header title */
+      color: var(--brand-primary);
       font-weight: bold;
   }
 
@@ -938,27 +1098,28 @@ if (!empty($_SESSION['cart'])) {
     transform: scale(1.1);
   }
   .cart-close i {
-      color: var(--bs-secondary); /* Secondary color for close icon */
+      color: var(--text-primary);
   }
 
   .cart-body {
     padding: 1rem;
     flex: 1;
     overflow-y: auto;
+    background: var(--bg-card);
   }
 
   /* Cart Items */
   .empty-cart-state {
     text-align: center;
     padding: 3rem 1rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .empty-cart-state i {
     font-size: 3rem;
     margin-bottom: 1rem;
     opacity: 0.5;
-    color: var(--bs-secondary); /* Secondary color for icon */
+    color: var(--text-muted);
   }
 
   .cart-items {
@@ -969,7 +1130,7 @@ if (!empty($_SESSION['cart'])) {
     display: flex;
     align-items: center;
     padding: 1rem 0;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border-light);
     gap: 0.75rem;
     transition: background-color 0.2s ease;
   }
@@ -979,7 +1140,7 @@ if (!empty($_SESSION['cart'])) {
   }
 
   .cart-item:hover {
-      background-color: var(--bs-light); /* Light background on hover */
+      background-color: var(--bg-tertiary);
   }
 
   .item-selection {
@@ -987,7 +1148,7 @@ if (!empty($_SESSION['cart'])) {
   }
 
   .select-item {
-      accent-color: var(--bs-secondary); /* Secondary color for checkbox */
+      accent-color: var(--brand-primary);
       width: 18px;
       height: 18px;
       cursor: pointer;
@@ -998,7 +1159,7 @@ if (!empty($_SESSION['cart'])) {
     height: 50px;
     object-fit: cover;
     border-radius: 6px;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--border-light);
   }
 
   .item-details {
@@ -1011,12 +1172,12 @@ if (!empty($_SESSION['cart'])) {
     font-weight: 600;
     margin: 0 0 0.25rem 0;
     line-height: 1.3;
-    color: #333;
+    color: var(--text-primary);
   }
 
   .item-price {
     font-size: 0.8rem;
-    color: #666;
+    color: var(--text-secondary);
     font-weight: bold;
   }
 
@@ -1031,24 +1192,24 @@ if (!empty($_SESSION['cart'])) {
   .quantity-controls {
     display: flex;
     align-items: center;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
     border-radius: 4px;
     overflow: hidden;
   }
 
   .qty-btn {
-    background: #f8f9fa;
+    background: var(--bg-tertiary);
     border: none;
     padding: 0.25rem 0.75rem;
     cursor: pointer;
     font-size: 1rem;
     line-height: 1;
     transition: background-color 0.2s;
-    color: var(--bs-secondary); /* Secondary color for buttons */
+    color: var(--text-primary);
   }
 
   .qty-btn:hover {
-    background: #e9ecef;
+    background: var(--border-light);
   }
 
   .cart-item-quantity {
@@ -1057,8 +1218,8 @@ if (!empty($_SESSION['cart'])) {
     font-weight: 600;
     min-width: 30px;
     text-align: center;
-    background: white;
-    color: var(--bs-secondary); /* Secondary color for quantity */
+    background: var(--bg-card);
+    color: var(--text-primary);
   }
 
   .item-total-price {
@@ -1085,8 +1246,8 @@ if (!empty($_SESSION['cart'])) {
   .cart-footer {
     margin-top: auto; /* Push footer to the bottom */
     padding: 1.5rem;
-    border-top: 1px solid #e9ecef;
-    background: var(--bs-light); /* Using light color for footer */
+    border-top: 1px solid var(--border-light);
+    background: var(--bg-tertiary);
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -1094,20 +1255,20 @@ if (!empty($_SESSION['cart'])) {
   }
 
   .cart-footer .fw-bold {
-      color: var(--bs-dark); /* Dark color for total labels */
+      color: var(--text-primary);
   }
   .cart-footer .selected-total, .cart-footer .cart-total {
-      color: var(--bs-secondary); /* Secondary color for total values */
+      color: var(--brand-primary);
   }
 
   /* Buttons in footer */
   .cart-footer .btn-primary {
-      background-color: var(--bs-secondary);
-      border-color: var(--bs-secondary);
+      background-color: var(--brand-primary);
+      border-color: var(--brand-primary);
   }
   .cart-footer .btn-primary:hover {
-      background-color: #5a1022; /* Darker shade of secondary */
-      border-color: #5a1022;
+      background-color: var(--brand-secondary);
+      border-color: var(--brand-secondary);
   }
 
 
@@ -1180,18 +1341,18 @@ if (!empty($_SESSION['cart'])) {
     display: flex;
     align-items: flex-start;
     padding: 1rem;
-    border-bottom: 1px solid #e9ecef;
-    background: white;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-card);
     border-radius: 0.5rem;
     margin-bottom: 0.75rem;
     gap: 0.75rem;
     transition: all 0.3s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 4px var(--shadow-light);
   }
 
   .cart-item-sliding:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 12px var(--shadow-medium);
   }
 
   .cart-item-sliding:last-child {
@@ -1204,7 +1365,7 @@ if (!empty($_SESSION['cart'])) {
     height: 60px;
     object-fit: cover;
     border-radius: 0.5rem;
-    border: 2px solid #e9ecef;
+    border: 2px solid var(--border-light);
     flex-shrink: 0;
   }
 
@@ -1216,7 +1377,7 @@ if (!empty($_SESSION['cart'])) {
   .item-name {
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--bs-secondary);
+    color: var(--text-primary);
     margin-bottom: 0.25rem;
     line-height: 1.3;
     display: -webkit-box;
@@ -1228,14 +1389,14 @@ if (!empty($_SESSION['cart'])) {
 
   .item-price {
     font-size: 0.8rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-weight: 500;
     margin-bottom: 0.25rem;
   }
 
   .item-stock {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .item-controls {
@@ -1249,21 +1410,21 @@ if (!empty($_SESSION['cart'])) {
   .quantity-controls {
     display: flex;
     align-items: center;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-light);
     border-radius: 0.375rem;
     overflow: hidden;
-    background: white;
+    background: var(--bg-card);
   }
 
   .quantity-btn {
-    background: #f8f9fa;
+    background: var(--bg-tertiary);
     border: none;
     padding: 0.375rem 0.5rem;
     cursor: pointer;
     font-size: 0.8rem;
     line-height: 1;
     transition: all 0.2s ease;
-    color: var(--bs-secondary);
+    color: var(--text-primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1272,7 +1433,7 @@ if (!empty($_SESSION['cart'])) {
   }
 
   .quantity-btn:hover:not(:disabled) {
-    background: var(--bs-secondary);
+    background: var(--brand-primary);
     color: white;
   }
 
@@ -1287,10 +1448,10 @@ if (!empty($_SESSION['cart'])) {
     font-weight: 600;
     min-width: 40px;
     text-align: center;
-    background: white;
-    color: var(--bs-dark);
-    border-left: 1px solid #dee2e6;
-    border-right: 1px solid #dee2e6;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-left: 1px solid var(--border-light);
+    border-right: 1px solid var(--border-light);
     transition: all 0.2s ease;
   }
   
@@ -1299,22 +1460,22 @@ if (!empty($_SESSION['cart'])) {
     border: none;
     outline: none;
     box-shadow: none;
-    background: white;
+    background: var(--bg-card);
     width: 60px;
     padding: 0.375rem 0.5rem;
     text-align: center;
     font-weight: 600;
     font-size: 0.9rem;
-    color: var(--bs-dark);
-    border-left: 1px solid #dee2e6;
-    border-right: 1px solid #dee2e6;
+    color: var(--text-primary);
+    border-left: 1px solid var(--border-light);
+    border-right: 1px solid var(--border-light);
     transition: all 0.2s ease;
   }
   
   .quantity-display.quantity-input:focus {
-    background: #f8f9fa;
-    border-left-color: var(--bs-secondary);
-    border-right-color: var(--bs-secondary);
+    background: var(--bg-tertiary);
+    border-left-color: var(--brand-primary);
+    border-right-color: var(--brand-primary);
   }
   
   .quantity-display.quantity-input::-webkit-outer-spin-button,
@@ -1330,32 +1491,32 @@ if (!empty($_SESSION['cart'])) {
 
   /* Decimal input styling for sliding cart */
   .cart-item-sliding .quantity-controls { 
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-light);
     border-radius: 0.375rem;
     overflow: hidden;
-    background: white;
+    background: var(--bg-card);
   }
   
   .cart-item-sliding input.quantity-input {
     border: none;
     outline: none;
     box-shadow: none;
-    background: white;
+    background: var(--bg-card);
     width: 60px;
     padding: 0.375rem 0.5rem;
     text-align: center;
     font-weight: 600;
     font-size: 0.9rem;
-    color: var(--bs-dark);
-    border-left: 1px solid #dee2e6;
-    border-right: 1px solid #dee2e6;
+    color: var(--text-primary);
+    border-left: 1px solid var(--border-light);
+    border-right: 1px solid var(--border-light);
     transition: all 0.2s ease;
   }
   
   .cart-item-sliding input.quantity-input:focus {
-    background: #f8f9fa;
-    border-left-color: var(--bs-secondary);
-    border-right-color: var(--bs-secondary);
+    background: var(--bg-tertiary);
+    border-left-color: var(--brand-primary);
+    border-right-color: var(--brand-primary);
   }
   
   .cart-item-sliding input.quantity-input::-webkit-outer-spin-button,
@@ -1372,7 +1533,7 @@ if (!empty($_SESSION['cart'])) {
   .item-total {
     font-size: 0.9rem;
     font-weight: 700;
-    color: var(--bs-secondary);
+    color: var(--brand-primary);
     text-align: center;
   }
 
@@ -1393,8 +1554,8 @@ if (!empty($_SESSION['cart'])) {
   }
 
   .remove-cart-item:hover {
-    background: #f8d7da;
-    color: #721c24;
+    background: var(--bg-tertiary);
+    color: var(--bs-danger);
   }
 
   .cart-items-container {
@@ -1402,11 +1563,11 @@ if (!empty($_SESSION['cart'])) {
   }
 
   .cart-summary {
-    background: white;
+    background: var(--bg-card);
     border-radius: 0.5rem;
     padding: 1rem;
     margin-bottom: 1rem;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--border-light);
   }
 
   /* Animation for cart items */
@@ -1423,5 +1584,166 @@ if (!empty($_SESSION['cart'])) {
       opacity: 1;
       transform: translateX(0);
     }
+  }
+
+  /* Dropdown Styles */
+  .navbar .dropdown-menu {
+    background-color: var(--modal-bg);
+    border-color: var(--border-medium);
+    box-shadow: 0 4px 20px var(--shadow-dark);
+    z-index: 1050;
+    min-width: 180px;
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+  }
+
+  .dropdown-item {
+    color: var(--text-primary);
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 500;
+    border-left: 3px solid transparent;
+    border-radius: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .dropdown-item:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--brand-primary);
+    border-left-color: var(--brand-primary);
+    transform: translateX(2px);
+  }
+
+  .dropdown-item:focus {
+    background-color: var(--bg-tertiary);
+    color: var(--brand-primary);
+    outline: none;
+    border-left-color: var(--brand-primary);
+  }
+
+  .dropdown-item i {
+    width: 20px;
+    text-align: center;
+    font-size: 0.9rem;
+  }
+
+  /* Logout button special styling */
+  .dropdown-item.logout-item {
+    color: var(--bs-danger);
+  }
+
+  .dropdown-item.logout-item:hover {
+    background-color: var(--bs-danger);
+    color: var(--text-light);
+    border-left-color: var(--bs-danger);
+  }
+
+  .dropdown-divider {
+    border-color: var(--border-light);
+    margin: 0.5rem 0;
+  }
+
+  /* Ensure dropdown is visible */
+  .dropdown-menu.show {
+    display: block;
+  }
+
+  /* Dark mode toggle button styling */
+  .dark-mode-toggle {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    width: 100%;
+    text-align: left;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+
+  .dark-mode-toggle:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--brand-primary);
+  }
+
+  .dark-mode-toggle i {
+    margin-right: 0.5rem;
+    width: 16px;
+    text-align: center;
+  }
+
+  /* Profile Dropdown Button */
+  .profile-dropdown-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+
+  /* Hide Bootstrap dropdown arrow */
+  .profile-dropdown-btn::after {
+    display: none !important;
+  }
+
+  .profile-dropdown-btn:hover {
+    color: var(--text-primary) !important;
+  }
+
+  .profile-dropdown-btn:focus {
+    color: var(--text-primary) !important;
+    box-shadow: none;
+  }
+
+  .profile-dropdown-btn:active {
+    color: var(--text-primary) !important;
+  }
+
+  /* SweetAlert2 Custom Styles */
+  .swal2-popup {
+    border-radius: 1rem !important;
+    font-family: 'Inter', sans-serif !important;
+  }
+
+  .swal2-title {
+    font-weight: 600 !important;
+  }
+
+  .swal2-confirm {
+    background-color: var(--brand-primary) !important;
+    border-color: var(--brand-primary) !important;
+  }
+
+  .swal2-confirm:hover {
+    background-color: var(--brand-secondary) !important;
+    border-color: var(--brand-secondary) !important;
+  }
+
+  .swal2-cancel {
+    background-color: var(--text-secondary) !important;
+    border-color: var(--text-secondary) !important;
+  }
+
+  .swal2-cancel:hover {
+    background-color: var(--text-primary) !important;
+    border-color: var(--text-primary) !important;
+  }
+
+  [data-theme="dark"] .swal2-popup {
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+  }
+
+  [data-theme="dark"] .swal2-title {
+    color: var(--text-primary) !important;
+  }
+
+  [data-theme="dark"] .swal2-content {
+    color: var(--text-secondary) !important;
   }
 </style>

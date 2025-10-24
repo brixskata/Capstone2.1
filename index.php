@@ -221,8 +221,8 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
-            color: var(--bs-dark);
-            background-color: #ffffff;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
@@ -252,32 +252,32 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         
         /* Navigation */
         .navbar {
-            background: rgba(255,255,255,0.95) !important;
+            background: var(--bg-card) !important;
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid var(--border-light);
             padding: 1rem 0;
         }
 
         .navbar-brand {
             font-weight: 800;
             font-size: 1.8rem;
-            color: var(--bs-secondary) !important;
+            color: var(--brand-primary) !important;
         }
 
         .navbar-nav .nav-link {
             font-weight: 500;
-            color: var(--bs-dark) !important;
+            color: var(--text-primary) !important;
             transition: all 0.3s ease;
             margin: 0 0.5rem;
         }
 
         .navbar-nav .nav-link:hover {
-            color: var(--bs-secondary) !important;
+            color: var(--brand-primary) !important;
         }
 
         /* Hero Section - FreshCart Style */
         .hero-section {
-            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             padding: 5rem 0;
             position: relative;
             overflow: hidden;
@@ -319,17 +319,17 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             font-weight: 800;
             line-height: 1.1;
             margin-bottom: 1.5rem;
-            color: var(--bs-dark);
+            color: var(--text-primary);
         }
 
         .hero-title .text-highlight {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
         }
 
         /* Typewriter Animation Styles */
         .cursor {
             animation: blink 1s infinite;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-weight: 300;
         }
 
@@ -361,7 +361,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         .hero-subtitle {
             font-size: 1.2rem;
-            color: #6c757d;
+            color: var(--text-secondary);
             margin-bottom: 2rem;
             line-height: 1.6;
         }
@@ -431,11 +431,11 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             align-items: center;
             gap: 0.5rem;
             font-weight: 500;
-            color: var(--bs-dark);
+            color: var(--text-primary);
         }
 
         .hero-feature i {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-size: 1.1rem;
         }
 
@@ -453,12 +453,12 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         }
 
         .btn-hero-primary {
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
         }
 
         .btn-hero-primary:hover {
-            background: #6b1429;
+            background: var(--brand-secondary);
             color: white;
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(127,23,52,0.3);
@@ -466,12 +466,12 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         .btn-hero-outline {
             background: transparent;
-            color: var(--bs-secondary);
-            border: 2px solid var(--bs-secondary);
+            color: var(--brand-primary);
+            border: 2px solid var(--brand-primary);
         }
 
         .btn-hero-outline:hover {
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
         }
 
@@ -490,10 +490,10 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         /* Floating Elements - Simplified */
         .floating-card {
             position: absolute;
-            background: white;
+            background: var(--bg-card);
             padding: 1rem;
             border-radius: 0.75rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 30px var(--shadow-medium);
             width: 180px;
             animation: float 6s ease-in-out infinite;
             z-index: 1;
@@ -529,11 +529,11 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             font-size: 0.9rem;
             font-weight: 600;
             margin-bottom: 0.25rem;
-            color: var(--bs-dark);
+            color: var(--text-primary);
         }
 
         .floating-card .price {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-weight: 700;
             font-size: 0.9rem;
         }
@@ -602,7 +602,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         /* Categories Section */
         .categories-section {
             padding: 6rem 0;
-            background: #f8f9fa;
+            background: var(--bg-secondary);
             width: 100vw;
             position: relative;
             left: 50%;
@@ -620,7 +620,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .section-title {
             font-size: 3rem;
             font-weight: 700;
-            color: var(--bs-dark);
+            color: var(--text-primary);
             margin-bottom: 1rem;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -629,7 +629,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .title-divider {
             width: 60px;
             height: 3px;
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             margin: 0 auto;
         }
 
@@ -638,16 +638,16 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         }
 
         .category-card {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1.5rem;
             overflow: hidden;
             transition: all 0.3s ease;
-            border: 1px solid #e9ecef;
+            border: 1px solid var(--border-light);
             height: 350px;
             position: relative;
             display: flex;
             align-items: end;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            box-shadow: 0 8px 25px var(--shadow-medium);
             cursor: pointer;
             text-decoration: none;
             color: inherit;
@@ -655,7 +655,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         .category-card:hover {
             transform: translateY(-8px);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            box-shadow: 0 20px 40px var(--shadow-dark);
             text-decoration: none;
             color: inherit;
         }
@@ -737,7 +737,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             width: 50px;
             height: 50px;
             border-radius: 50%;
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
             border: none;
             display: flex;
@@ -746,13 +746,13 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             font-size: 1.2rem;
             transition: all 0.3s ease;
             cursor: pointer;
-            box-shadow: 0 2px 10px rgba(127, 23, 52, 0.2);
+            box-shadow: 0 2px 10px var(--shadow-medium);
         }
 
         .btn-arrow:hover:not(:disabled) {
-            background: #6b1429;
+            background: var(--brand-secondary);
             transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(127, 23, 52, 0.3);
+            box-shadow: 0 4px 15px var(--shadow-medium);
         }
 
         .btn-arrow:disabled {
@@ -766,8 +766,8 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             display: inline-block;
             width: 20px;
             height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid var(--bs-secondary);
+            border: 3px solid var(--bg-tertiary);
+            border-top: 3px solid var(--brand-primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -947,14 +947,14 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         /* Featured Products Section */
         .featured-section {
             padding: 5rem 0;
-            background: var(--bs-light);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
         }
 
         .product-card {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
             padding: 1.5rem;
-            border: 1px solid #e9ecef;
+            border: 1px solid var(--border-light);
             transition: all 0.3s ease;
             height: 100%;
             position: relative;
@@ -971,7 +971,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         .product-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            box-shadow: 0 15px 35px var(--shadow-medium);
             text-decoration: none;
             color: inherit;
         }
@@ -985,7 +985,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             position: absolute;
             top: 1rem;
             left: 1rem;
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
             padding: 0.25rem 0.75rem;
             border-radius: 50px;
@@ -1000,7 +1000,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             object-fit: cover;
             border-radius: 0.75rem;
             margin-bottom: 1rem;
-            background-color: #f8f9fa;
+            background-color: var(--bg-secondary);
             flex-shrink: 0;
         }
 
@@ -1008,7 +1008,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             font-size: 1.1rem;
             font-weight: 600;
             margin-bottom: 0.5rem;
-            color: var(--bs-dark);
+            color: var(--text-primary);
             line-height: 1.4;
             word-wrap: break-word;
             overflow-wrap: break-word;
@@ -1020,21 +1020,21 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         .product-desc {
             font-size: 0.9rem;
-            color: #6c757d;
+            color: var(--text-secondary);
             margin-bottom: 1rem;
         }
 
         .product-price {
             font-size: 1.2rem;
             font-weight: 700;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             margin-bottom: 1rem;
         }
 
         .product-meta {
             margin-bottom: 1rem;
             font-size: 0.8rem;
-            color: #6c757d;
+            color: var(--text-secondary);
         }
 
         .product-stock {
@@ -1051,7 +1051,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         .product-stock i,
         .product-sold i {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-size: 0.75rem;
         }
 
@@ -1064,7 +1064,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         }
 
         .product-rating .text-muted {
-            color: #6c757d !important;
+            color: var(--text-secondary) !important;
         }
 
         .product-rating small {
@@ -1118,7 +1118,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         .btn-add-cart {
             width: 100%;
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             color: white;
             border: none;
             padding: 0.75rem;
@@ -1129,7 +1129,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         }
 
         .btn-add-cart:hover {
-            background: #6b1429;
+            background: var(--brand-secondary);
             color: white;
             transform: translateY(-2px);
         }
@@ -1139,17 +1139,17 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         }
 
         .quantity-input {
-            border: 2px solid #e9ecef;
+            border: 2px solid var(--border-light);
             border-radius: 0.5rem;
             padding: 0.5rem;
             font-weight: 500;
             transition: all 0.3s ease;
-            background: white;
+            background: var(--input-bg);
             width: 80px;
         }
 
         .quantity-input:focus {
-            border-color: var(--bs-secondary);
+            border-color: var(--brand-primary);
             box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
             outline: none;
         }
@@ -1171,7 +1171,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         /* About Us Section */
         .about-section {
             padding: 5rem 0;
-            background: #f8f9fa;
+            background: var(--bg-secondary);
         }
 
         .about-content {
@@ -1185,12 +1185,12 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .about-text {
             font-size: 1rem;
             line-height: 1.7;
-            color: #6c757d;
+            color: var(--text-secondary);
             margin-bottom: 1.5rem;
         }
 
         .about-text strong {
-            color: var(--bs-dark);
+            color: var(--text-primary);
             font-weight: 600;
         }
 
@@ -1204,27 +1204,27 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .stat-item {
             text-align: center;
             padding: 1.5rem;
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 10px var(--shadow-light);
             transition: all 0.3s ease;
         }
 
         .stat-item:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 25px var(--shadow-medium);
         }
 
         .stat-number {
             font-size: 2rem;
             font-weight: 700;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             margin-bottom: 0.5rem;
         }
 
         .stat-label {
             font-size: 0.9rem;
-            color: #6c757d;
+            color: var(--text-secondary);
             font-weight: 500;
         }
 
@@ -1243,24 +1243,24 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         }
 
         .about-actions .btn-primary {
-            background: var(--bs-secondary);
-            border-color: var(--bs-secondary);
+            background: var(--brand-primary);
+            border-color: var(--brand-primary);
         }
 
         .about-actions .btn-primary:hover {
-            background: #6b1429;
-            border-color: #6b1429;
+            background: var(--brand-secondary);
+            border-color: var(--brand-secondary);
             transform: translateY(-2px);
         }
 
         .about-actions .btn-outline-primary {
-            color: var(--bs-secondary);
-            border-color: var(--bs-secondary);
+            color: var(--brand-primary);
+            border-color: var(--brand-primary);
         }
 
         .about-actions .btn-outline-primary:hover {
-            background: var(--bs-secondary);
-            border-color: var(--bs-secondary);
+            background: var(--brand-primary);
+            border-color: var(--brand-primary);
             color: white;
         }
 
@@ -1278,9 +1278,9 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .map-info {
             margin-top: 1rem;
             padding: 1.5rem;
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 10px var(--shadow-light);
         }
 
         .map-address {
@@ -1299,7 +1299,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         }
 
         .map-address strong {
-            color: var(--bs-dark);
+            color: var(--text-primary);
             font-weight: 600;
         }
 
@@ -1346,20 +1346,9 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         /* Customer Ratings Section */
         .customer-ratings-section {
             padding: 5rem 0;
-            background: #ffffff;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             position: relative;
             overflow: hidden;
-        }
-
-        .customer-ratings-section::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(127,23,52,0.02) 0%, rgba(255,255,255,0.8) 100%);
-            z-index: 1;
         }
 
         .customer-ratings-section .container {
@@ -1447,7 +1436,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .section-header.text-start .section-title {
             font-size: 2.5rem;
             font-weight: 700;
-            color: var(--bs-dark);
+            color: var(--text-primary);
             margin-bottom: 0.5rem;
             line-height: 1.2;
         }
@@ -1455,7 +1444,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .title-underline {
             width: 60px;
             height: 4px;
-            background: linear-gradient(90deg, var(--bs-secondary), var(--bs-warning));
+            background: linear-gradient(90deg, var(--brand-primary), var(--bs-warning));
             border-radius: 2px;
             margin-bottom: 2rem;
         }
@@ -1500,7 +1489,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .testimonial-text {
             font-size: 1.1rem;
             line-height: 1.7;
-            color: #6c757d;
+            color: var(--text-secondary);
             margin-bottom: 1.5rem;
             font-style: italic;
             max-width: 500px;
@@ -1558,13 +1547,13 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .author-info h4 {
             font-size: 1.1rem;
             font-weight: 600;
-            color: var(--bs-dark);
+            color: var(--text-primary);
             margin-bottom: 0.25rem;
         }
 
         .author-info p {
             font-size: 0.9rem;
-            color: #6c757d;
+            color: var(--text-secondary);
             margin: 0;
         }
 
@@ -1637,25 +1626,25 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         /* Footer */
         .footer {
-            background: var(--bs-dark);
-            color: white;
+            background: var(--bg-dark);
+            color: var(--text-light);
             padding: 3rem 0 1rem;
         }
 
         .footer-title {
-            color: white;
+            color: var(--text-light);
             font-weight: 600;
             margin-bottom: 1rem;
         }
 
         .footer-link {
-            color: #adb5bd;
+            color: var(--text-secondary);
             text-decoration: none;
             transition: all 0.3s ease;
         }
 
         .footer-link:hover {
-            color: white;
+            color: var(--text-light);
         }
 
         /* Responsive Design */
@@ -1713,10 +1702,17 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .swal2-popup {
             border-radius: 1rem !important;
             font-family: 'Inter', sans-serif !important;
+            background: var(--bg-card) !important;
+            color: var(--text-primary) !important;
         }
 
         .swal2-title {
             font-weight: 600 !important;
+            color: var(--text-primary) !important;
+        }
+
+        .swal2-content {
+            color: var(--text-secondary) !important;
         }
 
         .swal2-confirm {
@@ -1734,24 +1730,24 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         }
 
         .swal2-success .swal2-confirm {
-            background: #198754 !important; /* Green for success */
+            background: var(--bs-success) !important; /* Green for success */
         }
 
         .swal2-warning .swal2-confirm {
-            background: #ffc107 !important; /* Yellow for warnings */
-            color: #212529 !important;
+            background: var(--bs-warning) !important; /* Yellow for warnings */
+            color: var(--text-primary) !important;
         }
 
         .swal2-danger .swal2-confirm {
-            background: #dc3545 !important; /* Red for delete/danger */
+            background: var(--bs-danger) !important; /* Red for delete/danger */
         }
 
         .swal2-info .swal2-confirm {
-            background: #0dcaf0 !important; /* Blue for info */
+            background: var(--bs-info) !important; /* Blue for info */
         }
 
         .swal2-cancel {
-            background: #6c757d !important; /* Gray for cancel */
+            background: var(--text-secondary) !important; /* Gray for cancel */
         }
 
         .swal2-actions {

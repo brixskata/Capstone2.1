@@ -210,12 +210,12 @@ $_SESSION['cart_total'] = $cart_total;
     align-items: center;
     gap: 0.75rem;
     padding: 1rem;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--border-light);
     transition: background-color 0.2s ease;
 }
 
 .cart-item-sliding:hover {
-    background-color: #f8f9fa;
+    background-color: var(--bg-tertiary);
 }
 
 .cart-selection-controls {
@@ -223,8 +223,8 @@ $_SESSION['cart_total'] = $cart_total;
     justify-content: space-between;
     align-items: center;
     padding: 1rem;
-    background: #f8f9fa;
-    border-top: 1px solid #e9ecef;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-light);
     font-size: 0.9rem;
 }
 
@@ -241,12 +241,12 @@ $_SESSION['cart_total'] = $cart_total;
 }
 
 .selected-count {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-weight: 500;
 }
 
 #selected-count {
-    color: #7F1734;
+    color: var(--brand-primary);
     font-weight: 700;
 }
 </style>
@@ -296,7 +296,7 @@ $_SESSION['cart_total'] = $cart_total;
                         </div>
                     <?php endif; ?>
                     <div class="item-price">₱<?= number_format($item['product']['price'], 2) ?> each</div>
-                    <div class="item-stock text-muted small">
+                    <div class="item-stock small" style="color: var(--text-secondary);">
                         <i class="fas fa-box me-1"></i>
                         <?= (float)$item['product']['stock'] > 0 ? number_format((float)$item['product']['stock'], 1) . ' in stock' : 'Out of stock' ?>
                     </div>

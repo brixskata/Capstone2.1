@@ -29,3 +29,14 @@ $page_keywords = $page_keywords ?? 'frozen products, frozen meat, frozen seafood
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <!-- Google Fonts -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<!-- Dark Mode CSS -->
+<link rel="stylesheet" href="assets/css/dark-mode.css">
+
+<!-- Inline Theme Loader (prevents flash of unstyled content) -->
+<script>
+(function() {
+    const savedTheme = localStorage.getItem('theme-preference') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+})();
+</script>
