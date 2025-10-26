@@ -252,11 +252,11 @@ $_SESSION['cart_total'] = $cart_total;
 </style>
 
 <?php if (empty($cart_items)): ?>
-    <div class="empty-cart text-center py-5">
-        <i class="fas fa-shopping-cart text-muted" style="font-size: 3rem; margin-bottom: 1rem;"></i>
-        <h5 class="text-muted">Your cart is empty</h5>
-        <p class="text-muted small">Add some products to get started!</p>
-        <button class="btn btn-outline-secondary btn-sm" onclick="closeCart(); window.location.href='product.php'">
+    <div class="empty-cart-state">
+        <i class="fas fa-shopping-cart"></i>
+        <h6>Cart is empty</h6>
+        <p>Add products to get started</p>
+        <button class="btn" onclick="closeCart(); window.location.href='product.php'">
             <i class="fas fa-shopping-bag me-1"></i>Browse Products
         </button>
     </div>

@@ -3,6 +3,33 @@
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
+
+// Always prevent caching for this page
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+
+// Check if user is already logged in, redirect to appropriate admin page
+if (isset($_SESSION['user_id']) && isset($_SESSION['role']) && in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+    // Redirect based on permissions
+    include '../includes/db.php';
+    include '../includes/permissions.php';
+    
+    if (isSuperAdmin($pdo)) {
+        header("Location: admin_dashboard2.php");
+    } elseif (hasPermission($pdo, 'order_view')) {
+        header("Location: transaction_logs.php");
+    } elseif (hasPermission($pdo, 'product_view')) {
+        header("Location: products.php");
+    } elseif (hasPermission($pdo, 'user_view')) {
+        header("Location: manage_users.php");
+    } elseif (hasPermission($pdo, 'report_view')) {
+        header("Location: reports.php");
+    } else {
+        header("Location: basic_dashboard.php");
+    }
+    exit;
+}
 ?>
 <?php
 $page_title = 'Admin Login - MikeMadz';

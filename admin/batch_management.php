@@ -26,17 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['action'])) {
         try {
             switch ($_POST['action']) {
-                case 'deactivate_batch':
-                    $batch_id = (int)$_POST['batch_id'];
-                    $batchManager->updateBatch($batch_id, ['is_active' => 0]);
-                    $_SESSION['success'] = "Batch deactivated successfully!";
-                    break;
-                    
-                case 'activate_batch':
-                    $batch_id = (int)$_POST['batch_id'];
-                    $batchManager->updateBatch($batch_id, ['is_active' => 1]);
-                    $_SESSION['success'] = "Batch activated successfully!";
-                    break;
+                // Batch action cases removed - deactivate/activate functionality removed
             }
         } catch (Exception $e) {
             $_SESSION['error'] = "Error: " . $e->getMessage();
@@ -48,7 +38,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 // Get filter parameters
 $product_filter = $_GET['product_id'] ?? '';
-$status_filter = $_GET['status'] ?? 'all';
 $expiry_filter = $_GET['expiry'] ?? 'all';
 
 // Build query for batches
@@ -58,12 +47,6 @@ $params = [];
 if ($product_filter) {
     $where_conditions[] = "pb.product_id = ?";
     $params[] = $product_filter;
-}
-
-if ($status_filter === 'active') {
-    $where_conditions[] = "pb.is_active = 1";
-} elseif ($status_filter === 'inactive') {
-    $where_conditions[] = "pb.is_active = 0";
 }
 
 if ($expiry_filter === 'expiring') {
@@ -318,14 +301,6 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                         </h2>
                         <p class="mb-0 opacity-75">Track product batches with FIFO inventory management</p>
                     </div>
-                    <div class="d-flex gap-2">
-                        <?php if ($expiring_count > 0): ?>
-                            <span class="badge" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);"><?= $expiring_count ?> Expiring Soon</span>
-                        <?php endif; ?>
-                        <?php if ($expired_count > 0): ?>
-                            <span class="badge" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);"><?= $expired_count ?> Expired</span>
-                        <?php endif; ?>
-                    </div>
                 </div>
             </div>
 
@@ -346,15 +321,7 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">Status</label>
-                    <select name="status" class="form-select">
-                        <option value="all" <?= $status_filter === 'all' ? 'selected' : '' ?>>All</option>
-                        <option value="active" <?= $status_filter === 'active' ? 'selected' : '' ?>>Active</option>
-                        <option value="inactive" <?= $status_filter === 'inactive' ? 'selected' : '' ?>>Inactive</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="form-label fw-semibold">Expiration</label>
                     <select name="expiry" class="form-select">
                         <option value="all" <?= $expiry_filter === 'all' ? 'selected' : '' ?>>All</option>
@@ -362,7 +329,7 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                         <option value="expired" <?= $expiry_filter === 'expired' ? 'selected' : '' ?>>Expired</option>
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-4">
                     <label class="form-label">&nbsp;</label>
                     <button type="submit" class="btn d-block w-100" style="background: #7F1734; color: white; border-radius: 8px;">
                         <i class="fa fa-filter me-1"></i>Filter
@@ -387,13 +354,6 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                         <div class="batch-card">
                             <div class="batch-header">
                                 <div class="batch-number"><?= htmlspecialchars($batch['batch_number']) ?></div>
-                                <div>
-                                    <?php if ($batch['is_active']): ?>
-                                        <span class="badge" style="background: #d4edda; color: #155724; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Active</span>
-                                    <?php else: ?>
-                                        <span class="badge" style="background: #e2e3e5; color: #383d41; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">Inactive</span>
-                                    <?php endif; ?>
-                                </div>
                             </div>
                             
                             <div class="mb-3">
@@ -451,24 +411,6 @@ $expired_count = count($batchManager->getExpiringBatches(-1));
                                     <button class="btn btn-sm" style="background: #f8d7da; color: #721c24; border-radius: 8px;" onclick="pullOutBatch(<?= $batch['batch_id'] ?>, '<?= htmlspecialchars($batch['batch_number']) ?>', <?= $batch['quantity_remaining'] ?>)">
                                         <i class="fa fa-box-open me-1"></i>Pull Out
                                     </button>
-                                <?php endif; ?>
-                                
-                                <?php if ($batch['is_active']): ?>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="action" value="deactivate_batch">
-                                        <input type="hidden" name="batch_id" value="<?= $batch['batch_id'] ?>">
-                                        <button type="submit" class="btn btn-sm" style="background: #fff3cd; color: #856404; border-radius: 8px;" onclick="return confirm('Deactivate this batch?')">
-                                            <i class="fa fa-pause me-1"></i>Deactivate
-                                        </button>
-                                    </form>
-                                <?php else: ?>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="action" value="activate_batch">
-                                        <input type="hidden" name="batch_id" value="<?= $batch['batch_id'] ?>">
-                                        <button type="submit" class="btn btn-sm" style="background: #d4edda; color: #155724; border-radius: 8px;">
-                                            <i class="fa fa-play me-1"></i>Activate
-                                        </button>
-                                    </form>
                                 <?php endif; ?>
                             </div>
                         </div>

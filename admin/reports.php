@@ -317,15 +317,6 @@ if ($reportType === 'sales') {
       overflow: hidden;
     }
 
-    .analytics-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: var(--bs-primary);
-    }
 
     .analytics-card:hover {
       transform: translateY(-2px);
@@ -498,56 +489,6 @@ if ($reportType === 'sales') {
       </div>
     </div>
 
-      <!-- Analytics Cards -->
-      <div class="row g-4 mb-4">
-        <div class="col-lg-3 col-md-6">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fa fa-chart-line"></i>
-            </div>
-            <div class="card-content">
-              <h3 class="card-number">₱<?php echo number_format($totalSales, 2); ?></h3>
-              <p class="card-label"><?= $isCustomRange ? 'Sales (Custom Range)' : 'Sales (' . ucfirst($period) . ')' ?></p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="col-lg-3 col-md-6">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fa fa-shopping-cart"></i>
-            </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo $totalOrders; ?></h3>
-              <p class="card-label"><?= $isCustomRange ? 'Orders (Custom Range)' : 'Orders (' . ucfirst($period) . ')' ?></p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="col-lg-3 col-md-6">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fa fa-clock"></i>
-            </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo $pendingOrders; ?></h3>
-              <p class="card-label"><?= $isCustomRange ? 'Pending (Custom Range)' : 'Pending (' . ucfirst($period) . ')' ?></p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="col-lg-3 col-md-6">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fa fa-check-circle"></i>
-            </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo $completedOrders; ?></h3>
-              <p class="card-label"><?= $isCustomRange ? 'Completed (Custom Range)' : 'Completed (' . ucfirst($period) . ')' ?></p>
-            </div>
-          </div>
-        </div>
-      </div>
 
 
       <!-- Report Navigation -->
@@ -683,7 +624,7 @@ if ($reportType === 'sales') {
                 <i class="fa fa-chart-line me-2"></i>
                 Sales Report (<?= $isCustomRange ? 'Custom Range: ' . $customFrom . ' to ' . $customTo : ucfirst($period) ?>)
               </h5>
-              <a href="generate_report_pdf.php?type=sales&period=<?= $period ?><?= $isCustomRange ? '&custom_from=' . $customFrom . '&custom_to=' . $customTo : '' ?>" class="btn btn-danger">
+              <a href="#" id="generatePdfBtn" class="btn btn-danger" onclick="generateFilteredPdf()">
                 <i class="fa fa-file-pdf me-1"></i>Generate PDF
               </a>
             </div>
@@ -770,7 +711,7 @@ if ($reportType === 'sales') {
                 <i class="fa fa-box-open me-2"></i>
                 Pull Out Report (<?= $isCustomRange ? 'Custom Range: ' . $customFrom . ' to ' . $customTo : ucfirst($period) ?>)
               </h5>
-              <a href="generate_report_pdf.php?type=pullout&period=<?= $period ?><?= $isCustomRange ? '&custom_from=' . $customFrom . '&custom_to=' . $customTo : '' ?>" class="btn btn-danger">
+              <a href="#" class="btn btn-danger" onclick="generateFilteredPdf()">
                 <i class="fa fa-file-pdf me-1"></i>Generate PDF
               </a>
             </div>
@@ -878,7 +819,7 @@ if ($reportType === 'sales') {
                 <i class="fa fa-undo me-2"></i>
                 Supplier Returns Report (<?= $isCustomRange ? 'Custom Range: ' . $customFrom . ' to ' . $customTo : ucfirst($period) ?>)
               </h5>
-              <a href="generate_report_pdf.php?type=supplier_returns&period=<?= $period ?><?= $isCustomRange ? '&custom_from=' . $customFrom . '&custom_to=' . $customTo : '' ?>" class="btn btn-danger">
+              <a href="#" class="btn btn-danger" onclick="generateFilteredPdf()">
                 <i class="fa fa-file-pdf me-1"></i>Generate PDF
               </a>
             </div>
@@ -969,7 +910,7 @@ if ($reportType === 'sales') {
                 <i class="fa fa-boxes me-2"></i>
                 Inventory Report
               </h5>
-              <a href="generate_report_pdf.php?type=inventory" class="btn btn-danger">
+              <a href="#" class="btn btn-danger" onclick="generateFilteredPdf()">
                 <i class="fa fa-file-pdf me-1"></i>Generate PDF
               </a>
             </div>
@@ -1048,7 +989,7 @@ if ($reportType === 'sales') {
                 <i class="fa fa-undo me-2"></i>
                 Return Reports
               </h5>
-              <a href="generate_report_pdf.php?type=returns" class="btn btn-danger">
+              <a href="#" class="btn btn-danger" onclick="generateFilteredPdf()">
                 <i class="fa fa-file-pdf me-1"></i>Generate PDF
               </a>
             </div>
@@ -1106,7 +1047,49 @@ if ($reportType === 'sales') {
   <?php include 'includes/admin_scripts.php'; ?>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
+      // Function to generate PDF with current search filters
+      function generateFilteredPdf() {
+        const searchInput = document.getElementById('searchFilter');
+        const dateFromInput = document.getElementById('dateFrom');
+        const dateToInput = document.getElementById('dateTo');
+        
+        const searchTerm = searchInput ? searchInput.value : '';
+        const dateFrom = dateFromInput ? dateFromInput.value : '';
+        const dateTo = dateToInput ? dateToInput.value : '';
+        
+        // Get the current period from the URL or hidden input
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentPeriod = urlParams.get('period') || 'daily';
+        
+        console.log('Current period from URL:', currentPeriod);
+        console.log('PHP period:', '<?= $period ?>');
+        
+        // Build PDF URL with search parameters
+        let pdfUrl = 'generate_report_pdf.php?type=<?= $reportType ?>&period=' + currentPeriod;
+        
+        <?php if ($isCustomRange): ?>
+        pdfUrl += '&custom_from=<?= $customFrom ?>&custom_to=<?= $customTo ?>';
+        <?php endif; ?>
+        
+        // Add search parameters
+        if (searchTerm) {
+          pdfUrl += '&search=' + encodeURIComponent(searchTerm);
+        }
+        if (dateFrom && currentPeriod !== 'weekly') {
+          pdfUrl += '&date_from=' + encodeURIComponent(dateFrom);
+        }
+        if (dateTo && currentPeriod !== 'weekly') {
+          pdfUrl += '&date_to=' + encodeURIComponent(dateTo);
+        }
+        
+        // Debug
+        console.log('PDF URL: ' + pdfUrl);
+        
+        // Open PDF in new window
+        window.open(pdfUrl, '_blank');
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
       const sortSelect = document.getElementById('sortBy');
       const searchInput = document.getElementById('searchFilter');
       const dateFromInput = document.getElementById('dateFrom');
@@ -1334,6 +1317,9 @@ if ($reportType === 'sales') {
         if (tbody) {
           rows.forEach(row => tbody.appendChild(row));
         }
+        
+        // Update totals after sorting
+        updateTotals();
       }
       
       // Filter function
@@ -1382,6 +1368,108 @@ if ($reportType === 'sales') {
           
           row.style.display = shouldShow ? '' : 'none';
         });
+        
+        // Update totals after filtering
+        updateTotals();
+      }
+      
+      // Function to update totals based on visible rows
+      function updateTotals() {
+        const visibleRows = getTableRows().filter(row => row.style.display !== 'none');
+        
+        if (reportType === 'sales') {
+          let totalAmount = 0;
+          let totalQuantity = 0;
+          
+          visibleRows.forEach(row => {
+            if (row.cells.length >= 4) {
+              const amount = parseFloat(row.cells[3].textContent.replace(/[₱,]/g, '')) || 0;
+              const quantity = parseFloat(row.cells[2].textContent.replace(/,/g, '')) || 0;
+              
+              totalAmount += amount;
+              totalQuantity += quantity;
+            }
+          });
+          
+          // Update summary cards
+          const summaryCards = document.querySelectorAll('.stat-card .display-6');
+          if (summaryCards.length >= 3) {
+            summaryCards[0].textContent = visibleRows.length; // Products Sold
+            summaryCards[1].textContent = '₱' + totalAmount.toLocaleString('en-US', {minimumFractionDigits: 2}); // Total Revenue
+            summaryCards[2].textContent = totalQuantity.toLocaleString(); // Total Quantity
+          }
+          
+          // Update footer totals - Enhanced debugging
+          console.log('Updating footer totals:', totalQuantity, totalAmount);
+          
+          // Try multiple selectors to find the footer
+          let footerRow = document.querySelector('.table-card table tfoot tr');
+          if (!footerRow) {
+            footerRow = document.querySelector('table tfoot tr');
+          }
+          if (!footerRow) {
+            footerRow = document.querySelector('tfoot tr');
+          }
+          
+          console.log('Footer row found:', footerRow);
+          
+          if (footerRow && footerRow.cells.length >= 3) {
+            console.log('Updating footer cells:', footerRow.cells[1], footerRow.cells[2]);
+            footerRow.cells[1].textContent = totalQuantity.toLocaleString('en-US', {minimumFractionDigits: 1});
+            footerRow.cells[2].textContent = '₱' + totalAmount.toLocaleString('en-US', {minimumFractionDigits: 2});
+            console.log('Footer updated successfully');
+          } else {
+            console.log('Footer row not found or insufficient cells');
+          }
+        } else if (reportType === 'pullout') {
+          let totalQuantity = 0;
+          
+          visibleRows.forEach(row => {
+            if (row.cells.length >= 4) {
+              const quantity = parseInt(row.cells[3].textContent) || 0;
+              totalQuantity += quantity;
+            }
+          });
+          
+          // Update summary cards
+          const summaryCards = document.querySelectorAll('.stat-card .display-6');
+          if (summaryCards.length >= 2) {
+            summaryCards[0].textContent = visibleRows.length; // Total Pull Outs
+            summaryCards[1].textContent = totalQuantity; // Total Quantity
+          }
+        } else if (reportType === 'supplier_returns') {
+          let totalQuantity = 0;
+          
+          visibleRows.forEach(row => {
+            if (row.cells.length >= 4) {
+              const quantity = parseInt(row.cells[3].textContent) || 0;
+              totalQuantity += quantity;
+            }
+          });
+          
+          // Update summary cards
+          const summaryCards = document.querySelectorAll('.stat-card .display-6');
+          if (summaryCards.length >= 2) {
+            summaryCards[0].textContent = visibleRows.length; // Total Returns
+            summaryCards[1].textContent = totalQuantity; // Total Quantity
+          }
+        } else if (reportType === 'inventory') {
+          let totalValue = 0;
+          
+          visibleRows.forEach(row => {
+            if (row.cells.length >= 5) {
+              const value = parseFloat(row.cells[4].textContent.replace(/[₱,]/g, '')) || 0;
+              totalValue += value;
+            }
+          });
+          
+          // Update summary cards
+          const summaryCards = document.querySelectorAll('.stat-card .display-6');
+          if (summaryCards.length >= 2) {
+            summaryCards[0].textContent = visibleRows.length; // Active Products
+            summaryCards[1].textContent = '₱' + totalValue.toLocaleString('en-US', {minimumFractionDigits: 2}); // Total Inventory Value
+          }
+        }
       }
       
       // Helper function to check if value is in array (JavaScript equivalent of PHP in_array)

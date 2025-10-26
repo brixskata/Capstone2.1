@@ -93,6 +93,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['archive_question'])) 
     }
 }
 
+// Handle restoring/unarchiving questions
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_question'])) {
+    $faq_id = (int)$_POST['faq_id'];
+    
+    try {
+        // Check if the question was previously answered
+        $stmt = $pdo->prepare("SELECT answer FROM faq_questions WHERE faq_id = ?");
+        $stmt->execute([$faq_id]);
+        $question = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Restore to appropriate status based on whether it has an answer
+        $new_status = !empty($question['answer']) ? 'answered' : 'pending';
+        
+        $stmt = $pdo->prepare("UPDATE faq_questions SET status = ? WHERE faq_id = ?");
+        $stmt->execute([$new_status, $faq_id]);
+        $message = 'Question restored successfully!';
+    } catch (Exception $e) {
+        $error = 'Failed to restore question. Please try again.';
+    }
+}
+
 // Fetch FAQ questions
 $status_filter = $_GET['status'] ?? 'all';
 $where_clause = '';
@@ -154,6 +175,7 @@ try {
     <link rel="icon" type="image/png" href="../favicon.png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <?php include 'includes/admin_styles.php'; ?>
     <style>
         :root {
@@ -347,6 +369,54 @@ try {
                 font-size: 1.5rem;
             }
         }
+        
+        /* SweetAlert2 Custom Styles */
+        .swal2-popup-custom {
+            border-radius: 20px !important;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+            border: 1px solid #e9ecef !important;
+        }
+        
+        .swal2-title-custom {
+            color: var(--bs-primary) !important;
+            font-weight: 700 !important;
+            font-size: 1.5rem !important;
+        }
+        
+        .swal2-content-custom {
+            font-size: 1rem !important;
+            color: var(--bs-dark) !important;
+        }
+        
+        .swal2-confirm-custom {
+            background: var(--bs-warning) !important;
+            border: none !important;
+            border-radius: 25px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        .swal2-confirm-custom:hover {
+            background: #e0a800 !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+        }
+        
+        .swal2-cancel-custom {
+            background: #6c757d !important;
+            border: none !important;
+            border-radius: 25px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        .swal2-cancel-custom:hover {
+            background: #5a6268 !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+        }
     </style>
 </head>
 <body>
@@ -452,15 +522,28 @@ try {
                                         <i class="fas fa-clock me-1"></i>
                                         <?php echo date('M j, Y g:i A', strtotime($faq['created_at'])); ?>
                                     </small>
-                                    <!-- Archive question button -->
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="faq_id" value="<?php echo $faq['faq_id']; ?>">
-                                        <button type="submit" name="archive_question" class="btn btn-outline-danger btn-sm" 
-                                                onclick="return confirm('Are you sure you want to archive this question?')"
-                                                title="Archive Question">
-                                            <i class="fas fa-archive"></i>
-                                        </button>
-                                    </form>
+                                    <!-- Action buttons based on status -->
+                                    <?php if ($faq['status'] === 'archived'): ?>
+                                        <!-- Restore button for archived questions -->
+                                        <form method="POST" style="display: inline;">
+                                            <input type="hidden" name="faq_id" value="<?php echo $faq['faq_id']; ?>">
+                                            <button type="button" class="btn btn-outline-success btn-sm" 
+                                                    onclick="confirmRestore(<?php echo $faq['faq_id']; ?>, '<?php echo htmlspecialchars($faq['question'], ENT_QUOTES); ?>')"
+                                                    title="Restore Question">
+                                                <i class="fas fa-undo"></i>
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <!-- Archive button for non-archived questions -->
+                                        <form method="POST" style="display: inline;">
+                                            <input type="hidden" name="faq_id" value="<?php echo $faq['faq_id']; ?>">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                    onclick="confirmArchive(<?php echo $faq['faq_id']; ?>, '<?php echo htmlspecialchars($faq['question'], ENT_QUOTES); ?>')"
+                                                    title="Archive Question">
+                                                <i class="fas fa-archive"></i>
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <p class="mb-0 fw-semibold"><?php echo htmlspecialchars($faq['question']); ?></p>
@@ -482,19 +565,35 @@ try {
                                 
                                 <!-- Action buttons for answered questions -->
                                 <div class="d-flex justify-content-end gap-2">
-                                    <button type="button" class="btn btn-outline-primary btn-sm" 
-                                            onclick="toggleEditForm(<?php echo $faq['faq_id']; ?>)">
-                                        <i class="fas fa-edit me-1"></i>
-                                        Edit Answer
-                                    </button>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="faq_id" value="<?php echo $faq['faq_id']; ?>">
-                                        <button type="submit" name="archive_question" class="btn btn-outline-secondary btn-sm" 
-                                                onclick="return confirm('Are you sure you want to archive this answered question?')">
-                                            <i class="fas fa-archive me-1"></i>
-                                            Archive
+                                    <?php if ($faq['status'] !== 'archived'): ?>
+                                        <button type="button" class="btn btn-outline-primary btn-sm" 
+                                                onclick="toggleEditForm(<?php echo $faq['faq_id']; ?>)">
+                                            <i class="fas fa-edit me-1"></i>
+                                            Edit Answer
                                         </button>
-                                    </form>
+                                    <?php endif; ?>
+                                    
+                                    <?php if ($faq['status'] === 'archived'): ?>
+                                        <!-- Restore button for archived answered questions -->
+                                        <form method="POST" style="display: inline;">
+                                            <input type="hidden" name="faq_id" value="<?php echo $faq['faq_id']; ?>">
+                                            <button type="button" class="btn btn-outline-success btn-sm" 
+                                                    onclick="confirmRestore(<?php echo $faq['faq_id']; ?>, '<?php echo htmlspecialchars($faq['question'], ENT_QUOTES); ?>')">
+                                                <i class="fas fa-undo me-1"></i>
+                                                Restore
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <!-- Archive button for non-archived answered questions -->
+                                        <form method="POST" style="display: inline;">
+                                            <input type="hidden" name="faq_id" value="<?php echo $faq['faq_id']; ?>">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                                    onclick="confirmArchiveAnswered(<?php echo $faq['faq_id']; ?>, '<?php echo htmlspecialchars($faq['question'], ENT_QUOTES); ?>')">
+                                                <i class="fas fa-archive me-1"></i>
+                                                Archive
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                 </div>
                                 
                                 <!-- Edit Answer Form (hidden by default) -->
@@ -557,15 +656,31 @@ try {
                                         </div>
                                     </div>
                                     <div class="d-flex gap-2">
-                                        <button type="submit" name="submit_answer" class="btn btn-primary">
-                                            <i class="fas fa-paper-plane me-1"></i>
-                                            Submit Answer
-                                        </button>
-                                        <button type="submit" name="archive_question" class="btn btn-outline-secondary" 
-                                                onclick="return confirm('Are you sure you want to archive this question?')">
-                                            <i class="fas fa-archive me-1"></i>
-                                            Archive
-                                        </button>
+                                        <?php if ($faq['status'] !== 'archived'): ?>
+                                            <button type="submit" name="submit_answer" class="btn btn-primary">
+                                                <i class="fas fa-paper-plane me-1"></i>
+                                                Submit Answer
+                                            </button>
+                                        <?php endif; ?>
+                                        
+                                        <?php if ($faq['status'] === 'archived'): ?>
+                                            <!-- Restore button for archived pending questions -->
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="faq_id" value="<?php echo $faq['faq_id']; ?>">
+                                                <button type="button" class="btn btn-outline-success" 
+                                                        onclick="confirmRestore(<?php echo $faq['faq_id']; ?>, '<?php echo htmlspecialchars($faq['question'], ENT_QUOTES); ?>')">
+                                                    <i class="fas fa-undo me-1"></i>
+                                                    Restore
+                                                </button>
+                                            </form>
+                                        <?php else: ?>
+                                            <!-- Archive button for non-archived pending questions -->
+                                            <button type="button" class="btn btn-outline-secondary" 
+                                                    onclick="confirmArchive(<?php echo $faq['faq_id']; ?>, '<?php echo htmlspecialchars($faq['question'], ENT_QUOTES); ?>')">
+                                                <i class="fas fa-archive me-1"></i>
+                                                Archive
+                                            </button>
+                                        <?php endif; ?>
                                     </div>
                                 </form>
                             </div>
@@ -652,6 +767,134 @@ try {
                 bsAlert.close();
             });
         }, 5000);
+
+        // SweetAlert confirmation functions
+        function confirmArchive(faqId, question) {
+            Swal.fire({
+                title: 'Archive Question',
+                html: `Are you sure you want to archive this question?<br><br><strong>"${question}"</strong><br><br><small class="text-muted">This will move the question to the archived section.</small>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ffc107',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fa fa-archive me-1"></i>Archive',
+                cancelButtonText: '<i class="fa fa-times me-1"></i>Cancel',
+                customClass: {
+                    popup: 'swal2-popup-custom',
+                    title: 'swal2-title-custom',
+                    content: 'swal2-content-custom',
+                    confirmButton: 'swal2-confirm-custom',
+                    cancelButton: 'swal2-cancel-custom'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Create a form to submit the archive action
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.style.display = 'none';
+                    
+                    const faqIdInput = document.createElement('input');
+                    faqIdInput.type = 'hidden';
+                    faqIdInput.name = 'faq_id';
+                    faqIdInput.value = faqId;
+                    
+                    const archiveInput = document.createElement('input');
+                    archiveInput.type = 'hidden';
+                    archiveInput.name = 'archive_question';
+                    archiveInput.value = '1';
+                    
+                    form.appendChild(faqIdInput);
+                    form.appendChild(archiveInput);
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
+        }
+
+        function confirmArchiveAnswered(faqId, question) {
+            Swal.fire({
+                title: 'Archive Answered Question',
+                html: `Are you sure you want to archive this answered question?<br><br><strong>"${question}"</strong><br><br><small class="text-muted">This will move the question to the archived section.</small>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ffc107',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fa fa-archive me-1"></i>Archive',
+                cancelButtonText: '<i class="fa fa-times me-1"></i>Cancel',
+                customClass: {
+                    popup: 'swal2-popup-custom',
+                    title: 'swal2-title-custom',
+                    content: 'swal2-content-custom',
+                    confirmButton: 'swal2-confirm-custom',
+                    cancelButton: 'swal2-cancel-custom'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Create a form to submit the archive action
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.style.display = 'none';
+                    
+                    const faqIdInput = document.createElement('input');
+                    faqIdInput.type = 'hidden';
+                    faqIdInput.name = 'faq_id';
+                    faqIdInput.value = faqId;
+                    
+                    const archiveInput = document.createElement('input');
+                    archiveInput.type = 'hidden';
+                    archiveInput.name = 'archive_question';
+                    archiveInput.value = '1';
+                    
+                    form.appendChild(faqIdInput);
+                    form.appendChild(archiveInput);
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
+        }
+
+        // SweetAlert confirmation function for restore
+        function confirmRestore(faqId, question) {
+            Swal.fire({
+                title: 'Restore Question',
+                html: `Are you sure you want to restore this question?<br><br><strong>"${question}"</strong><br><br><small class="text-muted">This will move the question back to the active section.</small>`,
+                icon: 'success',
+                showCancelButton: true,
+                confirmButtonColor: '#198754',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fa fa-undo me-1"></i>Restore',
+                cancelButtonText: '<i class="fa fa-times me-1"></i>Cancel',
+                customClass: {
+                    popup: 'swal2-popup-custom',
+                    title: 'swal2-title-custom',
+                    content: 'swal2-content-custom',
+                    confirmButton: 'swal2-confirm-custom',
+                    cancelButton: 'swal2-cancel-custom'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Create a form to submit the restore action
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.style.display = 'none';
+                    
+                    const faqIdInput = document.createElement('input');
+                    faqIdInput.type = 'hidden';
+                    faqIdInput.name = 'faq_id';
+                    faqIdInput.value = faqId;
+                    
+                    const restoreInput = document.createElement('input');
+                    restoreInput.type = 'hidden';
+                    restoreInput.name = 'restore_question';
+                    restoreInput.value = '1';
+                    
+                    form.appendChild(faqIdInput);
+                    form.appendChild(restoreInput);
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
+        }
     </script>
 </body>
 </html>

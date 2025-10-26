@@ -553,15 +553,6 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
             overflow: hidden;
         }
 
-        .analytics-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--bs-primary);
-        }
 
         .analytics-card:hover {
             transform: translateY(-2px);
@@ -955,9 +946,23 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
             <!-- Recent Restocking Records -->
             <div class="table-card">
                 <div class="card-header bg-transparent border-0 p-4">
-                    <h5 class="fw-bold mb-0 text-dark">
-                        <i class="fas fa-history me-2"></i>Recent Restocking Records
-                    </h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0 text-dark">
+                            <i class="fas fa-history me-2"></i>Recent Restocking Records
+                        </h5>
+                        <div class="d-flex gap-2">
+                            <div class="input-group" style="width: 300px;">
+                                <span class="input-group-text"><i class="fa fa-search"></i></span>
+                                <input type="text" id="restockSearch" class="form-control form-control-sm" placeholder="Search Date, Type/PO, Product, Brand, Supplier...">
+                            </div>
+                            <select id="statusFilter" class="form-select form-select-sm" style="width: 150px;">
+                                <option value="">All Status</option>
+                                <option value="1">Pending</option>
+                                <option value="2">Received</option>
+                                <option value="3">Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
@@ -1919,6 +1924,96 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                          return false;
                      }
                  });
+             }
+         });
+         
+         // Restocking Records Search and Filter Functionality
+         document.addEventListener('DOMContentLoaded', function() {
+             const searchInput = document.getElementById('restockSearch');
+             const statusFilter = document.getElementById('statusFilter');
+             
+             function filterTable() {
+                 const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+                 const selectedStatus = statusFilter ? statusFilter.value : '';
+                 
+                 // Find the correct table body
+                 const tableCard = searchInput ? searchInput.closest('.table-card') : statusFilter.closest('.table-card');
+                 const tbody = tableCard.querySelector('tbody');
+                 
+                 if (!tbody) return;
+                 
+                 const rows = tbody.querySelectorAll('tr:not(.no-results-row)');
+                 
+                 rows.forEach(row => {
+                     const cells = row.querySelectorAll('td');
+                     let shouldShow = true;
+                     
+                     // Apply search filter
+                     if (searchTerm !== '') {
+                         const searchableCells = [0, 1, 2, 3, 4];
+                         let searchMatch = false;
+                         
+                         searchableCells.forEach(cellIndex => {
+                             if (cells[cellIndex]) {
+                                 const cellText = cells[cellIndex].textContent.toLowerCase();
+                                 if (cellText.includes(searchTerm)) {
+                                     searchMatch = true;
+                                 }
+                             }
+                         });
+                         
+                         if (!searchMatch) shouldShow = false;
+                     }
+                     
+                     // Apply status filter
+                     if (selectedStatus !== '' && shouldShow) {
+                         const statusCell = cells[8]; // Status column (index 8)
+                         if (statusCell) {
+                             const statusBadge = statusCell.querySelector('.badge');
+                             if (statusBadge) {
+                                 const statusText = statusBadge.textContent.toLowerCase();
+                                 let statusMatch = false;
+                                 
+                                 switch(selectedStatus) {
+                                     case '1': statusMatch = statusText.includes('pending'); break;
+                                     case '2': statusMatch = statusText.includes('received'); break;
+                                     case '3': statusMatch = statusText.includes('cancelled'); break;
+                                 }
+                                 
+                                 if (!statusMatch) shouldShow = false;
+                             }
+                         }
+                     }
+                     
+                     row.style.display = shouldShow ? '' : 'none';
+                 });
+                 
+                 // Show "No results" message if no rows are visible
+                 const visibleRows = Array.from(rows).filter(row => row.style.display !== 'none');
+                 let noResultsRow = tbody.querySelector('.no-results-row');
+                 
+                 if (visibleRows.length === 0) {
+                     if (!noResultsRow) {
+                         noResultsRow = document.createElement('tr');
+                         noResultsRow.className = 'no-results-row';
+                         noResultsRow.innerHTML = '<td colspan="10" class="text-center text-muted py-4"><i class="fa fa-search me-2"></i>No results found</td>';
+                         tbody.appendChild(noResultsRow);
+                     }
+                     noResultsRow.style.display = '';
+                 } else {
+                     if (noResultsRow) {
+                         noResultsRow.style.display = 'none';
+                     }
+                 }
+             }
+             
+             // Add event listeners
+             if (searchInput) {
+                 searchInput.addEventListener('input', filterTable);
+             }
+             
+             if (statusFilter) {
+                 statusFilter.addEventListener('change', filterTable);
              }
          });
     </script>

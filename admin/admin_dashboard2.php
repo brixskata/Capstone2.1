@@ -4,6 +4,11 @@ include '../includes/db.php';
 include '../includes/permissions.php';
 session_start();
 
+// Always prevent caching for this page
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+
 // Ensure user is logged in and has admin access
 if (!isset($_SESSION['user_id'])) {
     header("Location: login_admin.php");
@@ -323,15 +328,6 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
             overflow: hidden;
         }
 
-        .analytics-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--bs-primary);
-        }
 
         .analytics-card:hover {
             transform: translateY(-2px);
@@ -408,6 +404,7 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
             background: #f8f9fa;
         }
         
+        /* Mobile Responsive Styles */
         @media (max-width: 768px) {
             .main-container {
                 padding: 1rem;
@@ -419,6 +416,131 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
             
             .page-header h2 {
                 font-size: 1.5rem;
+            }
+            
+            /* Analytics Cards Mobile */
+            .analytics-card {
+                padding: 1rem;
+                gap: 0.75rem;
+            }
+            
+            .card-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.25rem;
+            }
+            
+            .card-number {
+                font-size: 1.5rem;
+            }
+            
+            .card-label {
+                font-size: 0.8rem;
+            }
+            
+            /* Table Cards Mobile */
+            .table-card .card-header {
+                padding: 1rem;
+            }
+            
+            .table-card .card-body {
+                padding: 1rem;
+            }
+            
+            /* Table Responsive */
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .table {
+                min-width: 600px;
+            }
+            
+            /* Chart Containers Mobile */
+            .table-card .card-body[style*="height"] {
+                height: 250px !important;
+            }
+            
+            /* Customer Analytics Mobile */
+            .analytics-card[style*="padding:12px"] {
+                padding: 0.75rem !important;
+                gap: 0.5rem !important;
+            }
+            
+            .analytics-card[style*="padding:12px"] .card-icon {
+                width: 40px !important;
+                height: 40px !important;
+                font-size: 1rem !important;
+            }
+            
+            .analytics-card[style*="padding:12px"] .card-number {
+                font-size: 1.1rem !important;
+            }
+            
+            .analytics-card[style*="padding:12px"] .card-label {
+                font-size: 0.75rem !important;
+            }
+            
+            /* Badge Mobile */
+            .badge {
+                font-size: 0.65rem !important;
+                padding: 3px 6px !important;
+            }
+            
+            /* Chart Height Adjustments */
+            canvas {
+                max-height: 200px !important;
+            }
+        }
+        
+        /* Extra Small Devices */
+        @media (max-width: 576px) {
+            .main-container {
+                padding: 0.75rem;
+            }
+            
+            .page-header {
+                padding: 1rem;
+            }
+            
+            .page-header h2 {
+                font-size: 1.25rem;
+            }
+            
+            .analytics-card {
+                padding: 0.75rem;
+                gap: 0.5rem;
+            }
+            
+            .card-icon {
+                width: 45px;
+                height: 45px;
+                font-size: 1.1rem;
+            }
+            
+            .card-number {
+                font-size: 1.25rem;
+            }
+            
+            .card-label {
+                font-size: 0.75rem;
+            }
+            
+            .table-card .card-header {
+                padding: 0.75rem;
+            }
+            
+            .table-card .card-body {
+                padding: 0.75rem;
+            }
+            
+            .table-card .card-body[style*="height"] {
+                height: 200px !important;
+            }
+            
+            canvas {
+                max-height: 150px !important;
             }
         }
   </style>

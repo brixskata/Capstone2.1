@@ -145,11 +145,13 @@ $verifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
             border-radius: 20px;
             box-shadow: 0 8px 25px rgba(0,0,0,0.08);
             border: 1px solid #e9ecef;
-            overflow: hidden;
+            overflow-x: auto;
+            overflow-y: hidden;
         }
         
         .table {
             margin-bottom: 0;
+            min-width: 800px;
         }
         
         .table thead th {
@@ -504,10 +506,6 @@ $verifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             .table-container {
                 overflow-x: auto;
-            }
-            
-            .table {
-                min-width: 800px;
             }
             
             .user-info {

@@ -2,6 +2,17 @@
 session_start();
 include 'includes/db.php';
 
+// Check if user is already logged in, redirect to appropriate page
+if (isset($_SESSION['user_id'])) {
+    // Redirect based on role
+    if (in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+        header('Location: admin/admin_dashboard2.php');
+    } else {
+        header('Location: index.php');
+    }
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
     $email = htmlspecialchars(trim($_POST['email']));
     $password = trim($_POST['password']);

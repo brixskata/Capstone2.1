@@ -26,23 +26,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $is_active = isset($_POST['is_active']) ? 1 : 0;
     $expires_at = !empty($_POST['expires_at']) ? $_POST['expires_at'] : null;
     
+    // Validate expiration date (must be in the future, not today)
+    if ($expires_at && strtotime($expires_at) <= strtotime('tomorrow')) {
+        $_SESSION['error'] = "Expiration date must be tomorrow or later";
+        header("Location: discount_codes.php");
+        exit;
+    }
+    
     if ($action === 'add') {
         if (!empty($code) && !empty($discount_type) && $discount_value > 0) {
-            try {
-                // Check if code already exists
-                $stmt = $pdo->prepare("SELECT 1 FROM discount_codes WHERE code = ?");
-                $stmt->execute([$code]);
-                if ($stmt->fetch()) {
-                    $_SESSION['error'] = "Discount code '$code' already exists";
-                } else {
-                    $stmt = $pdo->prepare("INSERT INTO discount_codes (code, discount_type, discount_value, is_active, expires_at) VALUES (?, ?, ?, ?, ?)");
-                    $stmt->execute([$code, $discount_type, $discount_value, $is_active, $expires_at]);
-                    
-                    $_SESSION['success'] = "Discount code '$code' created successfully";
-                    logHistory($pdo, 'Discount Code Created', "Created discount code: $code", $_SESSION['username']);
+            // Validate percentage discount (must be less than or equal to 5%)
+            if ($discount_type === 'percent' && $discount_value > 5) {
+                $_SESSION['error'] = "Percentage discount must be 5% or less";
+            } else {
+                try {
+                    // Check if code already exists
+                    $stmt = $pdo->prepare("SELECT 1 FROM discount_codes WHERE code = ?");
+                    $stmt->execute([$code]);
+                    if ($stmt->fetch()) {
+                        $_SESSION['error'] = "Discount code '$code' already exists";
+                    } else {
+                        $stmt = $pdo->prepare("INSERT INTO discount_codes (code, discount_type, discount_value, is_active, expires_at) VALUES (?, ?, ?, ?, ?)");
+                        $stmt->execute([$code, $discount_type, $discount_value, $is_active, $expires_at]);
+                        
+                        $_SESSION['success'] = "Discount code '$code' created successfully";
+                        logHistory($pdo, 'Discount Code Created', "Created discount code: $code", $_SESSION['username']);
+                    }
+                } catch (Exception $e) {
+                    $_SESSION['error'] = "Error creating discount code: " . $e->getMessage();
                 }
-            } catch (Exception $e) {
-                $_SESSION['error'] = "Error creating discount code: " . $e->getMessage();
             }
         } else {
             $_SESSION['error'] = "Please fill in all required fields";
@@ -50,21 +62,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'edit' && !empty($_POST['discount_id'])) {
         $discount_id = (int)$_POST['discount_id'];
         if (!empty($code) && !empty($discount_type) && $discount_value > 0) {
-            try {
-                // Check if code already exists (excluding current record)
-                $stmt = $pdo->prepare("SELECT 1 FROM discount_codes WHERE code = ? AND id != ?");
-                $stmt->execute([$code, $discount_id]);
-                if ($stmt->fetch()) {
-                    $_SESSION['error'] = "Discount code '$code' already exists";
-                } else {
-                    $stmt = $pdo->prepare("UPDATE discount_codes SET code=?, discount_type=?, discount_value=?, is_active=?, expires_at=? WHERE id=?");
-                    $stmt->execute([$code, $discount_type, $discount_value, $is_active, $expires_at, $discount_id]);
-                    
-                    $_SESSION['success'] = "Discount code '$code' updated successfully";
-                    logHistory($pdo, 'Discount Code Updated', "Updated discount code: $code", $_SESSION['username']);
+            // Validate percentage discount (must be less than or equal to 5%)
+            if ($discount_type === 'percent' && $discount_value > 5) {
+                $_SESSION['error'] = "Percentage discount must be 5% or less";
+            } else {
+                try {
+                    // Check if code already exists (excluding current record)
+                    $stmt = $pdo->prepare("SELECT 1 FROM discount_codes WHERE code = ? AND id != ?");
+                    $stmt->execute([$code, $discount_id]);
+                    if ($stmt->fetch()) {
+                        $_SESSION['error'] = "Discount code '$code' already exists";
+                    } else {
+                        $stmt = $pdo->prepare("UPDATE discount_codes SET code=?, discount_type=?, discount_value=?, is_active=?, expires_at=? WHERE id=?");
+                        $stmt->execute([$code, $discount_type, $discount_value, $is_active, $expires_at, $discount_id]);
+                        
+                        $_SESSION['success'] = "Discount code '$code' updated successfully";
+                        logHistory($pdo, 'Discount Code Updated', "Updated discount code: $code", $_SESSION['username']);
+                    }
+                } catch (Exception $e) {
+                    $_SESSION['error'] = "Error updating discount code: " . $e->getMessage();
                 }
-            } catch (Exception $e) {
-                $_SESSION['error'] = "Error updating discount code: " . $e->getMessage();
             }
         } else {
             $_SESSION['error'] = "Please fill in all required fields";
@@ -118,6 +135,7 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <title>Discount Codes - Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <?php include 'includes/admin_styles.php'; ?>
     <style>
         :root {
@@ -176,15 +194,6 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
             overflow: hidden;
         }
 
-        .analytics-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--bs-primary);
-        }
 
         .analytics-card:hover {
             transform: translateY(-2px);
@@ -257,6 +266,54 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
             .page-header h2 {
                 font-size: 1.5rem;
             }
+        }
+        
+        /* SweetAlert2 Custom Styles */
+        .swal2-popup-custom {
+            border-radius: 20px !important;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+            border: 1px solid #e9ecef !important;
+        }
+        
+        .swal2-title-custom {
+            color: var(--bs-primary) !important;
+            font-weight: 700 !important;
+            font-size: 1.5rem !important;
+        }
+        
+        .swal2-content-custom {
+            font-size: 1rem !important;
+            color: var(--bs-dark) !important;
+        }
+        
+        .swal2-confirm-custom {
+            background: var(--bs-danger) !important;
+            border: none !important;
+            border-radius: 25px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        .swal2-confirm-custom:hover {
+            background: #c82333 !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+        }
+        
+        .swal2-cancel-custom {
+            background: #6c757d !important;
+            border: none !important;
+            border-radius: 25px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        .swal2-cancel-custom:hover {
+            background: #5a6268 !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
         }
     </style>
 </head>
@@ -375,8 +432,8 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                 </a>
                                             </li>
                                             <li>
-                                                <a class="dropdown-item text-danger" href="discount_codes.php?delete=<?php echo $discount['id']; ?>" 
-                                                   onclick="return confirm('Are you sure you want to delete this discount code?')">
+                                                <a class="dropdown-item text-danger" href="#" 
+                                                   onclick="confirmDelete(<?php echo $discount['id']; ?>, '<?php echo htmlspecialchars($discount['code'], ENT_QUOTES); ?>')">
                                                     <i class="fa fa-trash me-2"></i>Delete
                                                 </a>
                                             </li>
@@ -455,21 +512,26 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <label class="form-label">Type</label>
                             <select class="form-select" name="discount_type" id="discountType" required>
                                 <option value="percent">Percentage (%)</option>
-                                <option value="fixed">Fixed Amount (₱)</option>
                             </select>
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label">Value</label>
                             <input type="number" step="0.01" class="form-control" name="discount_value" id="discountValue" required 
-                                   placeholder="Enter discount value">
-                            <small class="text-muted" id="valueHelp">Enter the percentage value (e.g., 20 for 20%)</small>
+                                   placeholder="Enter discount value" min="0.01" max="5">
+                            <small class="text-muted" id="valueHelp">Enter the percentage value (e.g., 5 for 5%)</small>
+                            <div class="invalid-feedback" id="valueError" style="display: none;">
+                                Percentage discount must be 5% or less
+                            </div>
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label">Expires At</label>
                             <input type="datetime-local" class="form-control" name="expires_at" id="discountExpires">
                             <small class="text-muted">Leave empty for no expiration</small>
+                            <div class="invalid-feedback" id="expiresError" style="display: none;">
+                                Expiration date must be tomorrow or later
+                            </div>
                         </div>
                         
                         <div class="mb-3">
@@ -493,13 +555,53 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <?php include 'includes/admin_scripts.php'; ?>
     <script>
-        // Update value help text based on discount type
-        document.getElementById('discountType').addEventListener('change', function() {
-            const valueHelp = document.getElementById('valueHelp');
-            if (this.value === 'percent') {
-                valueHelp.textContent = 'Enter the percentage value (e.g., 20 for 20%)';
+        // Set default values for percentage-only discount
+        document.addEventListener('DOMContentLoaded', function() {
+            const valueInput = document.getElementById('discountValue');
+            const valueError = document.getElementById('valueError');
+            
+            // Set percentage defaults
+            valueInput.max = '5';
+            valueInput.placeholder = 'Enter percentage (max 5%)';
+            
+            // Clear any existing validation errors
+            valueError.style.display = 'none';
+            valueInput.classList.remove('is-invalid');
+        });
+
+        // Validate percentage input in real-time
+        document.getElementById('discountValue').addEventListener('input', function() {
+            const valueError = document.getElementById('valueError');
+            
+            if (parseFloat(this.value) > 5) {
+                valueError.style.display = 'block';
+                this.classList.add('is-invalid');
             } else {
-                valueHelp.textContent = 'Enter the fixed amount in pesos (e.g., 100 for ₱100)';
+                valueError.style.display = 'none';
+                this.classList.remove('is-invalid');
+            }
+        });
+
+        // Validate expiration date in real-time
+        document.getElementById('discountExpires').addEventListener('change', function() {
+            const expiresError = document.getElementById('expiresError');
+            
+            if (this.value) {
+                const selectedDate = new Date(this.value);
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(0, 0, 0, 0);
+                
+                if (selectedDate < tomorrow) {
+                    expiresError.style.display = 'block';
+                    this.classList.add('is-invalid');
+                } else {
+                    expiresError.style.display = 'none';
+                    this.classList.remove('is-invalid');
+                }
+            } else {
+                expiresError.style.display = 'none';
+                this.classList.remove('is-invalid');
             }
         });
 
@@ -515,16 +617,48 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
             document.getElementById('discountActive').checked = discount.is_active == 1;
             document.getElementById('submitBtn').textContent = 'Update Discount Code';
             
-            // Update value help text
-            const valueHelp = document.getElementById('valueHelp');
-            if (discount.discount_type === 'percent') {
-                valueHelp.textContent = 'Enter the percentage value (e.g., 20 for 20%)';
-            } else {
-                valueHelp.textContent = 'Enter the fixed amount in pesos (e.g., 100 for ₱100)';
-            }
+            // Set percentage defaults for editing
+            const valueInput = document.getElementById('discountValue');
+            const valueError = document.getElementById('valueError');
+            
+            valueInput.max = '5';
+            valueInput.placeholder = 'Enter percentage (max 5%)';
+            
+            // Clear any existing validation errors
+            valueError.style.display = 'none';
+            valueInput.classList.remove('is-invalid');
             
             new bootstrap.Modal(document.getElementById('addDiscountModal')).show();
         }
+
+        // Form submission validation
+        document.getElementById('discountForm').addEventListener('submit', function(e) {
+            const discountValue = parseFloat(document.getElementById('discountValue').value);
+            const expiresAt = document.getElementById('discountExpires').value;
+            
+            if (discountValue > 5) {
+                e.preventDefault();
+                document.getElementById('valueError').style.display = 'block';
+                document.getElementById('discountValue').classList.add('is-invalid');
+                document.getElementById('discountValue').focus();
+                return false;
+            }
+            
+            if (expiresAt) {
+                const selectedDate = new Date(expiresAt);
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(0, 0, 0, 0);
+                
+                if (selectedDate < tomorrow) {
+                    e.preventDefault();
+                    document.getElementById('expiresError').style.display = 'block';
+                    document.getElementById('discountExpires').classList.add('is-invalid');
+                    document.getElementById('discountExpires').focus();
+                    return false;
+                }
+            }
+        });
 
         // Reset form when modal is hidden
         document.getElementById('addDiscountModal').addEventListener('hidden.bs.modal', function() {
@@ -534,7 +668,38 @@ $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
             document.getElementById('discountForm').reset();
             document.getElementById('discountActive').checked = true;
             document.getElementById('submitBtn').textContent = 'Add Discount Code';
+            
+            // Clear validation errors
+            document.getElementById('valueError').style.display = 'none';
+            document.getElementById('discountValue').classList.remove('is-invalid');
+            document.getElementById('expiresError').style.display = 'none';
+            document.getElementById('discountExpires').classList.remove('is-invalid');
         });
+
+        // SweetAlert confirmation function for delete
+        function confirmDelete(discountId, discountCode) {
+            Swal.fire({
+                title: 'Delete Discount Code',
+                html: `Are you sure you want to permanently delete <strong>${discountCode}</strong>?<br><br><small class="text-danger">This action cannot be undone!</small>`,
+                icon: 'error',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fa fa-trash me-1"></i>Delete',
+                cancelButtonText: '<i class="fa fa-times me-1"></i>Cancel',
+                customClass: {
+                    popup: 'swal2-popup-custom',
+                    title: 'swal2-title-custom',
+                    content: 'swal2-content-custom',
+                    confirmButton: 'swal2-confirm-custom',
+                    cancelButton: 'swal2-cancel-custom'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = `discount_codes.php?delete=${discountId}`;
+                }
+            });
+        }
     </script>
 </body>
 </html>

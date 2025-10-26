@@ -276,15 +276,6 @@ $archived_brands = $archived_stmt->fetchAll(PDO::FETCH_ASSOC);
             overflow: hidden;
         }
 
-        .analytics-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--bs-primary);
-        }
 
         .analytics-card:hover {
             transform: translateY(-2px);

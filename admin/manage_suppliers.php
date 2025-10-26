@@ -69,13 +69,43 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
 // Handle supplier archiving
 if (isset($_GET['archive']) && isset($_GET['id'])) {
     $supplierId = intval($_GET['id']);
-    $stmt = $pdo->prepare("UPDATE suppliers SET is_archive = 1 WHERE supplier_id = ?");
+    
+    // Check if supplier has active product assignments
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM supplier_products WHERE supplier_id = ? AND is_active = 1");
     $stmt->execute([$supplierId]);
+    $productCount = $stmt->fetchColumn();
+    
+    // Check if supplier has active product batches
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM product_batches WHERE supplier_id = ? AND is_active = 1 AND quantity_remaining > 0");
+    $stmt->execute([$supplierId]);
+    $batchCount = $stmt->fetchColumn();
+    
+    if ($productCount > 0 || $batchCount > 0) {
+        $stmt = $pdo->prepare("SELECT name FROM suppliers WHERE supplier_id = ?");
+        $stmt->execute([$supplierId]);
+        $supplier = $stmt->fetch();
+        $supplierName = $supplier['name'] ?? 'Unknown';
+        
+        $message = "Cannot archive supplier <strong>$supplierName</strong>. ";
+        if ($productCount > 0 && $batchCount > 0) {
+            $message .= "They have $productCount active product assignments and $batchCount active product batches.";
+        } elseif ($productCount > 0) {
+            $message .= "They have $productCount active product assignments.";
+        } else {
+            $message .= "They have $batchCount active product batches.";
+        }
+        
+        $_SESSION['error'] = $message;
+    } else {
+        $stmt = $pdo->prepare("UPDATE suppliers SET is_archive = 1 WHERE supplier_id = ?");
+        $stmt->execute([$supplierId]);
 
-    $stmt = $pdo->prepare("SELECT name FROM suppliers WHERE supplier_id = ?");
-    $stmt->execute([$supplierId]);
-    $supplier = $stmt->fetch();
-    logHistory($pdo, 'Archived Supplier', 'Supplier ID: ' . $supplierId . ', Name: ' . $supplier['name'], $_SESSION['username']);
+        $stmt = $pdo->prepare("SELECT name FROM suppliers WHERE supplier_id = ?");
+        $stmt->execute([$supplierId]);
+        $supplier = $stmt->fetch();
+        logHistory($pdo, 'Archived Supplier', 'Supplier ID: ' . $supplierId . ', Name: ' . $supplier['name'], $_SESSION['username']);
+        $_SESSION['success'] = "Supplier archived successfully!";
+    }
 
     header("Location: manage_suppliers.php");
     exit;
@@ -486,15 +516,6 @@ foreach ($archivedSuppliers as $supplier) {
         overflow: hidden;
     }
 
-    .analytics-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: var(--bs-primary);
-    }
 
     .analytics-card:hover {
         transform: translateY(-2px);
@@ -544,6 +565,8 @@ foreach ($archivedSuppliers as $supplier) {
     .table-card .card-header {
         background: transparent;
         border-bottom: 1px solid #e9ecef;
+        padding: 1.5rem 1.5rem 1rem 1.5rem;
+        margin: 0;
     }
     
     .table-card .card-body {
@@ -701,6 +724,54 @@ foreach ($archivedSuppliers as $supplier) {
         box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
     }
     
+    /* SweetAlert2 Custom Styles */
+    .swal2-popup-custom {
+        border-radius: 20px !important;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+        border: 1px solid #e9ecef !important;
+    }
+    
+    .swal2-title-custom {
+        color: var(--bs-primary) !important;
+        font-weight: 700 !important;
+        font-size: 1.5rem !important;
+    }
+    
+    .swal2-content-custom {
+        font-size: 1rem !important;
+        color: var(--bs-dark) !important;
+    }
+    
+    .swal2-confirm-custom {
+        background: var(--bs-success) !important;
+        border: none !important;
+        border-radius: 25px !important;
+        padding: 0.75rem 2rem !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .swal2-confirm-custom:hover {
+        background: #157347 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+    }
+    
+    .swal2-cancel-custom {
+        background: #6c757d !important;
+        border: none !important;
+        border-radius: 25px !important;
+        padding: 0.75rem 2rem !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .swal2-cancel-custom:hover {
+        background: #5a6268 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+    }
+    
     @media (max-width: 768px) {
         .main-container {
             padding: 1rem;
@@ -805,7 +876,7 @@ foreach ($archivedSuppliers as $supplier) {
     <div class="mb-5">
       <div class="table-card">
         <div class="card-header">
-          <h4 class="fw-bold text-dark mb-3">
+          <h4 class="fw-bold text-dark mb-0">
             <i class="fa fa-truck me-2" style="color: var(--bs-primary);"></i>Active Suppliers
           </h4>
         </div>
@@ -907,13 +978,12 @@ foreach ($archivedSuppliers as $supplier) {
                               title="Edit Supplier">
                         <i class="fa fa-edit"></i>
                       </button>
-                      <a class="btn btn-sm" 
+                      <button class="btn btn-sm" 
                          style="background: #fff3cd; color: #856404; border-radius: 8px;"
-                         href="manage_suppliers.php?archive=1&id=<?= $supplier['id'] ?>" 
-                         onclick="return confirm('Archive this supplier?')"
+                         onclick="confirmArchive(<?= $supplier['id'] ?>, '<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>')"
                          title="Archive Supplier">
                         <i class="fa fa-archive"></i>
-                      </a>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -1074,20 +1144,18 @@ foreach ($archivedSuppliers as $supplier) {
                               title="Edit Supplier">
                         <i class="fa fa-edit"></i>
                       </button>
-                      <a class="btn btn-sm" 
+                      <button class="btn btn-sm" 
                          style="background: #d4edda; color: #155724; border-radius: 8px;"
-                         href="manage_suppliers.php?unarchive=1&id=<?= $supplier['id'] ?>" 
-                         onclick="return confirm('Unarchive this supplier?')"
+                         onclick="confirmUnarchive(<?= $supplier['id'] ?>, '<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>')"
                          title="Unarchive Supplier">
                         <i class="fa fa-undo"></i>
-                      </a>
-                      <a class="btn btn-sm" 
+                      </button>
+                      <button class="btn btn-sm" 
                          style="background: #f5c6cb; color: #721c24; border-radius: 8px;"
-                         href="manage_suppliers.php?delete=1&id=<?= $supplier['id'] ?>" 
-                         onclick="return confirm('Permanently delete this supplier?')"
+                         onclick="confirmDelete(<?= $supplier['id'] ?>, '<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>')"
                          title="Delete Supplier">
                         <i class="fa fa-trash"></i>
-                      </a>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -1398,6 +1466,7 @@ foreach ($archivedSuppliers as $supplier) {
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <?php include 'includes/admin_scripts.php'; ?>
   <script>
     function openEditSupplierModal(btn) {
@@ -1625,6 +1694,79 @@ foreach ($archivedSuppliers as $supplier) {
       // No additional validation needed for PO creation
       // Cost and expiration date will be entered during receipt
     });
+
+    // SweetAlert confirmation functions
+    function confirmArchive(supplierId, supplierName) {
+      Swal.fire({
+        title: 'Archive Supplier',
+        html: `Are you sure you want to archive <strong>${supplierName}</strong>?<br><br><small class="text-muted">This will move the supplier to the archived section.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ffc107',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fa fa-archive me-1"></i>Archive',
+        cancelButtonText: '<i class="fa fa-times me-1"></i>Cancel',
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          content: 'swal2-content-custom',
+          confirmButton: 'swal2-confirm-custom',
+          cancelButton: 'swal2-cancel-custom'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = `manage_suppliers.php?archive=1&id=${supplierId}`;
+        }
+      });
+    }
+
+    function confirmUnarchive(supplierId, supplierName) {
+      Swal.fire({
+        title: 'Unarchive Supplier',
+        html: `Are you sure you want to unarchive <strong>${supplierName}</strong>?<br><br><small class="text-muted">This will move the supplier back to the active section.</small>`,
+        icon: 'success',
+        showCancelButton: true,
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fa fa-undo me-1"></i>Unarchive',
+        cancelButtonText: '<i class="fa fa-times me-1"></i>Cancel',
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          content: 'swal2-content-custom',
+          confirmButton: 'swal2-confirm-custom',
+          cancelButton: 'swal2-cancel-custom'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = `manage_suppliers.php?unarchive=1&id=${supplierId}`;
+        }
+      });
+    }
+
+    function confirmDelete(supplierId, supplierName) {
+      Swal.fire({
+        title: 'Delete Supplier',
+        html: `Are you sure you want to permanently delete <strong>${supplierName}</strong>?<br><br><small class="text-danger">This action cannot be undone!</small>`,
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fa fa-trash me-1"></i>Delete',
+        cancelButtonText: '<i class="fa fa-times me-1"></i>Cancel',
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom',
+          content: 'swal2-content-custom',
+          confirmButton: 'swal2-confirm-custom',
+          cancelButton: 'swal2-cancel-custom'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = `manage_suppliers.php?delete=1&id=${supplierId}`;
+        }
+      });
+    }
 
   </script>
 </body>

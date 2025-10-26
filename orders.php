@@ -190,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['address_action'])) {
 
 // Fetch all orders (current and completed)
 $sql = "SELECT o.orders_id, o.created_at, os.status_name as status, o.total_price, o.delivery_option,
-               o.plate_number, o.transaction_number, o.application_name, o.rider_name,
+               o.plate_number, o.rider_contact_number, o.transaction_number, o.application_name, o.rider_name,
                oi.quantity, p.product_name, oi.price,
                oc.reason AS cancel_reason, oc.receipt_path, oc.receipt_filename,
                a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country
@@ -226,6 +226,7 @@ foreach ($rawOrders as $row) {
             'total_price' => $row['total_price'],
             'delivery_option' => $row['delivery_option'] ?? 'pickup',
             'plate_number' => $row['plate_number'] ?? null,
+            'rider_contact_number' => $row['rider_contact_number'] ?? null,
             'transaction_number' => $row['transaction_number'] ?? null,
             'application_name' => $row['application_name'] ?? null,
             'rider_name' => $row['rider_name'] ?? null,
@@ -1526,7 +1527,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                         </div>
 
                                         <!-- Delivery Tracking Information -->
-                                        <?php if (!empty($order['plate_number']) || !empty($order['transaction_number']) || !empty($order['application_name']) || !empty($order['rider_name'])): ?>
+                                        <?php if (!empty($order['plate_number']) || !empty($order['rider_contact_number']) || !empty($order['transaction_number']) || !empty($order['application_name']) || !empty($order['rider_name'])): ?>
                                         <div class="delivery-tracking mb-3">
                                             <div class="alert alert-success py-2">
                                                 <small><i class="fas fa-truck me-1"></i><strong>Delivery Tracking:</strong></small>
@@ -1536,6 +1537,9 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                     <?php endif; ?>
                                                     <?php if (!empty($order['rider_name'])): ?>
                                                         <div><i class="fas fa-user me-1"></i><strong>Rider:</strong> <?= htmlspecialchars($order['rider_name']) ?></div>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($order['rider_contact_number'])): ?>
+                                                        <div><i class="fas fa-phone me-1"></i><strong>Contact:</strong> <?= htmlspecialchars($order['rider_contact_number']) ?></div>
                                                     <?php endif; ?>
                                                     <?php if (!empty($order['plate_number'])): ?>
                                                         <div><i class="fas fa-car me-1"></i><strong>Plate Number:</strong> <?= htmlspecialchars($order['plate_number']) ?></div>
@@ -1981,13 +1985,6 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                     <?php endif; ?>
                                                 </div>
                                             <?php endif; ?>
-                                            
-                                            <!-- E-Invoice Button -->
-                                            <div class="mt-2">
-                                                <a href="generate_e_invoice.php?order_id=<?= $order['id'] ?>" class="btn btn-outline-primary btn-sm" target="_blank">
-                                                    <i class="fas fa-file-pdf me-1"></i>View E-Invoice
-                                                </a>
-                                            </div>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
@@ -3620,6 +3617,9 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
             if (orderData.rider_name) {
                 trackingHtml += `<div><i class="fas fa-user me-1"></i><strong>Rider:</strong> ${escapeHtml(orderData.rider_name)}</div>`;
+            }
+            if (orderData.rider_contact_number) {
+                trackingHtml += `<div><i class="fas fa-phone me-1"></i><strong>Contact:</strong> ${escapeHtml(orderData.rider_contact_number)}</div>`;
             }
             if (orderData.plate_number) {
                 trackingHtml += `<div><i class="fas fa-car me-1"></i><strong>Plate Number:</strong> ${escapeHtml(orderData.plate_number)}</div>`;

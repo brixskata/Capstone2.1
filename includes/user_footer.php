@@ -88,7 +88,7 @@ try {
                 <h5 class="footer-title">Support</h5>
                 <ul class="footer-links">
                     <li><a href="https://www.facebook.com/profile.php?id=100080633373415" target="_blank" rel="noopener noreferrer">Contact Us</a></li>
-                    <li><a href="faq.php">FAQ</a></li>
+                    <li><a href="faq.php">Frequently Asked Questions</a></li>
                     <li><a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">Terms &amp; Condition</a></li>
                 </ul>
             </div>
@@ -158,27 +158,27 @@ try {
                     <p>Customers may also arrange their own delivery by booking a third-party courier (e.g., Grab, Lalamove) to pick up the order on their behalf.</p>
                     <p>Once the order is released to the customer or their chosen courier, responsibility for the product transfers to the customer.</p>
 
-                    <h6>Delivery</h6>
+                    <h6>3. Delivery</h6>
                     <p>We arrange nationwide delivery through trusted third-party courier partners for customer convenience.</p>
                     <p>Delivery fees, timelines, and conditions will follow the policies of the assigned courier.</p>
                     <p>While we coordinate the shipment, we are not responsible for courier delays, damages, or failed deliveries caused by factors beyond our control (e.g., weather, traffic, incomplete addresses).</p>
                     <p>Customers must provide accurate delivery details to avoid delays or additional charges.</p>
 
-                    <h6>3. Cancellations &amp; Refunds</h6>
+                    <h6>4. Cancellations &amp; Refunds</h6>
                     <p>Customers may cancel their orders only if the order has not yet been shipped or dispatched.</p>
                     <p>Once an order is shipped, it can no longer be canceled.</p>
                     <p>Perishable goods cannot be refunded once delivered, unless proven defective or spoiled upon receipt.</p>
                     <p>The admin reserves the right to cancel or not proceed with an order if the submitted proof of payment (via Bank Transfer or GCash) is not verified or invalid.</p>
                     <p>In case of admin-initiated cancellation, the customer will be notified immediately, and any verified payments already received will be refunded.</p>
 
-                    <h6>4. Product Quality</h6>
+                    <h6>5. Product Quality</h6>
                     <p>We guarantee that our meats are fresh and handled in compliance with food safety standards.</p>
                     <p>All products are properly packed and stored in well-insulated styrofoam containers to ensure freshness during handling and delivery.</p>
                     <p>When properly frozen and stored, our meats can maintain quality for an extended period, even up to years, depending on storage conditions.</p>
                     <p>Customers are advised to refrigerate or freeze products immediately upon receipt to maximize shelf life.</p>
                     <p>We are not responsible for spoilage due to improper storage or delayed receipt after successful delivery.</p>
 
-                    <h6>5. Limitation of Liability</h6>
+                    <h6>6. Limitation of Liability</h6>
                     <p>We are not liable for any indirect, incidental, or consequential damages, including but not limited to product spoilage caused by delayed receipt, courier delays, or improper storage after delivery.</p>
                     <p>Once an order is handed over to a third-party courier, responsibility for the handling, timeliness, and condition of the shipment lies with the courier and the customer.</p>
                     <p>Our maximum liability, in any case, is limited to the total amount paid for the specific order in question.</p>

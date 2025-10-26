@@ -204,9 +204,9 @@ if ($payment_method === 'GCash') {
         header('Location: checkout.php');
         exit;
     }
-    // Validate transaction ID format (should be 1 to 13 digits)
-    if (!preg_match('/^[0-9]{1,13}$/', $gcash_transaction_id)) {
-        $_SESSION['upload_error'] = "GCash transaction ID must be 1 to 13 digits.";
+    // Validate transaction ID format (should be 8 to 13 digits)
+    if (!preg_match('/^[0-9]{8,13}$/', $gcash_transaction_id)) {
+        $_SESSION['upload_error'] = "GCash transaction ID must be 8 to 13 digits.";
         header('Location: checkout.php');
         exit;
     }
@@ -705,13 +705,6 @@ try {
             padding: 0.75rem 2rem !important;
             font-weight: 600 !important;
             font-size: 1rem !important;
-            transition: all 0.3s ease !important;
-        }
-        
-        .swal2-confirm:hover {
-            transform: translateY(-2px) !important;
-            box-shadow: 0 8px 25px var(--shadow-medium) !important;
-            background: linear-gradient(135deg, #6d1429 0%, #8f1937 100%) !important;
         }
         
         .swal2-cancel {
@@ -722,14 +715,6 @@ try {
             font-weight: 600 !important;
             background: transparent !important;
             font-size: 1rem !important;
-            transition: all 0.3s ease !important;
-        }
-        
-        .swal2-cancel:hover {
-            background: var(--brand-primary) !important;
-            color: var(--text-light) !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 8px 25px var(--shadow-medium) !important;
         }
         
         .order-details {

@@ -77,18 +77,11 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FAQ - MikeMadz</title>
     <link rel="icon" type="image/png" href="favicon.png">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <?php include 'includes/user_head.php'; ?>
     <style>
-        :root {
-            --bs-primary: #ffffff;
-            --bs-secondary: #7F1734;
-            --bs-success: #198754;
-            --bs-danger: #db3030;
-            --bs-warning: #ffc107;
-            --bs-info: #016bf8;
-            --bs-light: #f0f3f2;
-            --bs-dark: #001e2b;
+        body {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            color: var(--text-primary);
         }
 
         .faq-container {
@@ -97,41 +90,50 @@ try {
         }
 
         .faq-header {
-            background: white;
-            color: var(--bs-secondary);
+            background: var(--bg-card);
+            color: var(--brand-primary);
             padding: 3rem 0;
             text-align: center;
             margin-bottom: 2rem;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid var(--border-light);
+            box-shadow: var(--shadow-light);
+        }
+
+        .faq-header .lead {
+            color: var(--text-primary);
         }
 
         .faq-card {
-            border: none;
+            border: 1px solid var(--border-light);
             border-radius: 1rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: var(--shadow-light);
             margin-bottom: 1.5rem;
             overflow: hidden;
+            background: var(--bg-card);
         }
 
         .faq-question {
-            background: var(--bs-light);
-            border-left: 4px solid var(--bs-secondary);
+            background: var(--bg-tertiary);
+            border-left: 4px solid var(--brand-primary);
             padding: 1.5rem;
+            color: var(--text-primary);
         }
 
         .faq-answer {
-            background: white;
+            background: var(--bg-card);
             border-left: 4px solid var(--bs-success);
             padding: 1.5rem;
-            border-top: 1px solid #e9ecef;
+            border-top: 1px solid var(--border-light);
+            color: var(--text-primary);
         }
 
         .question-form {
-            background: white;
+            background: var(--bg-card);
             border-radius: 1rem;
             padding: 2rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: var(--shadow-light);
             margin-bottom: 2rem;
+            border: 1px solid var(--border-light);
         }
 
         .status-badge {
@@ -141,53 +143,104 @@ try {
         }
 
         .status-pending {
-            background-color: #fff3cd;
-            color: #856404;
+            background-color: var(--bs-warning);
+            color: var(--text-light);
         }
 
         .status-answered {
-            background-color: #d1edff;
-            color: #0c5460;
+            background-color: var(--bs-success);
+            color: var(--text-light);
         }
 
         .user-info {
             font-size: 0.875rem;
-            color: #6c757d;
+            color: var(--text-secondary);
         }
 
         .timestamp {
             font-size: 0.75rem;
-            color: #6c757d;
+            color: var(--text-secondary);
         }
 
         .btn-primary {
-            background-color: var(--bs-secondary);
-            border-color: var(--bs-secondary);
+            background-color: var(--brand-primary);
+            border-color: var(--brand-primary);
         }
 
         .btn-primary:hover {
-            background-color: #5a1022;
-            border-color: #5a1022;
+            background-color: var(--brand-secondary);
+            border-color: var(--brand-secondary);
         }
 
         .section-title {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-weight: 600;
             margin-bottom: 1.5rem;
             padding-bottom: 0.5rem;
-            border-bottom: 2px solid var(--bs-light);
+            border-bottom: 2px solid var(--border-light);
         }
 
         .empty-state {
             text-align: center;
             padding: 3rem;
-            color: #6c757d;
+            color: var(--text-secondary);
         }
 
         .empty-state i {
             font-size: 3rem;
             margin-bottom: 1rem;
             opacity: 0.5;
+            color: var(--text-muted);
+        }
+
+        /* Form styling */
+        .form-label {
+            color: var(--text-primary);
+        }
+
+        .form-control {
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-light);
+            color: var(--text-primary);
+        }
+
+        .form-control:focus {
+            background-color: var(--input-bg);
+            border-color: var(--brand-primary);
+            color: var(--text-primary);
+            box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
+        }
+
+        .form-text {
+            color: var(--text-secondary);
+        }
+
+        /* Card header styling */
+        .card-header {
+            background-color: var(--bg-tertiary) !important;
+            border-bottom: 1px solid var(--border-light) !important;
+        }
+
+        /* Alert styling */
+        .alert-success {
+            background-color: rgba(25, 135, 84, 0.1);
+            border-color: var(--bs-success);
+            color: var(--text-primary);
+        }
+
+        .alert-danger {
+            background-color: rgba(219, 48, 48, 0.1);
+            border-color: var(--bs-danger);
+            color: var(--text-primary);
+        }
+
+        /* Text color fixes */
+        .text-muted {
+            color: var(--text-secondary) !important;
+        }
+
+        .text-success {
+            color: var(--bs-success) !important;
         }
     </style>
 </head>
@@ -375,8 +428,6 @@ try {
     </div>
 
     <?php include 'includes/user_footer.php'; ?>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Character counter for question textarea (only for logged-in users)
         <?php if ($user_id): ?>

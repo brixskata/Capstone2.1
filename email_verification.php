@@ -5,43 +5,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Verification - MikeMadz</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <?php include 'includes/user_head.php'; ?>
     <style>
-        :root {
-            --bs-primary: #ffffff;
-            --bs-secondary: #7F1734;
-            --bs-success: #198754;
-            --bs-danger: #dc3545;
-            --bs-warning: #ffc107;
-            --bs-info: #0dcaf0;
-            --bs-light: #f8f9fa;
-            --bs-dark: #212529;
-        }
-
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             margin: 0;
             padding: 2rem 0;
+            color: var(--text-primary);
         }
 
         .verification-container {
-            background: white;
+            background: var(--bg-card);
             border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(127, 23, 52, 0.1);
+            box-shadow: var(--shadow-dark);
             overflow: hidden;
             max-width: 500px;
             width: 100%;
             margin: 0 1rem;
             position: relative;
+            border: 1px solid var(--border-light);
         }
 
         .verification-container::before {
@@ -51,12 +39,12 @@
             left: 0;
             right: 0;
             height: 4px;
-            background: linear-gradient(90deg, var(--bs-secondary), #a91d42);
+            background: var(--brand-gradient);
         }
 
         .verification-header {
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
-            color: white;
+            background: var(--brand-gradient);
+            color: var(--text-light);
             padding: 2rem;
             text-align: center;
         }
@@ -103,13 +91,13 @@
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            background: #e9ecef;
+            background: var(--border-light);
             transition: all 0.3s ease;
             position: relative;
         }
 
         .step-dot.active {
-            background: var(--bs-secondary);
+            background: var(--brand-primary);
             transform: scale(1.2);
         }
 
@@ -124,7 +112,7 @@
             left: 100%;
             width: 30px;
             height: 2px;
-            background: #e9ecef;
+            background: var(--border-light);
             transform: translateY(-50%);
             z-index: -1;
         }
@@ -147,7 +135,7 @@
         }
 
         .step-title {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-size: 1.5rem;
             font-weight: 700;
             margin-bottom: 0.5rem;
@@ -155,26 +143,26 @@
         }
 
         .step-description {
-            color: #6c757d;
+            color: var(--text-secondary);
             text-align: center;
             margin-bottom: 1rem;
             line-height: 1.6;
         }
 
         .email-display {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border: 2px solid #e9ecef;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-light);
             border-radius: 12px;
             padding: 1rem;
             margin: 0 auto 2rem auto;
             text-align: center;
             max-width: 300px;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-size: 1rem;
         }
 
         .email-display i {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
         }
 
         .form-group {
@@ -184,17 +172,23 @@
 
         .form-control {
             padding: 0.75rem 1rem 0.75rem 3rem;
-            border: 2px solid #e9ecef;
+            border: 2px solid var(--border-light);
             border-radius: 12px;
             font-size: 1rem;
             transition: all 0.3s ease;
-            background-color: #f8f9fa;
+            background-color: var(--input-bg);
+            color: var(--text-primary);
         }
 
         .form-control:focus {
-            border-color: var(--bs-secondary);
+            border-color: var(--brand-primary);
             box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.25);
-            background-color: white;
+            background-color: var(--input-bg);
+            color: var(--text-primary);
+        }
+
+        .form-control::placeholder {
+            color: var(--text-secondary);
         }
 
         .form-icon {
@@ -202,7 +196,7 @@
             left: 1rem;
             top: 50%;
             transform: translateY(-50%);
-            color: #6c757d;
+            color: var(--text-secondary);
             font-size: 1.1rem;
         }
 
@@ -219,25 +213,26 @@
             text-align: center;
             font-size: 20px;
             font-weight: 600;
-            border: 2px solid #e9ecef;
+            border: 2px solid var(--border-light);
             border-radius: 12px;
-            background: #f8f9fa;
+            background: var(--input-bg);
+            color: var(--text-primary);
             transition: all 0.3s ease;
         }
 
         .otp-input:focus {
             outline: none;
-            border-color: var(--bs-secondary);
-            background: white;
+            border-color: var(--brand-primary);
+            background: var(--input-bg);
             box-shadow: 0 0 0 0.2rem rgba(127, 23, 52, 0.15);
             transform: scale(1.05);
         }
 
         .verification-btn {
             width: 100%;
-            background: linear-gradient(135deg, var(--bs-secondary) 0%, #a91d42 100%);
+            background: var(--brand-gradient);
             border: none;
-            color: white;
+            color: var(--text-light);
             padding: 0.75rem 2rem;
             border-radius: 12px;
             font-weight: 600;
@@ -250,7 +245,7 @@
         .verification-btn:hover {
             background: linear-gradient(135deg, #6d1429 0%, #8f1937 100%);
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(127, 23, 52, 0.3);
+            box-shadow: var(--shadow-medium);
         }
 
         .verification-btn:disabled {
@@ -274,19 +269,19 @@
         }
 
         .success {
-            background: linear-gradient(135deg, #d1e7dd 0%, #badbcc 100%);
-            color: #0f5132;
-            border: 1px solid #a3cfbb;
+            background: linear-gradient(135deg, rgba(25, 135, 84, 0.1) 0%, rgba(25, 135, 84, 0.2) 100%);
+            color: var(--bs-success);
+            border: 1px solid var(--bs-success);
         }
 
         .error {
-            background: linear-gradient(135deg, #f8d7da 0%, #f5c2c7 100%);
-            color: #842029;
-            border: 1px solid #f5c2c7;
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(220, 53, 69, 0.2) 100%);
+            color: var(--bs-danger);
+            border: 1px solid var(--bs-danger);
         }
 
         .countdown {
-            color: #6c757d;
+            color: var(--text-secondary);
             font-size: 0.875rem;
             text-align: center;
             margin: 1rem 0;
@@ -296,7 +291,7 @@
         .resend-btn {
             background: none;
             border: none;
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             font-weight: 600;
             cursor: pointer;
             padding: 0.5rem 1rem;
@@ -307,7 +302,7 @@
         }
 
         .resend-btn:hover {
-            background: rgba(127, 23, 52, 0.1);
+            background: var(--bg-tertiary);
             transform: translateY(-1px);
         }
 
@@ -350,7 +345,7 @@
         }
 
         .back-to-login a {
-            color: var(--bs-secondary);
+            color: var(--brand-primary);
             text-decoration: none;
             font-weight: 500;
             font-size: 0.9rem;
@@ -358,7 +353,7 @@
         }
 
         .back-to-login a:hover {
-            color: #6d1429;
+            color: var(--brand-secondary);
             text-decoration: underline;
         }
 

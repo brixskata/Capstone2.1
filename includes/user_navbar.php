@@ -1111,15 +1111,49 @@ function confirmLogout() {
   /* Cart Items */
   .empty-cart-state {
     text-align: center;
-    padding: 3rem 1rem;
-    color: var(--text-secondary);
+    padding: 2rem 1rem;
+    color: var(--text-primary);
   }
 
   .empty-cart-state i {
-    font-size: 3rem;
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+    color: var(--bs-secondary);
+    opacity: 0.7;
+  }
+
+  .empty-cart-state h6 {
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+  }
+
+  .empty-cart-state p {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
     margin-bottom: 1rem;
-    opacity: 0.5;
-    color: var(--text-muted);
+  }
+
+  .empty-cart-state .btn {
+    background: var(--bs-secondary);
+    border: none;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+  }
+
+  .empty-cart-state .btn:hover {
+    background: #6d1429;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(127, 23, 52, 0.3);
+  }
+
+  .empty-cart-state .btn i {
+    color: white !important;
   }
 
   .cart-items {
@@ -1719,19 +1753,9 @@ function confirmLogout() {
     border-color: var(--brand-primary) !important;
   }
 
-  .swal2-confirm:hover {
-    background-color: var(--brand-secondary) !important;
-    border-color: var(--brand-secondary) !important;
-  }
-
   .swal2-cancel {
     background-color: var(--text-secondary) !important;
     border-color: var(--text-secondary) !important;
-  }
-
-  .swal2-cancel:hover {
-    background-color: var(--text-primary) !important;
-    border-color: var(--text-primary) !important;
   }
 
   [data-theme="dark"] .swal2-popup {

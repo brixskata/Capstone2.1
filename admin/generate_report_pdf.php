@@ -26,6 +26,15 @@ date_default_timezone_set('Asia/Manila');
 $type = $_GET['type'] ?? 'sales';
 $period = $_GET['period'] ?? 'daily';
 
+// Debug
+error_log("PDF - Received GET parameters: " . print_r($_GET, true));
+error_log("PDF - Period: $period");
+
+// Get search parameters
+$search = $_GET['search'] ?? '';
+$dateFrom = $_GET['date_from'] ?? '';
+$dateTo = $_GET['date_to'] ?? '';
+
 // Check for custom date range
 $customFrom = $_GET['custom_from'] ?? null;
 $customTo = $_GET['custom_to'] ?? null;
@@ -149,8 +158,12 @@ ob_start();
 <body>
     <div class="header">
         <div class="company-name">MikeMadz</div>
-        <div class="report-title"><?= ucfirst($type) ?> Report</div>
-        <div class="report-period"><?= getPeriodText($period, $customFrom, $customTo) ?></div>
+        <div class="report-title"><?= ucfirst($type) ?> Report<?= !empty($search) ? ' - Filtered by "' . htmlspecialchars($search) . '"' : '' ?></div>
+        <div class="report-period"><?php 
+            // Direct debug in HTML
+            echo "<!-- DEBUG: period = $period -->";
+            echo getPeriodText($period, $customFrom, $customTo); 
+        ?></div>
         <div class="generated-date">Generated on: <?= date('F d, Y \a\t g:i A') ?></div>
     </div>
 
@@ -164,7 +177,42 @@ try {
             list($start, $end) = getDateRange($period);
         }
         
-        // Get sales data
+        // Debug: Check what period we received
+        error_log("PDF Debug - Received period: $period");
+        
+        // Build date range filter
+        $whereConditions = ["os.status_name = 'Completed'"];
+        $params = [];
+        
+        // Apply date range filter for all periods including weekly
+        if ($period && !$isCustomRange && !empty($start) && !empty($end)) {
+            $whereConditions[] = "o.created_at >= ?";
+            $params[] = $start;
+            $whereConditions[] = "o.created_at <= ?";
+            $params[] = $end;
+        }
+        
+        // Add search filter
+        if (!empty($search)) {
+            $whereConditions[] = "(b.name LIKE ? OR p.product_name LIKE ?)";
+            $searchTerm = '%' . $search . '%';
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+        }
+        
+        // Don't add dateFrom/dateTo filter for weekly - it conflicts with the period date range
+        // Add date range filter if provided (only for custom date inputs, not for period dates)
+        if (!empty($dateFrom) && $period !== 'weekly') {
+            $whereConditions[] = "DATE(o.created_at) >= ?";
+            $params[] = $dateFrom;
+        }
+        if (!empty($dateTo) && $period !== 'weekly') {
+            $whereConditions[] = "DATE(o.created_at) <= ?";
+            $params[] = $dateTo;
+        }
+        
+        $whereClause = implode(' AND ', $whereConditions);
+        
         $stmt = $pdo->prepare("
             SELECT 
                 COALESCE(b.name, 'No Brand') as brand_name,
@@ -177,11 +225,11 @@ try {
             INNER JOIN order_items oi ON o.orders_id = oi.order_id
             INNER JOIN products p ON oi.product_id = p.product_id
             LEFT JOIN brands b ON oi.brand_id = b.id
-            WHERE os.status_name = 'Completed' AND o.created_at BETWEEN ? AND ?
+            WHERE $whereClause
             GROUP BY b.name, p.product_name, o.created_at
             ORDER BY o.created_at DESC, p.product_name ASC
         ");
-        $stmt->execute([$start, $end]);
+        $stmt->execute($params);
         $sales = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Sales table
@@ -217,8 +265,21 @@ try {
         echo '</tbody></table>';
         
     } elseif ($type === 'inventory') {
-        // Get inventory data (only active products)
-        $stmt = $pdo->query("
+        // Get inventory data with search filtering
+        $whereConditions = ["p.is_archive = 0"];
+        $params = [];
+        
+        // Add search filter
+        if (!empty($search)) {
+            $whereConditions[] = "(p.product_name LIKE ? OR c.category_name LIKE ?)";
+            $searchTerm = '%' . $search . '%';
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+        }
+        
+        $whereClause = implode(' AND ', $whereConditions);
+        
+        $stmt = $pdo->prepare("
             SELECT p.product_id as id, p.product_name as name, 
                    COALESCE(ps.current_stock, 0) as stock, 
                    COALESCE(pp.markup_price, 0) + COALESCE((
@@ -231,29 +292,33 @@ try {
                        LIMIT 1
                    ), pp.cost_price, 0) as price, 
                    p.is_archive as is_archived, 
-                   c.category_name AS category
+                   c.category_name AS category,
+                   COALESCE(b.name, 'No Brand') as brand_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.category_id
             LEFT JOIN product_stock ps ON p.product_id = ps.product_id
             LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
-            WHERE p.is_archive = 0
+            LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE $whereClause
             ORDER BY c.category_name, p.product_name
         ");
+        $stmt->execute($params);
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Inventory table
         echo '<table>';
-        echo '<thead><tr><th>ID</th><th>Product Name</th><th>Category</th><th>Stock</th><th>Price</th><th>Total Value</th></tr></thead>';
+        echo '<thead><tr><th>ID</th><th>Brand</th><th>Product Name</th><th>Category</th><th>Stock</th><th>Price</th><th>Total Value</th></tr></thead>';
         echo '<tbody>';
         
         if (empty($products)) {
-            echo '<tr><td colspan="6">No active products found.</td></tr>';
+            echo '<tr><td colspan="7">No active products found.</td></tr>';
         } else {
             foreach ($products as $row) {
                 $totalValue = $row['stock'] * $row['price'];
                 
                 echo '<tr>';
                 echo '<td>#' . $row['id'] . '</td>';
+                echo '<td>' . htmlspecialchars($row['brand_name']) . '</td>';
                 echo '<td>' . htmlspecialchars($row['name']) . '</td>';
                 echo '<td>' . htmlspecialchars($row['category']) . '</td>';
                 echo '<td>' . $row['stock'] . '</td>';
@@ -317,7 +382,30 @@ try {
             list($start, $end) = getDateRange($period);
         }
         
-        // Get pullout data
+        // Get pullout data with search filtering
+        $whereConditions = ["sa.adjustment_type_id = 2", "sa.reason IN ('Damaged Items', 'Theft/Loss', 'Expired')", "sa.created_at BETWEEN ? AND ?"];
+        $params = [$start, $end];
+        
+        // Add search filter
+        if (!empty($search)) {
+            $whereConditions[] = "(p.product_name LIKE ? OR b.name LIKE ?)";
+            $searchTerm = '%' . $search . '%';
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+        }
+        
+        // Add date range filter if provided
+        if (!empty($dateFrom)) {
+            $whereConditions[] = "DATE(sa.created_at) >= ?";
+            $params[] = $dateFrom;
+        }
+        if (!empty($dateTo)) {
+            $whereConditions[] = "DATE(sa.created_at) <= ?";
+            $params[] = $dateTo;
+        }
+        
+        $whereClause = implode(' AND ', $whereConditions);
+        
         $stmt = $pdo->prepare("
             SELECT 
                 sa.stockadjustment_id as id,
@@ -325,27 +413,25 @@ try {
                 COALESCE(b.name, 'N/A') as brand_name,
                 sa.quantity as quantity,
                 sa.reason as reason,
+                sa.expiration_date as expiration_date,
                 sa.created_at as created_at
             FROM stock_adjustment sa
             INNER JOIN products p ON sa.product_id = p.product_id
-            LEFT JOIN product_batches pb ON pb.product_id = p.product_id AND pb.is_active = 1
-            LEFT JOIN brands b ON pb.brand_id = b.id
-            WHERE sa.adjustment_type_id = 2 
-            AND sa.reason IN ('Damaged Items', 'Theft/Loss')
-            AND sa.created_at BETWEEN ? AND ?
-            GROUP BY sa.stockadjustment_id, p.product_name, b.name, sa.quantity, sa.reason, sa.created_at
+            LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE $whereClause
+            GROUP BY sa.stockadjustment_id, p.product_name, b.name, sa.quantity, sa.reason, sa.expiration_date, sa.created_at
             ORDER BY sa.created_at DESC
         ");
-        $stmt->execute([$start, $end]);
+        $stmt->execute($params);
         $pulloutData = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Pullout table
         echo '<table>';
-        echo '<thead><tr><th>Adjustment ID</th><th>Product</th><th>Brand</th><th>Quantity</th><th>Reason</th><th>Date</th></tr></thead>';
+        echo '<thead><tr><th>Adjustment ID</th><th>Product</th><th>Brand</th><th>Quantity</th><th>Reason</th><th>Expiration Date</th><th>Date</th></tr></thead>';
         echo '<tbody>';
         
         if (empty($pulloutData)) {
-            echo '<tr><td colspan="6">No pull out data found for this period.</td></tr>';
+            echo '<tr><td colspan="7">No pull out data found for this period.</td></tr>';
         } else {
             foreach ($pulloutData as $row) {
                 echo '<tr>';
@@ -354,6 +440,12 @@ try {
                 echo '<td>' . htmlspecialchars($row['brand_name']) . '</td>';
                 echo '<td>' . $row['quantity'] . '</td>';
                 echo '<td>' . htmlspecialchars($row['reason']) . '</td>';
+                // Show expiration date only if reason is Expired and date exists
+                if (!empty($row['expiration_date']) && $row['reason'] === 'Expired') {
+                    echo '<td>' . date('M d, Y', strtotime($row['expiration_date'])) . '</td>';
+                } else {
+                    echo '<td>-</td>';
+                }
                 echo '<td>' . date('M d, Y H:i', strtotime($row['created_at'])) . '</td>';
                 echo '</tr>';
             }
@@ -379,8 +471,7 @@ try {
                 sa.created_at as created_at
             FROM stock_adjustment sa
             INNER JOIN products p ON sa.product_id = p.product_id
-            LEFT JOIN product_batches pb ON pb.product_id = p.product_id AND pb.is_active = 1
-            LEFT JOIN brands b ON pb.brand_id = b.id
+            LEFT JOIN brands b ON p.brand_id = b.id
             WHERE sa.adjustment_type_id = 2 
             AND sa.reason = 'Supplier Return'
             AND sa.created_at BETWEEN ? AND ?

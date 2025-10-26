@@ -774,6 +774,21 @@ foreach ($gcash_defaults as $key => $default_value) {
             color: var(--text-primary);
         }
 
+        /* GCash Reference Validation Feedback */
+        #gcash-reference-validation-feedback {
+            font-size: 0.85rem;
+            min-height: 20px;
+        }
+        .reference-valid {
+            color: var(--bs-success);
+        }
+        .reference-invalid {
+            color: var(--bs-danger);
+        }
+        .reference-checking {
+            color: var(--bs-info);
+        }
+
         /* Placeholder text color fix */
         .form-control::placeholder {
             color: var(--text-secondary) !important;
@@ -1130,15 +1145,16 @@ foreach ($gcash_defaults as $key => $default_value) {
                                         <div class="col-12">
                                             <label class="form-label fw-bold">GCash Reference Number *</label>
                                             <input type="text" name="gcash_transaction_id" class="form-control" 
-                                                   placeholder="Enter your GCash Reference Number (up to 13 digits)" 
-                                                   pattern="[0-9]{1,13}" 
+                                                   placeholder="Enter your GCash Reference Number (8-13 digits)" 
+                                                   pattern="[0-9]{8,13}" 
                                                    maxlength="13"
-                                                   minlength="1"
-                                                   title="Please enter 1 to 13 digits for your GCash Reference Number">
+                                                   minlength="8"
+                                                   title="Please enter 8 to 13 digits for your GCash Reference Number">
                                             <small class="form-text text-muted">
                                                 <i class="fas fa-info-circle me-1"></i>
-                                                Enter 1 to 13 digits from your GCash Reference Number
+                                                Enter 8 to 13 digits from your GCash Reference Number
                                             </small>
+                                            <div id="gcash-reference-validation-feedback" class="mt-2"></div>
                                         </div>
                                         <div class="col-12">
                                             <label class="form-label fw-bold">Upload Payment Proof *</label>
@@ -1744,11 +1760,22 @@ foreach ($gcash_defaults as $key => $default_value) {
                     return;
                 }
                 
-                if (!transactionIdField.value || transactionIdField.value.length === 0 || transactionIdField.value.length > 13) {
+                if (!transactionIdField.value || transactionIdField.value.length < 8 || transactionIdField.value.length > 13) {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Missing Information',
-                        text: 'Please enter a valid GCash transaction ID (1-13 digits)',
+                        text: 'Please enter a valid GCash transaction ID (8-13 digits)',
+                        confirmButtonColor: '#7F1734'
+                    });
+                    return;
+                }
+                
+                // Check if reference number has been validated and is unique
+                if (window.gcashReferenceIsValid === false && transactionIdField.value.trim().length > 0) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid Reference Number',
+                        text: 'This GCash reference number has already been used or is invalid. Please use a different reference number.',
                         confirmButtonColor: '#7F1734'
                     });
                     return;
@@ -1874,8 +1901,8 @@ foreach ($gcash_defaults as $key => $default_value) {
                 
                 // Validate on blur
                 transactionIdInput.addEventListener('blur', function() {
-                    if (this.value.length > 0 && (this.value.length < 1 || this.value.length > 13)) {
-                        this.setCustomValidity('GCash Transaction ID must be 1 to 13 digits');
+                    if (this.value.length > 0 && (this.value.length < 8 || this.value.length > 13)) {
+                        this.setCustomValidity('GCash Transaction ID must be 8 to 13 digits');
                         this.reportValidity();
                     } else {
                         this.setCustomValidity('');
@@ -1884,11 +1911,106 @@ foreach ($gcash_defaults as $key => $default_value) {
                 
                 // Clear validation on input
                 transactionIdInput.addEventListener('input', function() {
-                    if (this.value.length >= 1 && this.value.length <= 13) {
+                    if (this.value.length >= 8 && this.value.length <= 13) {
                         this.setCustomValidity('');
                     }
                 });
             }
+        }
+
+        // GCash Reference Uniqueness Validation
+        function validateGCashReferenceUniqueness() {
+            const transactionIdInput = document.querySelector('input[name="gcash_transaction_id"]');
+            const feedbackDiv = document.getElementById('gcash-reference-validation-feedback');
+            
+            if (!transactionIdInput || !feedbackDiv) {
+                return; // Elements not found (e.g., GCash section not visible)
+            }
+            
+            let validationDebounce;
+            let isReferenceValid = false;
+            
+            // Store validation state globally
+            window.gcashReferenceIsValid = false;
+            
+            function checkReferenceUniqueness(referenceNumber) {
+                if (!referenceNumber || referenceNumber.length < 8) {
+                    feedbackDiv.innerHTML = '';
+                    isReferenceValid = false;
+                    window.gcashReferenceIsValid = false;
+                    return;
+                }
+                
+                // Validate format
+                if (!/^[0-9]+$/.test(referenceNumber)) {
+                    feedbackDiv.innerHTML = '<i class="fas fa-times me-1"></i><span class="reference-invalid">Only numbers are allowed</span>';
+                    isReferenceValid = false;
+                    window.gcashReferenceIsValid = false;
+                    return;
+                }
+                
+                // Validate length
+                if (referenceNumber.length < 8 || referenceNumber.length > 13) {
+                    feedbackDiv.innerHTML = '<i class="fas fa-times me-1"></i><span class="reference-invalid">Must be 8 to 13 digits</span>';
+                    isReferenceValid = false;
+                    window.gcashReferenceIsValid = false;
+                    return;
+                }
+                
+                // Show loading indicator
+                feedbackDiv.innerHTML = '<i class="fas fa-spinner fa-spin me-1 reference-checking"></i><span class="reference-checking">Checking availability...</span>';
+                
+                // Send AJAX request to check reference
+                const formData = new FormData();
+                formData.append('reference_number', referenceNumber);
+                
+                fetch('check_gcash_reference.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.exists) {
+                        feedbackDiv.innerHTML = '<i class="fas fa-times-circle me-1"></i><span class="reference-invalid">' + data.message + '</span>';
+                        isReferenceValid = false;
+                        window.gcashReferenceIsValid = false;
+                    } else {
+                        feedbackDiv.innerHTML = '<i class="fas fa-check-circle me-1"></i><span class="reference-valid">' + data.message + '</span>';
+                        isReferenceValid = true;
+                        window.gcashReferenceIsValid = true;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error validating reference:', error);
+                    feedbackDiv.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i><span class="reference-invalid">Error checking reference number</span>';
+                    isReferenceValid = false;
+                    window.gcashReferenceIsValid = false;
+                });
+            }
+            
+            // Add debounced input event listener
+            transactionIdInput.addEventListener('input', function() {
+                clearTimeout(validationDebounce);
+                const refNumber = this.value.trim();
+                
+                if (refNumber.length < 8) {
+                    feedbackDiv.innerHTML = '';
+                    isReferenceValid = false;
+                    window.gcashReferenceIsValid = false;
+                    return;
+                }
+                
+                // Debounce validation (wait 500ms after user stops typing)
+                validationDebounce = setTimeout(function() {
+                    checkReferenceUniqueness(refNumber);
+                }, 500);
+            });
+            
+            // Add blur event listener (immediate check when user leaves field)
+            transactionIdInput.addEventListener('blur', function() {
+                clearTimeout(validationDebounce);
+                checkReferenceUniqueness(this.value.trim());
+            });
         }
 
         // Initialize address autocomplete when DOM is ready
@@ -1896,6 +2018,7 @@ foreach ($gcash_defaults as $key => $default_value) {
             initializeDeliveryRegionDropdown();
             initializeDeliveryCityAutocomplete();
             initializeGCashValidation();
+            validateGCashReferenceUniqueness();
             
             // Initialize form state - ensure pickup is selected by default and address fields are not required
             const pickupRadio = document.querySelector('input[name="delivery_option"][value="pickup"]');

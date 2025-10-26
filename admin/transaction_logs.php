@@ -25,6 +25,7 @@ if (isset($_POST['update_status'])) {
     $order_id = $_POST['order_id'];
     $new_status = $_POST['new_status'];
     $plate_number = $_POST['plate_number'] ?? null;
+    $rider_contact_number = $_POST['rider_contact_number'] ?? null;
     $transaction_number = $_POST['transaction_number'] ?? null;
     $application_name = $_POST['application_name'] ?? null;
     $rider_name = $_POST['rider_name'] ?? null;
@@ -33,6 +34,13 @@ if (isset($_POST['update_status'])) {
         // Validate transaction number format (up to 23 digits)
         if ($transaction_number && !preg_match('/^[0-9]{1,23}$/', $transaction_number)) {
             $_SESSION['error'] = "Transaction number must be up to 23 digits";
+            header("Location: transaction_logs.php");
+            exit;
+        }
+        
+        // Validate rider contact number format (11 digits)
+        if ($rider_contact_number && !preg_match('/^[0-9]{11}$/', $rider_contact_number)) {
+            $_SESSION['error'] = "Contact number must be 11 digits";
             header("Location: transaction_logs.php");
             exit;
         }
@@ -57,6 +65,7 @@ if (isset($_POST['update_status'])) {
                                 JOIN order_status os ON os.status_name = :status
                                 SET o.orderstatus_id = os.orderstatus_id,
                                     o.plate_number = :plate_number,
+                                    o.rider_contact_number = :rider_contact_number,
                                     o.transaction_number = :transaction_number,
                                     o.application_name = :application_name,
                                     o.rider_name = :rider_name,
@@ -70,6 +79,7 @@ if (isset($_POST['update_status'])) {
             'status' => $new_status, 
             'order_id' => $order_id,
             'plate_number' => $plate_number,
+            'rider_contact_number' => $rider_contact_number,
             'transaction_number' => $transaction_number,
             'application_name' => $application_name,
             'rider_name' => $rider_name
@@ -86,6 +96,7 @@ if (isset($_POST['update_status'])) {
                 $message = "Your order #{$order_id} is now out for delivery! 
                             Application: {$application_name}
                             Rider: {$rider_name}
+                            Contact: {$rider_contact_number}
                             Vehicle: {$plate_number}
                             Transaction: {$transaction_number}";
                 $notif = $pdo->prepare("INSERT INTO notifications (user_id, order_id, message, is_read, created_at) VALUES (?, ?, ?, 0, NOW())");
@@ -239,6 +250,7 @@ $query = "
            o.total_price as total_amount,
            o.delivery_option,
            o.plate_number,
+           o.rider_contact_number,
            o.transaction_number,
            o.application_name,
            o.rider_name,
@@ -283,7 +295,7 @@ if ($search) {
     $query .= " AND (u.username LIKE '%$s%' OR o.orders_id LIKE '%$s%')";
 }
 
-$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.application_name, o.rider_name, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at ASC";
+$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.rider_contact_number, o.transaction_number, o.application_name, o.rider_name, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at ASC";
 
 try {
     $orders = $pdo->query($query)->fetchAll();
@@ -324,6 +336,7 @@ foreach ($statuses as $status) {
                o.total_price as total_amount,
                o.delivery_option,
                o.plate_number,
+               o.rider_contact_number,
                o.transaction_number,
                o.application_name,
                o.rider_name,
@@ -355,7 +368,7 @@ foreach ($statuses as $status) {
             ) latest ON latest.order_id = oc1.order_id AND latest.max_id = oc1.id
         ) oc ON oc.order_id = o.orders_id
         WHERE os.status_name = :status
-        GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.transaction_number, o.application_name, o.rider_name, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at 
+        GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.rider_contact_number, o.transaction_number, o.application_name, o.rider_name, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at 
         ORDER BY o.created_at ASC
     ";
     
@@ -441,15 +454,6 @@ foreach ($statuses as $status) {
             overflow: hidden;
         }
 
-        .analytics-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--bs-primary);
-        }
 
         .analytics-card:hover {
             transform: translateY(-2px);
@@ -1088,6 +1092,10 @@ foreach ($statuses as $status) {
                     <div class="col-8" id="modalPlateNumber">-</div>
                   </div>
                   <div class="row mb-2">
+                    <div class="col-4"><strong>Rider Contact:</strong></div>
+                    <div class="col-8" id="modalRiderContact">-</div>
+                  </div>
+                  <div class="row mb-2">
                     <div class="col-4"><strong>Transaction:</strong></div>
                     <div class="col-8" id="modalTransactionNumber">-</div>
                   </div>
@@ -1157,6 +1165,9 @@ foreach ($statuses as $status) {
           </div>
                         </div>
         <div class="modal-footer">
+          <button type="button" id="generateInvoiceBtn" class="btn btn-primary" style="display: none; background: #7F1734;" onclick="generateInvoice()">
+            <i class="fas fa-file-pdf me-1"></i>Generate Invoice
+          </button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
             <i class="fas fa-times me-1"></i>Close
           </button>
@@ -1505,6 +1516,12 @@ foreach ($statuses as $status) {
             </div>
             
             <div class="mb-3">
+              <label for="riderContactNumber" class="form-label">Rider Contact Number *</label>
+              <input type="text" id="riderContactNumber" class="form-control" placeholder="Enter 11-digit contact number" maxlength="11" pattern="[0-9]{11}" required>
+              <small class="text-muted">11 digits (e.g., 09123456789)</small>
+            </div>
+            
+            <div class="mb-3">
               <label for="transactionNumber" class="form-label">Transaction Number *</label>
               <input type="text" id="transactionNumber" class="form-control" placeholder="Enter transaction number" maxlength="23" pattern="[0-9]{1,23}" required>
               <small class="text-muted">Must be up to 23 digits (e.g., 1234567890123456789)</small>
@@ -1533,6 +1550,7 @@ foreach ($statuses as $status) {
           const applicationName = document.getElementById('applicationName').value.trim();
           const riderName = document.getElementById('riderName').value.trim();
           const plateNumber = document.getElementById('plateNumber').value.trim();
+          const riderContactNumber = document.getElementById('riderContactNumber').value.trim();
           const transactionNumber = document.getElementById('transactionNumber').value.trim();
           
           if (!applicationName) {
@@ -1547,6 +1565,17 @@ foreach ($statuses as $status) {
           
           if (!plateNumber) {
             Swal.showValidationMessage('Please enter a plate number');
+            return false;
+          }
+          
+          if (!riderContactNumber) {
+            Swal.showValidationMessage('Please enter rider contact number');
+            return false;
+          }
+          
+          // Validate contact number format (11 digits)
+          if (!/^[0-9]{11}$/.test(riderContactNumber)) {
+            Swal.showValidationMessage('Contact number must be exactly 11 digits');
             return false;
           }
           
@@ -1565,6 +1594,7 @@ foreach ($statuses as $status) {
             applicationName: applicationName,
             riderName: riderName,
             plateNumber: plateNumber,
+            riderContactNumber: riderContactNumber,
             transactionNumber: transactionNumber
           };
         }
@@ -1595,6 +1625,7 @@ foreach ($statuses as $status) {
             <input type="hidden" name="application_name" value="${result.value.applicationName}">
             <input type="hidden" name="rider_name" value="${result.value.riderName}">
             <input type="hidden" name="plate_number" value="${result.value.plateNumber}">
+            <input type="hidden" name="rider_contact_number" value="${result.value.riderContactNumber}">
             <input type="hidden" name="transaction_number" value="${result.value.transactionNumber}">
             <input type="hidden" name="update_status" value="1">
           `;
@@ -2354,13 +2385,23 @@ foreach ($statuses as $status) {
       });
     }
 
-    function viewOrderDetails(orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate, applicationName, riderName, plateNumber, transactionNumber) {
+    function viewOrderDetails(orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate, applicationName, riderName, plateNumber, riderContactNumber, transactionNumber) {
       // Debug: Log the received data
       console.log('Order Details Data:', {
         orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, 
         items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate,
         applicationName, riderName, plateNumber, transactionNumber
       });
+      
+      // Show/hide invoice button based on status
+      const invoiceBtn = document.getElementById('generateInvoiceBtn');
+      if (status === 'To Ship' || status === 'Ready for Pick Up') {
+        invoiceBtn.style.display = 'inline-block';
+        // Store order data in global variable for PDF generation
+        window.currentOrderData = { orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate, applicationName, riderName, plateNumber, riderContactNumber, transactionNumber };
+      } else {
+        invoiceBtn.style.display = 'none';
+      }
       
       // Populate modal with order data
       document.getElementById('modalOrderId').textContent = '#' + orderId;
@@ -2386,6 +2427,7 @@ foreach ($statuses as $status) {
       document.getElementById('modalApplicationName').textContent = applicationName || 'N/A';
       document.getElementById('modalRiderName').textContent = riderName || 'N/A';
       document.getElementById('modalPlateNumber').textContent = plateNumber || 'N/A';
+      document.getElementById('modalRiderContact').textContent = riderContactNumber || 'N/A';
       document.getElementById('modalTransactionNumber').textContent = transactionNumber || 'N/A';
       
       // Format order date
@@ -3129,6 +3171,101 @@ foreach ($statuses as $status) {
           htmlContainer: 'swal2-html-container-custom',
           cancelButton: 'swal2-cancel-button-custom'
         }
+      });
+    }
+
+    // Generate Invoice PDF
+    function generateInvoice() {
+      if (!window.currentOrderData) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'No order data available',
+          confirmButtonColor: '#7F1734'
+        });
+        return;
+      }
+      
+      const data = window.currentOrderData;
+      
+      // Show loading
+      Swal.fire({
+        title: 'Generating Invoice...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+        customClass: {
+          popup: 'swal2-popup-custom',
+          title: 'swal2-title-custom'
+        }
+      });
+      
+      // Create form data
+      const formData = new FormData();
+      formData.append('order_id', data.orderId);
+      formData.append('username', data.username);
+      formData.append('email', data.email);
+      formData.append('phone', data.phone || '');
+      formData.append('address', [data.addressLine, data.addressLine2, data.city, data.state, data.postalCode, data.country].filter(x => x).join(', '));
+      formData.append('items', data.items);
+      formData.append('total_amount', data.totalAmount);
+      formData.append('payment_method', data.paymentMethod || 'Cash on Delivery');
+      formData.append('gcash_transaction_id', data.transactionId || '');
+      formData.append('delivery_option', data.deliveryOption || '');
+      formData.append('order_date', data.orderDate);
+      formData.append('status', data.status);
+      if (data.applicationName) formData.append('application_name', data.applicationName);
+      if (data.riderName) formData.append('rider_name', data.riderName);
+      if (data.plateNumber) formData.append('plate_number', data.plateNumber);
+      if (data.riderContactNumber) formData.append('rider_contact_number', data.riderContactNumber);
+      if (data.transactionNumber) formData.append('transaction_number', data.transactionNumber);
+      
+      // Fetch PDF
+      fetch('generate_order_invoice.php', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => {
+        if (!response.ok) throw new Error('PDF generation failed');
+        return response.blob();
+      })
+      .then(blob => {
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Invoice_Order_${data.orderId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        Swal.fire({
+          icon: 'success',
+          title: 'Invoice Generated!',
+          text: 'Invoice downloaded successfully',
+          timer: 2000,
+          timerProgressBar: true,
+          confirmButtonColor: '#7F1734',
+          customClass: {
+            popup: 'swal2-popup-custom',
+            title: 'swal2-title-custom',
+            confirmButton: 'swal2-confirm-button-custom'
+          }
+        });
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Generation Failed',
+          text: 'Failed to generate invoice. Please try again.',
+          confirmButtonColor: '#7F1734',
+          customClass: {
+            popup: 'swal2-popup-custom',
+            title: 'swal2-title-custom',
+            confirmButton: 'swal2-confirm-button-custom'
+          }
+        });
       });
     }
 

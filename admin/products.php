@@ -220,15 +220,6 @@ $archived_count = $pdo->query("SELECT COUNT(*) FROM products WHERE is_archive = 
       overflow: hidden;
     }
 
-    .analytics-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: var(--bs-primary);
-    }
 
     .analytics-card:hover {
       transform: translateY(-2px);

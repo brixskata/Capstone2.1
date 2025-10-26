@@ -2,8 +2,13 @@
 <?php
 session_start();
 
+// Always prevent caching for this page
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+
 // Check if user is logged in and has admin access (Super Admin or Admin)
-if (!isset($_SESSION['username']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
+if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'super_admin'])) {
     header("Location: login_admin.php");
     exit;
 }
