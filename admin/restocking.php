@@ -1214,7 +1214,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                     </div>
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-outline-primary btn-sm" onclick="printPODetails()">
-                            <i class="fa fa-print me-1"></i>Print PDF
+                            <i class="fa fa-file-pdf me-1"></i>Generate PDF
                         </button>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
@@ -1642,85 +1642,7 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
          
          function printPODetails() {
              const poNumber = document.getElementById('view_po_number').textContent;
-             const supplierName = document.getElementById('view_supplier_name').textContent;
-             
-             // Create a new window for printing
-             const printWindow = window.open('', '_blank', 'width=800,height=600');
-             
-             // Get the modal content
-             const modalContent = document.querySelector('#viewPOModal .modal-content').cloneNode(true);
-             
-             // Remove the header buttons and close button
-             const headerButtons = modalContent.querySelector('.d-flex.gap-2');
-             if (headerButtons) headerButtons.remove();
-             
-             // Create print-friendly HTML
-             const printHTML = `
-                 <!DOCTYPE html>
-                 <html>
-                 <head>
-                     <title>Purchase Order - ${poNumber}</title>
-                     <style>
-                         body { font-family: Arial, sans-serif; margin: 20px; }
-                         .header { text-align: center; margin-bottom: 30px; }
-                         .header h1 { color: #7F1734; margin: 0; }
-                         .header h2 { color: #666; margin: 5px 0; }
-                         .po-info { margin-bottom: 20px; }
-                         .po-info p { margin: 5px 0; }
-                         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                         th { background-color: #f8f9fa; font-weight: bold; }
-                         .total { text-align: right; font-weight: bold; font-size: 18px; margin-top: 20px; }
-                         .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-                         .bg-warning { background-color: #ffc107; color: #000; }
-                         .bg-success { background-color: #198754; color: #fff; }
-                         .bg-danger { background-color: #dc3545; color: #fff; }
-                         .bg-secondary { background-color: #6c757d; color: #fff; }
-                         @media print {
-                             body { margin: 0; }
-                             .no-print { display: none; }
-                         }
-                     </style>
-                 </head>
-                 <body>
-                     <div class="header">
-                         <h1>PURCHASE ORDER</h1>
-                         <h2>${poNumber}</h2>
-                         <p><strong>Supplier:</strong> ${supplierName}</p>
-                         <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-                     </div>
-                     
-                     <table>
-                         <thead>
-                             <tr>
-                                 <th>Product</th>
-                                 <th>Brand</th>
-                                 <th>Quantity</th>
-                                 <th>Unit Cost</th>
-                                 <th>Total</th>
-                                 <th>Status</th>
-                             </tr>
-                         </thead>
-                         <tbody>
-                             ${document.getElementById('po_items_body').innerHTML}
-                         </tbody>
-                     </table>
-                     
-                     <div class="total">
-                         <strong>Grand Total: ₱${document.getElementById('po_grand_total').textContent}</strong>
-                     </div>
-                 </body>
-                 </html>
-             `;
-             
-             printWindow.document.write(printHTML);
-             printWindow.document.close();
-             
-             // Wait for content to load, then print
-             printWindow.onload = function() {
-                 printWindow.print();
-                 printWindow.close();
-             };
+             window.open('generate_po_pdf.php?po_number=' + encodeURIComponent(poNumber), '_blank');
          }
          
          function updateRestockStatus(restockingId, newStatus) {
