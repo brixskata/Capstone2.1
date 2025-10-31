@@ -256,53 +256,51 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_low_stock' && isset($_GET[
     $lowStockProducts = [];
     
     foreach ($allProducts as $product) {
-        // Check if this product has low stock
-        if ($product['current_stock'] <= $product['reorder_point']) {
-            // Get brands for this product that are actually assigned to this supplier
-            $brandStmt = $pdo->prepare("
-                SELECT DISTINCT b.id as brand_id, b.name as brand_name
-                FROM product_batches pb
-                INNER JOIN brands b ON pb.brand_id = b.id
-                WHERE pb.product_id = ? AND pb.is_active = 1 AND pb.supplier_id = ?
-                UNION
-                SELECT 1 as brand_id, 'No Brand' as brand_name
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM product_batches pb2 
-                    WHERE pb2.product_id = ? AND pb2.is_active = 1 AND pb2.supplier_id = ?
-                )
+        // Get brands for this product that are actually assigned to this supplier
+        $brandStmt = $pdo->prepare("
+            SELECT DISTINCT b.id as brand_id, b.name as brand_name
+            FROM product_batches pb
+            INNER JOIN brands b ON pb.brand_id = b.id
+            WHERE pb.product_id = ? AND pb.is_active = 1 AND pb.supplier_id = ?
+            UNION
+            SELECT 1 as brand_id, 'No Brand' as brand_name
+            WHERE NOT EXISTS (
+                SELECT 1 FROM product_batches pb2 
+                WHERE pb2.product_id = ? AND pb2.is_active = 1 AND pb2.supplier_id = ?
+            )
+        ");
+        $brandStmt->execute([$product['product_id'], $supplier_id, $product['product_id'], $supplier_id]);
+        $brands = $brandStmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        if (empty($brands)) {
+            // If no brands found, add a default entry
+            $brands = [['brand_id' => 1, 'brand_name' => 'No Brand']];
+        }
+        
+        foreach ($brands as $brand) {
+            // Calculate brand-specific stock from product_batches (actual stock) for this supplier only
+            $stockStmt = $pdo->prepare("
+                SELECT COALESCE(SUM(quantity_remaining), 0) as brand_stock
+                FROM product_batches 
+                WHERE product_id = ? AND brand_id = ? AND supplier_id = ? AND is_active = 1 AND quantity_remaining > 0
             ");
-            $brandStmt->execute([$product['product_id'], $supplier_id, $product['product_id'], $supplier_id]);
-            $brands = $brandStmt->fetchAll(PDO::FETCH_ASSOC);
+            $stockStmt->execute([$product['product_id'], $brand['brand_id'], $supplier_id]);
+            $brandStock = $stockStmt->fetchColumn();
             
-            if (empty($brands)) {
-                // If no brands found, add a default entry
-                $brands = [['brand_id' => 1, 'brand_name' => 'No Brand']];
-            }
-            
-            foreach ($brands as $brand) {
-                // Calculate brand-specific stock
-                $stockStmt = $pdo->prepare("
-                    SELECT COALESCE(SUM(quantity_remaining), 0) as brand_stock
-                    FROM product_batches 
-                    WHERE product_id = ? AND brand_id = ? AND is_active = 1 AND quantity_remaining > 0
-                ");
-                $stockStmt->execute([$product['product_id'], $brand['brand_id']]);
-                $brandStock = $stockStmt->fetchColumn();
-                
-                // Only include if brand stock is low or out
-                if ($brandStock <= $product['reorder_point']) {
-                    $lowStockProducts[] = [
-                        'product_id' => $product['product_id'],
-                        'product_name' => $product['product_name'],
-                        'brand_id' => $brand['brand_id'],
-                        'brand_name' => $brand['brand_name'],
-                        'current_stock' => $brandStock,
-                        'reorder_point' => $product['reorder_point'],
-                        'uom_name' => $product['uom_name'],
-                        'last_cost' => $product['last_cost'],
-                        'suggested_qty' => max($product['reorder_point'] - $brandStock, 1)
-                    ];
-                }
+            // Check brand stock against reorder_point (not product_stock.current_stock)
+            // This ensures we check the actual stock that matches what's displayed
+            if ($brandStock <= $product['reorder_point']) {
+                $lowStockProducts[] = [
+                    'product_id' => $product['product_id'],
+                    'product_name' => $product['product_name'],
+                    'brand_id' => $brand['brand_id'],
+                    'brand_name' => $brand['brand_name'],
+                    'current_stock' => $brandStock,
+                    'reorder_point' => $product['reorder_point'],
+                    'uom_name' => $product['uom_name'],
+                    'last_cost' => $product['last_cost'],
+                    'suggested_qty' => max($product['reorder_point'] - $brandStock, 1)
+                ];
             }
         }
     }
@@ -380,18 +378,35 @@ foreach ($activeSuppliers as $supplier) {
             b.name AS brand_name,
             b.id AS brand_id,
             uom.name AS uom_name,
-            COALESCE(SUM(pb.quantity_remaining), 0) AS stock,
+            COALESCE(SUM(CASE WHEN pb.quantity_remaining > 0 THEN pb.quantity_remaining ELSE 0 END), 0) AS stock,
             COALESCE(pp.markup_price, 0) + COALESCE(AVG(pb.unit_cost), pp.cost_price, 0) AS price,
-            (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+            COALESCE(ps.reorder_point, 10) AS reorder_point,
+            (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1,
+            (SELECT COUNT(DISTINCT r.po_number) 
+             FROM restocking r 
+             WHERE r.product_id = p.product_id 
+             AND (r.brand_id = b.id OR (r.brand_id IS NULL AND b.id IS NULL))
+             AND r.supplier_id != sp.supplier_id 
+             AND r.is_purchase_order = 1 
+             AND r.status_id = 1) AS pending_po_count,
+            (SELECT GROUP_CONCAT(DISTINCT s2.name SEPARATOR ', ') 
+             FROM restocking r2 
+             INNER JOIN suppliers s2 ON r2.supplier_id = s2.supplier_id
+             WHERE r2.product_id = p.product_id 
+             AND (r2.brand_id = b.id OR (r2.brand_id IS NULL AND b.id IS NULL))
+             AND r2.supplier_id != sp.supplier_id 
+             AND r2.is_purchase_order = 1 
+             AND r2.status_id = 1) AS pending_po_suppliers
         FROM supplier_products sp
         INNER JOIN products p ON sp.product_id = p.product_id
-        LEFT JOIN product_batches pb ON p.product_id = pb.product_id AND pb.is_active = 1 AND pb.quantity_remaining > 0
+        LEFT JOIN product_batches pb ON p.product_id = pb.product_id AND pb.supplier_id = sp.supplier_id AND pb.is_active = 1
         LEFT JOIN brands b ON pb.brand_id = b.id
         LEFT JOIN categories c ON p.category_id = c.category_id
         LEFT JOIN uom uom ON p.uom_id = uom.uom_id
         LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        LEFT JOIN product_stock ps ON p.product_id = ps.product_id
         WHERE sp.supplier_id = ? AND sp.is_active = 1 AND p.is_archive = 0
-        GROUP BY p.product_id, p.product_name, p.product_description, c.category_name, b.id, b.name, uom.name, pp.markup_price, pp.cost_price
+        GROUP BY p.product_id, p.product_name, p.product_description, c.category_name, b.id, b.name, uom.name, pp.markup_price, pp.cost_price, ps.reorder_point
         ORDER BY p.product_name, b.name
     ");
     $stmt->execute([$supplier['id']]);
@@ -428,18 +443,35 @@ foreach ($archivedSuppliers as $supplier) {
             b.name AS brand_name,
             b.id AS brand_id,
             uom.name AS uom_name,
-            COALESCE(SUM(pb.quantity_remaining), 0) AS stock,
+            COALESCE(SUM(CASE WHEN pb.quantity_remaining > 0 THEN pb.quantity_remaining ELSE 0 END), 0) AS stock,
             COALESCE(pp.markup_price, 0) + COALESCE(AVG(pb.unit_cost), pp.cost_price, 0) AS price,
-            (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1
+            COALESCE(ps.reorder_point, 10) AS reorder_point,
+            (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.product_id AND pi.is_primary = 1 LIMIT 1) AS image1,
+            (SELECT COUNT(DISTINCT r.po_number) 
+             FROM restocking r 
+             WHERE r.product_id = p.product_id 
+             AND (r.brand_id = b.id OR (r.brand_id IS NULL AND b.id IS NULL))
+             AND r.supplier_id != sp.supplier_id 
+             AND r.is_purchase_order = 1 
+             AND r.status_id = 1) AS pending_po_count,
+            (SELECT GROUP_CONCAT(DISTINCT s2.name SEPARATOR ', ') 
+             FROM restocking r2 
+             INNER JOIN suppliers s2 ON r2.supplier_id = s2.supplier_id
+             WHERE r2.product_id = p.product_id 
+             AND (r2.brand_id = b.id OR (r2.brand_id IS NULL AND b.id IS NULL))
+             AND r2.supplier_id != sp.supplier_id 
+             AND r2.is_purchase_order = 1 
+             AND r2.status_id = 1) AS pending_po_suppliers
         FROM supplier_products sp
         INNER JOIN products p ON sp.product_id = p.product_id
-        LEFT JOIN product_batches pb ON p.product_id = pb.product_id AND pb.is_active = 1 AND pb.quantity_remaining > 0
+        LEFT JOIN product_batches pb ON p.product_id = pb.product_id AND pb.supplier_id = sp.supplier_id AND pb.is_active = 1
         LEFT JOIN brands b ON pb.brand_id = b.id
         LEFT JOIN categories c ON p.category_id = c.category_id
         LEFT JOIN uom uom ON p.uom_id = uom.uom_id
         LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
+        LEFT JOIN product_stock ps ON p.product_id = ps.product_id
         WHERE sp.supplier_id = ? AND sp.is_active = 1 AND p.is_archive = 0
-        GROUP BY p.product_id, p.product_name, p.product_description, c.category_name, b.id, b.name, uom.name, pp.markup_price, pp.cost_price
+        GROUP BY p.product_id, p.product_name, p.product_description, c.category_name, b.id, b.name, uom.name, pp.markup_price, pp.cost_price, ps.reorder_point
         ORDER BY p.product_name, b.name
     ");
     $stmt->execute([$supplier['id']]);
@@ -1012,12 +1044,30 @@ foreach ($archivedSuppliers as $supplier) {
                                      class="product-image"
                                      onerror="this.src='uploads/default.png'">
                                 <div class="product-details">
-                                  <div class="product-name"><?= htmlspecialchars($product['product_name']) ?></div>
+                                  <div class="product-name d-flex align-items-center gap-2">
+                                    <?= htmlspecialchars($product['product_name']) ?>
+                                    <?php if (!empty($product['pending_po_count']) && $product['pending_po_count'] > 0): ?>
+                                      <span class="badge bg-warning text-dark" 
+                                            title="Another supplier has a pending PO for this product/brand">
+                                        <i class="fa fa-exclamation-triangle me-1"></i>PO Alert
+                                      </span>
+                                    <?php endif; ?>
+                                  </div>
+                                  <?php if (!empty($product['pending_po_count']) && $product['pending_po_count'] > 0): ?>
+                                    <div class="alert alert-warning py-1 px-2 mb-2" style="font-size: 0.75rem;">
+                                      <i class="fa fa-info-circle me-1"></i>
+                                      <strong>Pending PO:</strong> <?= htmlspecialchars($product['pending_po_suppliers'] ?? 'Other supplier') ?> 
+                                      has <?= $product['pending_po_count'] ?> pending purchase order(s) for this product/brand
+                                    </div>
+                                  <?php endif; ?>
                                   <div class="product-meta">
                                     <span class="product-price">₱<?= number_format($product['price'], 2) ?></span>
                                     <span class="mx-2">•</span>
-                                    <span class="product-stock <?= $product['stock'] > 10 ? 'stock-available' : ($product['stock'] > 0 ? 'stock-low' : 'stock-out') ?>">
+                                    <span class="product-stock <?= $product['stock'] <= 0 ? 'stock-out' : ($product['stock'] <= ($product['reorder_point'] ?? 10) ? 'stock-low' : 'stock-available') ?>">
                                       Stock: <?= $product['stock'] ?> <?= htmlspecialchars($product['uom_name'] ?? '') ?>
+                                      <?php if ($product['stock'] <= ($product['reorder_point'] ?? 10) && $product['stock'] > 0): ?>
+                                        <small class="text-muted">(Reorder: <?= $product['reorder_point'] ?? 10 ?>)</small>
+                                      <?php endif; ?>
                                     </span>
                                   </div>
                                   <div class="product-meta">
@@ -1180,12 +1230,30 @@ foreach ($archivedSuppliers as $supplier) {
                                      class="product-image"
                                      onerror="this.src='uploads/default.png'">
                                 <div class="product-details">
-                                  <div class="product-name"><?= htmlspecialchars($product['product_name']) ?></div>
+                                  <div class="product-name d-flex align-items-center gap-2">
+                                    <?= htmlspecialchars($product['product_name']) ?>
+                                    <?php if (!empty($product['pending_po_count']) && $product['pending_po_count'] > 0): ?>
+                                      <span class="badge bg-warning text-dark" 
+                                            title="Another supplier has a pending PO for this product/brand">
+                                        <i class="fa fa-exclamation-triangle me-1"></i>PO Alert
+                                      </span>
+                                    <?php endif; ?>
+                                  </div>
+                                  <?php if (!empty($product['pending_po_count']) && $product['pending_po_count'] > 0): ?>
+                                    <div class="alert alert-warning py-1 px-2 mb-2" style="font-size: 0.75rem;">
+                                      <i class="fa fa-info-circle me-1"></i>
+                                      <strong>Pending PO:</strong> <?= htmlspecialchars($product['pending_po_suppliers'] ?? 'Other supplier') ?> 
+                                      has <?= $product['pending_po_count'] ?> pending purchase order(s) for this product/brand
+                                    </div>
+                                  <?php endif; ?>
                                   <div class="product-meta">
                                     <span class="product-price">₱<?= number_format($product['price'], 2) ?></span>
                                     <span class="mx-2">•</span>
-                                    <span class="product-stock <?= $product['stock'] > 10 ? 'stock-available' : ($product['stock'] > 0 ? 'stock-low' : 'stock-out') ?>">
+                                    <span class="product-stock <?= $product['stock'] <= 0 ? 'stock-out' : ($product['stock'] <= ($product['reorder_point'] ?? 10) ? 'stock-low' : 'stock-available') ?>">
                                       Stock: <?= $product['stock'] ?> <?= htmlspecialchars($product['uom_name'] ?? '') ?>
+                                      <?php if ($product['stock'] <= ($product['reorder_point'] ?? 10) && $product['stock'] > 0): ?>
+                                        <small class="text-muted">(Reorder: <?= $product['reorder_point'] ?? 10 ?>)</small>
+                                      <?php endif; ?>
                                     </span>
                   </div>
                                   <div class="product-meta">
