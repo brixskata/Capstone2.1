@@ -91,6 +91,7 @@ try {
         LEFT JOIN product_pricing pp ON p.product_id = pp.product_id
         WHERE p.is_archive = 0 AND COALESCE(ps.current_stock, 0) > 0
         GROUP BY p.product_id
+        HAVING products_sold >= 10
         ORDER BY products_sold DESC, p.created_at DESC
         LIMIT 8
     ");
