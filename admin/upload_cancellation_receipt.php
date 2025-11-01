@@ -52,9 +52,10 @@ $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
 $timestamp = date('Y-m-d_H-i-s');
 $uniqueFilename = "order_{$orderId}_{$timestamp}.{$extension}";
 
-// Set upload directory
-$uploadDir = 'uploads/cancellation_receipts/';
+// Set upload directory (relative to admin folder)
+$uploadDir = __DIR__ . '/uploads/cancellation_receipts/';
 $uploadPath = $uploadDir . $uniqueFilename;
+$relativePath = 'uploads/cancellation_receipts/' . $uniqueFilename;
 
 // Create directory if it doesn't exist
 if (!is_dir($uploadDir)) {
@@ -76,30 +77,43 @@ if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
             exit;
         }
         
+        // Update using the specific cancellation ID (more reliable than ORDER BY in UPDATE)
         $stmt = $pdo->prepare("UPDATE order_cancellations 
                               SET receipt_path = :path, 
                                   receipt_filename = :filename, 
                                   receipt_uploaded_at = NOW() 
-                              WHERE order_id = :order_id 
-                              ORDER BY created_at DESC 
-                              LIMIT 1");
+                              WHERE id = :cancellation_id");
         
         $stmt->execute([
-            'path' => $uploadPath,
+            'path' => $relativePath,
             'filename' => $uniqueFilename,
-            'order_id' => $orderId
+            'cancellation_id' => $cancellationId
         ]);
+        
+        // Check if the update was successful
+        if ($stmt->rowCount() === 0) {
+            unlink($uploadPath);
+            error_log("Receipt upload failed: No rows updated for cancellation_id {$cancellationId}, order_id {$orderId}");
+            echo json_encode(['success' => false, 'message' => 'Failed to update cancellation record. Cancellation ID: ' . $cancellationId]);
+            exit;
+        }
+        
+        error_log("Receipt uploaded successfully: order_id {$orderId}, cancellation_id {$cancellationId}, path: {$relativePath}");
         
         echo json_encode([
             'success' => true, 
             'message' => 'Receipt uploaded successfully',
-            'file_path' => $uploadPath,
-            'filename' => $uniqueFilename
+            'file_path' => $relativePath,
+            'filename' => $uniqueFilename,
+            'cancellation_id' => $cancellationId
         ]);
         
     } catch (PDOException $e) {
         // If database update fails, delete the uploaded file
-        unlink($uploadPath);
+        if (file_exists($uploadPath)) {
+            unlink($uploadPath);
+        }
+        error_log("Receipt upload error for order {$orderId}: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
     }
 } else {

@@ -255,6 +255,10 @@ try {
 
   // Inventory value data removed — chart omitted from dashboard
 
+  // Get pending ID verifications
+  $stmt = $pdo->query("SELECT COUNT(*) FROM customer_id_verification WHERE status = 'pending'");
+  $pendingIdVerifications = $stmt->fetchColumn() ?: 0;
+
 } catch (Exception $e) {
 	echo "Error: " . $e->getMessage();
 }
@@ -628,14 +632,14 @@ $page_description = 'Admin dashboard for managing MikeMadz frozen product store'
           </a>
         </div>
         <div class="col-md-3">
-          <a href="stock_levels.php" class="text-decoration-none">
+          <a href="id_verification_management.php" class="text-decoration-none">
             <div class="analytics-card">
               <div class="card-icon">
-                <i class="fas fa-warehouse"></i>
+                <i class="fas fa-id-card"></i>
               </div>
               <div class="card-content">
-                <h3 class="card-number"><?php echo $inStockBrands; ?></h3>
-                <p class="card-label">Sufficient</p>
+                <h3 class="card-number"><?php echo $pendingIdVerifications; ?></h3>
+                <p class="card-label">Pending ID Verification</p>
               </div>
             </div>
           </a>

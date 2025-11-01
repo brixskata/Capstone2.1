@@ -21,12 +21,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
         $_SESSION['error'] = "All fields are required.";
     } else {
         try {
-            // Join users and user_info tables to get user data with email
-            // Get the LATEST VERIFIED user with this email
+            // First, check if user exists (without email_verified filter)
             $sql = "SELECT u.user_id, u.username, u.password, u.email_verified, u.is_active, u.usertype_id, ui.email 
                     FROM users u 
                     INNER JOIN user_info ui ON u.user_id = ui.user_id 
-                    WHERE ui.email = :email AND u.email_verified = 1
+                    WHERE ui.email = :email
                     ORDER BY u.date_created DESC 
                     LIMIT 1";
             $stmt = $pdo->prepare($sql);
@@ -35,8 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($user && password_verify($password, $user['password'])) {
+                // Check email verification status
                 if ($user['email_verified'] == 0) {
-                    $_SESSION['error'] = "Please verify your email before logging in. <a href='email_verification.php' style='color: #7F1734;'>Click here to verify</a>";
+                    $_SESSION['error'] = "Please verify your email before logging in. <a href='email_verification.php?email=" . urlencode($email) . "' style='color: #7F1734;'>Click here to verify</a>";
                 } else if ($user['is_active'] == 0) {
                     $_SESSION['error'] = "Your account has been deactivated. Please contact support.";
                 } else {

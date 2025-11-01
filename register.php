@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 // Commit transaction
                 $pdo->commit();
                 
-                $_SESSION['success'] = "Registration successful! Verify your email to complete the process.";
+                $_SESSION['success'] = "Registration successful! Make sure to verify your email to complete the process.";
                 header("Location: email_verification.php?email=" . urlencode($email));
                 exit;
             } catch (PDOException $e) {

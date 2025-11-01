@@ -200,8 +200,14 @@ if (isset($_POST['cancel_order'])) {
                     $needsRefund = true;
                     // Update cancellation reason to indicate refund needed
                     $refundReason = $reason . " - REFUND REQUIRED (Payment: " . $payment['method'] . ")";
-                    $updateStmt = $pdo->prepare("UPDATE order_cancellations SET reason = ? WHERE order_id = ? ORDER BY created_at DESC LIMIT 1");
-                    $updateStmt->execute([$refundReason, $order_id]);
+                    // Get the latest cancellation ID for this order
+                    $getIdStmt = $pdo->prepare("SELECT id FROM order_cancellations WHERE order_id = ? ORDER BY created_at DESC LIMIT 1");
+                    $getIdStmt->execute([$order_id]);
+                    $cancellationId = $getIdStmt->fetchColumn();
+                    if ($cancellationId) {
+                        $updateStmt = $pdo->prepare("UPDATE order_cancellations SET reason = ? WHERE id = ?");
+                        $updateStmt->execute([$refundReason, $cancellationId]);
+                    }
                 }
             }
 
@@ -216,6 +222,21 @@ if (isset($_POST['cancel_order'])) {
 
             $pdo->commit();
             
+            // Check if this is an AJAX request
+            $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+            
+            if ($isAjax) {
+                // Return JSON for AJAX requests
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'message' => $needsRefund ? 'Order cancelled successfully! Please upload the refund receipt.' : 'Order cancelled successfully!',
+                    'needs_refund' => $needsRefund,
+                    'order_id' => $order_id
+                ]);
+                exit;
+            }
+            
             if ($needsRefund) {
                 $_SESSION['success'] = "Order cancelled successfully! Please upload the refund receipt for the customer.";
             } else {
@@ -223,11 +244,29 @@ if (isset($_POST['cancel_order'])) {
             }
         } catch (Exception $e) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            
+            // Check if this is an AJAX request
+            $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+            
+            if ($isAjax) {
+                // Return JSON for AJAX requests
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => false,
+                    'message' => "Error cancelling order: " . $e->getMessage()
+                ]);
+                exit;
+            }
+            
             $_SESSION['error'] = "Error cancelling order: " . $e->getMessage();
         }
     }
-    header("Location: transaction_logs.php");
-    exit;
+    
+    // Only redirect if not AJAX request
+    if (!isset($isAjax) || !$isAjax) {
+        header("Location: transaction_logs.php");
+        exit;
+    }
 }
 
 // Fetch orders with filtering
@@ -240,6 +279,7 @@ $query = "
            u.username,
            ui.email,
            ui.phone,
+           ui.gcash_number,
            a.address_line,
            a.address_line2,
            a.city,
@@ -295,7 +335,7 @@ if ($search) {
     $query .= " AND (u.username LIKE '%$s%' OR o.orders_id LIKE '%$s%')";
 }
 
-$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.rider_contact_number, o.transaction_number, o.application_name, o.rider_name, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at ASC";
+$query .= " GROUP BY o.orders_id, u.username, ui.email, ui.phone, ui.gcash_number, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.rider_contact_number, o.transaction_number, o.application_name, o.rider_name, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at ORDER BY o.created_at ASC";
 
 try {
     $orders = $pdo->query($query)->fetchAll();
@@ -326,6 +366,7 @@ foreach ($statuses as $status) {
                u.username,
                ui.email,
                ui.phone,
+               ui.gcash_number,
                a.address_line,
                a.address_line2,
                a.city,
@@ -368,7 +409,7 @@ foreach ($statuses as $status) {
             ) latest ON latest.order_id = oc1.order_id AND latest.max_id = oc1.id
         ) oc ON oc.order_id = o.orders_id
         WHERE os.status_name = :status
-        GROUP BY o.orders_id, u.username, ui.email, ui.phone, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.rider_contact_number, o.transaction_number, o.application_name, o.rider_name, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at 
+        GROUP BY o.orders_id, u.username, ui.email, ui.phone, ui.gcash_number, a.address_line, a.address_line2, a.city, a.state, a.postal_code, a.country, os.status_name, o.total_price, o.delivery_option, o.plate_number, o.rider_contact_number, o.transaction_number, o.application_name, o.rider_name, o.pickup_ready_at, o.created_at, pay.method, pay.proof, pay.transaction_id, oc.reason, oc.receipt_path, oc.receipt_filename, oc.receipt_uploaded_at 
         ORDER BY o.created_at ASC
     ";
     
@@ -1129,6 +1170,10 @@ foreach ($statuses as $status) {
                   <div class="row mb-2">
                     <div class="col-4"><strong>Phone:</strong></div>
                     <div class="col-8" id="modalCustomerPhone">-</div>
+                  </div>
+                  <div class="row mb-2">
+                    <div class="col-4"><strong>GCash #:</strong></div>
+                    <div class="col-8" id="modalCustomerGCash">-</div>
                             </div>
                   <div class="row mb-2">
                     <div class="col-4"><strong>Address:</strong></div>
@@ -1882,17 +1927,40 @@ foreach ($statuses as $status) {
 
     function proceedWithCancellation(orderId, hoursElapsed) {
       return new Promise((resolve, reject) => {
-        // Create and submit form with cancellation reason
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `
-          <input type="hidden" name="order_id" value="${orderId}">
-          <input type="hidden" name="cancel_reason" value="Customer did not pick up order within 3 hours (${hoursElapsed} hours elapsed)">
-          <input type="hidden" name="cancel_order" value="1">
-        `;
-        document.body.appendChild(form);
-        form.submit();
-        resolve();
+        // Use AJAX instead of form submission to avoid page reload
+        const formData = new FormData();
+        formData.append('order_id', orderId);
+        formData.append('cancel_reason', `Customer did not pick up order within 3 hours (${hoursElapsed} hours elapsed)`);
+        formData.append('cancel_order', '1');
+        
+        fetch('transaction_logs.php', {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: formData
+        })
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            throw new Error('Cancellation request failed');
+          }
+        })
+        .then(data => {
+          if (data.success) {
+            // Wait a bit for the database transaction to complete
+            setTimeout(() => {
+              resolve(data);
+            }, 300);
+          } else {
+            reject(new Error(data.message || 'Cancellation failed'));
+          }
+        })
+        .catch(error => {
+          console.error('Cancellation error:', error);
+          reject(error);
+        });
       });
     }
 
@@ -2136,34 +2204,30 @@ foreach ($statuses as $status) {
 
         fetch('transaction_logs.php', {
           method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          },
           body: formData
         })
         .then(response => {
           if (response.ok) {
-            // Show success message and refresh the page
-            Swal.fire({
-              icon: 'success',
-              title: 'Order Cancelled!',
-              text: 'The order has been successfully cancelled.',
-              confirmButtonColor: '#7F1734',
-              timer: 2000,
-              timerProgressBar: true,
-              customClass: {
-                popup: 'swal2-popup-custom',
-                title: 'swal2-title-custom',
-                htmlContainer: 'swal2-html-container-custom',
-                confirmButton: 'swal2-confirm-button-custom'
-              }
-            }).then(() => {
-              // Refresh the page to show updated order status
-              location.reload();
-            });
-            resolve();
+            return response.json();
           } else {
-            reject(new Error('Cancellation failed'));
+            throw new Error('Cancellation request failed');
+          }
+        })
+        .then(data => {
+          if (data.success) {
+            // Wait a bit for the database transaction to complete
+            setTimeout(() => {
+              resolve(data);
+            }, 300);
+          } else {
+            reject(new Error(data.message || 'Cancellation failed'));
           }
         })
         .catch(error => {
+          console.error('Cancellation error:', error);
           reject(error);
         });
       });
@@ -2385,7 +2449,36 @@ foreach ($statuses as $status) {
       });
     }
 
-    function viewOrderDetails(orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate, applicationName, riderName, plateNumber, riderContactNumber, transactionNumber) {
+function viewOrderDetails(orderId, username, email, phoneOrGcash, maybeGcashOrAddressLine, addressLine2, city, state, postalCode, country, items, totalAmount, paymentMethod, paymentProof, transactionId, status, deliveryOption, orderDate, applicationName, riderName, plateNumber, riderContactNumber, transactionNumber) {
+      // Backward-compatible parameter mapping: older calls didn't pass gcash number.
+      let phone = phoneOrGcash;
+      let gcashNumber = '';
+      let addressLine = maybeGcashOrAddressLine;
+      // If the 5th arg looks like a GCash number (11 digits) and the 6th arg looks like an address (contains letter/space), assume new signature
+      if (typeof maybeGcashOrAddressLine === 'string' && /^\d{11}$/.test(maybeGcashOrAddressLine)) {
+        // New signature: phone, gcash, addressLine
+        gcashNumber = maybeGcashOrAddressLine;
+        // In this case, the next arg is actually addressLine2; shift left by one
+        addressLine = addressLine2;
+        addressLine2 = city;
+        city = state;
+        state = postalCode;
+        postalCode = country;
+        country = items;
+        items = totalAmount;
+        totalAmount = paymentMethod;
+        paymentMethod = paymentProof;
+        paymentProof = transactionId;
+        transactionId = status;
+        status = deliveryOption;
+        deliveryOption = orderDate;
+        orderDate = applicationName;
+        applicationName = riderName;
+        riderName = plateNumber;
+        plateNumber = riderContactNumber;
+        riderContactNumber = transactionNumber;
+        transactionNumber = undefined;
+      }
       // Debug: Log the received data
       console.log('Order Details Data:', {
         orderId, username, email, phone, addressLine, addressLine2, city, state, postalCode, country, 
@@ -2408,6 +2501,7 @@ foreach ($statuses as $status) {
       document.getElementById('modalCustomerUsername').textContent = username || 'N/A';
       document.getElementById('modalCustomerEmail').textContent = email || 'N/A';
       document.getElementById('modalCustomerPhone').textContent = phone || 'N/A';
+      document.getElementById('modalCustomerGCash').textContent = gcashNumber || 'N/A';
       
       // Format address
       let address = '';
@@ -2969,7 +3063,7 @@ foreach ($statuses as $status) {
             </td>
             <td>
               <div class="d-flex gap-1 flex-wrap">
-                <button type="button" class="action-btn" style="background: #6c757d; color: white;" onclick="event.stopPropagation(); viewOrderDetails(${order.id || 0}, '${(order.username || '').replace(/'/g, "\\'")}', '${(order.email || '').replace(/'/g, "\\'")}', '${(order.phone || '').replace(/'/g, "\\'")}', '${(order.address_line || '').replace(/'/g, "\\'")}', '${(order.address_line2 || '').replace(/'/g, "\\'")}', '${(order.city || '').replace(/'/g, "\\'")}', '${(order.state || '').replace(/'/g, "\\'")}', '${(order.postal_code || '').replace(/'/g, "\\'")}', '${(order.country || '').replace(/'/g, "\\'")}', '${(order.items || '').replace(/'/g, "\\'")}', '${order.total_amount || 0}', '${(order.payment_method || '').replace(/'/g, "\\'")}', '${(order.payment_proof || '').replace(/'/g, "\\'")}', '${(order.gcash_transaction_id || '').replace(/'/g, "\\'")}', '${(order.status || '').replace(/'/g, "\\'")}', '${(order.delivery_option || '').replace(/'/g, "\\'")}', '${order.created_at || ''}', '${(order.application_name || '').replace(/'/g, "\\'")}', '${(order.rider_name || '').replace(/'/g, "\\'")}', '${(order.plate_number || '').replace(/'/g, "\\'")}', '${(order.transaction_number || '').replace(/'/g, "\\'")}')">
+                <button type="button" class="action-btn" style="background: #6c757d; color: white;" onclick="event.stopPropagation(); viewOrderDetails(${order.id || 0}, '${(order.username || '').replace(/'/g, "\\'")}', '${(order.email || '').replace(/'/g, "\\'")}', '${(order.phone || '').replace(/'/g, "\\'")}', '${(order.gcash_number || '').replace(/'/g, "\\'")}', '${(order.address_line || '').replace(/'/g, "\\'")}', '${(order.address_line2 || '').replace(/'/g, "\\'")}', '${(order.city || '').replace(/'/g, "\\'")}', '${(order.state || '').replace(/'/g, "\\'")}', '${(order.postal_code || '').replace(/'/g, "\\'")}', '${(order.country || '').replace(/'/g, "\\'")}', '${(order.items || '').replace(/'/g, "\\'")}', '${order.total_amount || 0}', '${(order.payment_method || '').replace(/'/g, "\\'")}', '${(order.payment_proof || '').replace(/'/g, "\\'")}', '${(order.gcash_transaction_id || '').replace(/'/g, "\\'")}', '${(order.status || '').replace(/'/g, "\\'")}', '${(order.delivery_option || '').replace(/'/g, "\\'")}', '${order.created_at || ''}', '${(order.application_name || '').replace(/'/g, "\\'")}', '${(order.rider_name || '').replace(/'/g, "\\'")}', '${(order.plate_number || '').replace(/'/g, "\\'")}', '${(order.transaction_number || '').replace(/'/g, "\\'")}')">
                   <i class="fas fa-eye me-1"></i>View Details
                 </button>
                 ${generateActionButtons(order, isSuperAdmin)}
@@ -3021,12 +3115,18 @@ foreach ($statuses as $status) {
           </span>`;
         }
         
-             // Add cancel button for overdue orders
+             // Add cancel button for overdue orders - ONLY for Cash on Delivery (not paid orders)
              if (isOverdue) {
-               const hoursElapsed = timeDiff / (1000 * 60 * 60);
-               buttons += `<button type="button" class="action-btn" style="background: #dc3545; color: white;" onclick="event.stopPropagation(); cancelOverduePickup(${order.id}, ${Math.round(hoursElapsed * 10) / 10}, '${order.payment_method || ''}', '${order.payment_proof || ''}')">
-                 <i class="fas fa-exclamation-triangle me-1"></i>Cancel Order
-               </button>`;
+               // Only show cancel button for COD orders (no payment method or Cash on Delivery)
+               const paymentMethod = (order.payment_method || '').toLowerCase();
+               const isCOD = !order.payment_method || !order.payment_proof || paymentMethod === 'cash on delivery';
+               
+               if (isCOD) {
+                 const hoursElapsed = timeDiff / (1000 * 60 * 60);
+                 buttons += `<button type="button" class="action-btn" style="background: #dc3545; color: white;" onclick="event.stopPropagation(); cancelOverduePickup(${order.id}, ${Math.round(hoursElapsed * 10) / 10}, '${order.payment_method || ''}', '${order.payment_proof || ''}')">
+                   <i class="fas fa-exclamation-triangle me-1"></i>Cancel Order
+                 </button>`;
+               }
              }
       } else if (order.status === 'Out for delivery') {
         buttons += `<span class="action-btn btn-waiting" title="Waiting for customer to confirm receipt">

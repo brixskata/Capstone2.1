@@ -1039,10 +1039,12 @@ $page_keywords = 'meat catalog, seafood catalog, fresh products, MikeMadz produc
                             <?= htmlspecialchars($product['name']) ?>
                         </h3>
 
+                        <?php if ((float)$product['stock'] > 0): ?>
                         <div class="product-price">
                             ₱<?= number_format($product['price'], 2) ?>
                             <span class="fs-6 text-muted"> / <?= htmlspecialchars($product['uom_name'] ?? '') ?></span>
                         </div>
+                        <?php endif; ?>
 
                         <div class="product-stock">
                             <?php if ($product['stock'] > 0): ?>

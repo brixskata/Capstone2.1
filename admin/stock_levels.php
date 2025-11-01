@@ -18,46 +18,6 @@ if (isCustomer($pdo)) {
     exit;
 }
 
-// Handle reorder point update
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_reorder_point'])) {
-    try {
-        $product_id = (int)$_POST['product_id'];
-        $brand_id = (int)$_POST['brand_id'];
-        $reorder_point = (int)$_POST['reorder_point'];
-        
-        if ($reorder_point < 0) {
-            throw new Exception("Reorder point cannot be negative.");
-        }
-
-        // Update reorder point in brand_product_stock table (single source of truth)
-        $stmt = $pdo->prepare("UPDATE brand_product_stock SET reorder_point = ?, last_calculated = NOW() WHERE product_id = ? AND brand_id = ?");
-        $stmt->execute([$reorder_point, $product_id, $brand_id]);
-        
-        // Also update product_stock table for backward compatibility
-        $stmt = $pdo->prepare("UPDATE product_stock SET reorder_point = ? WHERE product_id = ?");
-        $stmt->execute([$reorder_point, $product_id]);
-
-        // Get product and brand names for logging
-        $stmt = $pdo->prepare("
-            SELECT p.product_name, b.name as brand_name 
-            FROM products p 
-            LEFT JOIN brands b ON b.id = ? 
-            WHERE p.product_id = ?
-        ");
-        $stmt->execute([$brand_id, $product_id]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        $product_name = $result['product_name'];
-        $brand_name = $result['brand_name'];
-
-        logHistory($pdo, 'Reorder Point Updated', "Product: $product_name, Brand: $brand_name, New Reorder Point: $reorder_point", $_SESSION['username']);
-        $_SESSION['success'] = "Reorder point updated successfully!";
-    } catch (Exception $e) {
-        $_SESSION['error'] = "Error updating reorder point: " . $e->getMessage();
-    }
-    header("Location: stock_levels.php");
-    exit;
-}
-
 // Initialize reorder point calculator
 $ropCalculator = new ReorderPointCalculator($pdo);
 
@@ -91,6 +51,35 @@ $stmt = $pdo->query("
     ORDER BY total_stock ASC, b.name
 ");
 $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch product-brand details for each brand (for expandable rows)
+$brandProducts = [];
+foreach ($brands as $brand) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            p.product_id,
+            p.product_name,
+            b.id as brand_id,
+            b.name as brand_name,
+            uom.name as uom_name,
+            COALESCE(SUM(pb.quantity_remaining), 0) as current_stock,
+            COALESCE(bps.reorder_point, ps.reorder_point, 10) as reorder_point,
+            COALESCE(bps.average_daily_sales, 0) as ads,
+            COALESCE(bps.movement_type, 'Non-Moving') as movement_type,
+            ps.last_restock_date
+        FROM product_batches pb
+        INNER JOIN products p ON pb.product_id = p.product_id
+        INNER JOIN brands b ON pb.brand_id = b.id
+        LEFT JOIN uom ON p.uom_id = uom.uom_id
+        LEFT JOIN brand_product_stock bps ON bps.product_id = p.product_id AND bps.brand_id = b.id
+        LEFT JOIN product_stock ps ON ps.product_id = p.product_id
+        WHERE b.id = ? AND pb.is_active = 1 AND p.is_archive = 0
+        GROUP BY p.product_id, b.id, b.name, p.product_name, uom.name, bps.reorder_point, ps.reorder_point, bps.average_daily_sales, bps.movement_type, ps.last_restock_date
+        ORDER BY p.product_name
+    ");
+    $stmt->execute([$brand['brand_id']]);
+    $brandProducts[$brand['brand_id']] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 // Calculate stock level statistics using consistent stock status logic
 $total_brands = count($brands);
@@ -375,7 +364,7 @@ if ($filter === 'low_stock') {
                         <h2>
                             <i class="fa fa-chart-line me-3"></i>Brand Stock Levels
                         </h2>
-                        <p class="mb-0 opacity-75">Monitor real-time stock levels by brand and manage reorder points</p>
+                        <p class="mb-0 opacity-75">Monitor real-time stock levels by brand (reorder points are automatically calculated based on sales data)</p>
                     </div>
                     <div class="text-white opacity-75">
                         <small><i class="fa fa-info-circle me-1"></i>Reorder points are automatically calculated based on sales data</small>
@@ -482,9 +471,15 @@ if ($filter === 'low_stock') {
                             $is_low_stock = $stock_status === 'Low Stock';
                             $is_out_of_stock = $stock_status === 'Out of Stock';
                             ?>
-                            <tr class="<?= $is_out_of_stock ? 'out-of-stock-item' : ($is_low_stock ? 'low-stock-item' : '') ?>">
+                            <tr class="brand-row <?= $is_out_of_stock ? 'out-of-stock-item' : ($is_low_stock ? 'low-stock-item' : '') ?>" 
+                                style="cursor: pointer;" 
+                                onclick="toggleBrandProducts(<?= $brand['brand_id'] ?>)"
+                                data-brand-id="<?= $brand['brand_id'] ?>">
                                 <td>
-                                    <div class="fw-semibold"><?= htmlspecialchars($brand['brand_name']) ?></div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="fa fa-chevron-right text-muted" id="chevron-<?= $brand['brand_id'] ?>" style="font-size: 0.75rem; transition: transform 0.3s;"></i>
+                                        <div class="fw-semibold"><?= htmlspecialchars($brand['brand_name']) ?></div>
+                                    </div>
                                 </td>
                                 <td>
                                     <span class="badge" style="background: #cce5ff; color: #004085; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;"><?= $brand['product_count'] ?> products</span>
@@ -516,13 +511,107 @@ if ($filter === 'low_stock') {
                                     <?= !empty($brand['last_restock_date']) ? date('M d, Y', strtotime($brand['last_restock_date'])) : 'Never' ?>
                                 </td>
                                 <td>
-                                    <div class="btn-group" role="group">
+                                    <div class="btn-group" role="group" onclick="event.stopPropagation();">
                                         <a href="restocking.php" class="btn btn-sm" style="background: #d4edda; color: #155724; border-radius: 8px;">
                                             <i class="fa fa-plus me-1"></i>Restock
                                         </a>
                                         <a href="product_movement_analysis.php" class="btn btn-sm" style="background: #cce5ff; color: #004085; border-radius: 8px;">
                                             <i class="fa fa-chart-bar me-1"></i>Analysis
                                         </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            <!-- Expandable Product-Brand Details Row -->
+                            <tr id="products-row-<?= $brand['brand_id'] ?>" class="products-detail-row" style="display: none;">
+                                <td colspan="8">
+                                    <div class="p-4 bg-light rounded">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <h6 class="fw-semibold mb-0">
+                                                <i class="fa fa-box me-2 text-primary"></i>Product Details for <?= htmlspecialchars($brand['brand_name']) ?>
+                                            </h6>
+                                        </div>
+                                        <?php 
+                                        $products = $brandProducts[$brand['brand_id']] ?? [];
+                                        if (!empty($products)): ?>
+                                            <div class="table-responsive">
+                                                <table class="table table-sm table-hover mb-0 bg-white rounded">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th class="fw-semibold">Product</th>
+                                                            <th class="fw-semibold">Current Stock</th>
+                                                            <th class="fw-semibold">Sales/Day</th>
+                                                            <th class="fw-semibold">Reorder Point</th>
+                                                            <th class="fw-semibold">Status</th>
+                                                            <th class="fw-semibold">Movement Type</th>
+                                                            <th class="fw-semibold">Last Restock</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <?php foreach ($products as $product): ?>
+                                                            <?php
+                                                            $productStock = (float)$product['current_stock'];
+                                                            $productROP = (float)$product['reorder_point'];
+                                                            $productStatus = $ropCalculator->getStockStatus($productStock, $productROP);
+                                                            $isProductLow = $productStatus === 'Low Stock';
+                                                            $isProductOut = $productStatus === 'Out of Stock';
+                                                            ?>
+                                                            <tr class="<?= $isProductOut ? 'out-of-stock-item' : ($isProductLow ? 'low-stock-item' : '') ?>">
+                                                                <td>
+                                                                    <div class="fw-semibold"><?= htmlspecialchars($product['product_name']) ?></div>
+                                                                    <small class="text-muted"><?= htmlspecialchars($product['uom_name'] ?? '') ?></small>
+                                                                </td>
+                                                                <td>
+                                                                    <span class="fw-semibold <?= $isProductOut ? 'text-danger' : ($isProductLow ? 'text-warning' : 'text-success') ?>">
+                                                                        <?= number_format($productStock, 2) ?>
+                                                                    </span>
+                                                                </td>
+                                                                <td>
+                                                                    <span class="fw-semibold"><?= number_format($product['ads'], 2) ?></span>
+                                                                </td>
+                                                                <td>
+                                                                    <span class="fw-semibold"><?= number_format($productROP, 2) ?></span>
+                                                                </td>
+                                                                <td>
+                                                                    <?php
+                                                                    $statusColors = [
+                                                                        'Sufficient' => ['bg' => '#d4edda', 'color' => '#155724'],
+                                                                        'Low Stock' => ['bg' => '#fff3cd', 'color' => '#856404'],
+                                                                        'Out of Stock' => ['bg' => '#f5c6cb', 'color' => '#721c24']
+                                                                    ];
+                                                                    $statusColor = $statusColors[$productStatus] ?? $statusColors['Sufficient'];
+                                                                    ?>
+                                                                    <span class="badge" style="background: <?= $statusColor['bg'] ?>; color: <?= $statusColor['color'] ?>; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                                                                        <?= $productStatus ?>
+                                                                    </span>
+                                                                </td>
+                                                                <td>
+                                                                    <?php
+                                                                    $movementColors = [
+                                                                        'Fast-Moving' => ['bg' => '#d4edda', 'color' => '#155724'],
+                                                                        'Slow-Moving' => ['bg' => '#fff3cd', 'color' => '#856404'],
+                                                                        'Non-Moving' => ['bg' => '#e2e3e5', 'color' => '#383d41']
+                                                                    ];
+                                                                    $movColor = $movementColors[$product['movement_type']] ?? $movementColors['Non-Moving'];
+                                                                    ?>
+                                                                    <span class="badge" style="background: <?= $movColor['bg'] ?>; color: <?= $movColor['color'] ?>; border-radius: 15px; padding: 4px 8px; font-size: 0.7rem;">
+                                                                        <?= htmlspecialchars($product['movement_type']) ?>
+                                                                    </span>
+                                                                </td>
+                                                                <td class="text-muted">
+                                                                    <?= !empty($product['last_restock_date']) ? date('M d, Y', strtotime($product['last_restock_date'])) : 'Never' ?>
+                                                                </td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="text-center py-4">
+                                                <i class="fa fa-box-open display-4 text-muted mb-3"></i>
+                                                <h6 class="text-muted">No Products Found</h6>
+                                                <p class="text-muted">This brand doesn't have any active products with stock.</p>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>
@@ -534,57 +623,22 @@ if ($filter === 'low_stock') {
         </div>
     </main>
 
-    <!-- Reorder Point Modal -->
-    <div class="modal fade" id="reorderModal" tabindex="-1">
-        <div class="modal-dialog">
-            <form action="stock_levels.php" method="POST">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title fw-bold">
-                            <i class="fa fa-edit me-2" style="color: #7F1734;"></i>Update Reorder Point
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <input type="hidden" name="update_reorder_point" value="1">
-                        <input type="hidden" name="product_id" id="reorderProductId">
-                        <input type="hidden" name="brand_id" id="reorderBrandId">
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Brand</label>
-                            <input type="text" id="reorderBrandName" class="form-control" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Product</label>
-                            <input type="text" id="reorderProductName" class="form-control" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">New Reorder Point</label>
-                            <input type="number" name="reorder_point" id="reorderPointInput" class="form-control" required min="0">
-                            <small class="text-muted">Set the minimum stock level at which to trigger reordering</small>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn text-white fw-bold" style="background-color: #7F1734; border-radius: 8px;">
-                            <i class="fa fa-save me-2"></i>Update Reorder Point
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <?php include 'includes/admin_scripts.php'; ?>
     <script>
-        function openReorderModal(productId, productName, brandId, brandName, currentReorderPoint) {
-            const modal = new bootstrap.Modal(document.getElementById('reorderModal'));
-            document.getElementById('reorderProductId').value = productId;
-            document.getElementById('reorderBrandId').value = brandId;
-            document.getElementById('reorderProductName').value = productName;
-            document.getElementById('reorderBrandName').value = brandName;
-            document.getElementById('reorderPointInput').value = currentReorderPoint;
-            modal.show();
+        function toggleBrandProducts(brandId) {
+            const productsRow = document.getElementById('products-row-' + brandId);
+            const chevron = document.getElementById('chevron-' + brandId);
+            
+            if (productsRow.style.display === 'none' || productsRow.style.display === '') {
+                // Show products
+                productsRow.style.display = 'table-row';
+                chevron.style.transform = 'rotate(90deg)';
+            } else {
+                // Hide products
+                productsRow.style.display = 'none';
+                chevron.style.transform = 'rotate(0deg)';
+            }
         }
     </script>
 </body>

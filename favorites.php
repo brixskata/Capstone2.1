@@ -220,6 +220,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
             height: 100%;
             position: relative;
             overflow: hidden;
+            cursor: pointer;
         }
 
         .product-card:hover {
@@ -340,6 +341,8 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
             gap: 0.5rem;
             align-items: center;
             justify-content: center;
+            position: relative;
+            z-index: 10;
         }
 
         .btn-remove-favorite {
@@ -354,6 +357,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
             display: flex;
             align-items: center;
             justify-content: center;
+            cursor: pointer;
         }
 
         .btn-remove-favorite:hover {
@@ -526,7 +530,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="row g-4">
                 <?php foreach ($favorites as $product): ?>
                     <div class="col-md-6 col-lg-4 col-xl-3">
-                        <div class="product-card">
+                        <div class="product-card" onclick="window.location.href='product_detail.php?id=<?= $product['id'] ?>'">
                             <!-- Favorite Badge -->
                             <span class="favorite-badge">
                                 <i class="fas fa-heart"></i>
@@ -540,7 +544,6 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                  onerror="this.src='images/beefscrap.png'">
 
                             <h3 class="product-title"><?= htmlspecialchars($product['name']) ?></h3>
-                            <p class="product-desc"><?= htmlspecialchars($product['description']) ?></p>
 
                             <!-- Product Rating -->
                             <div class="product-rating mb-2">
@@ -567,7 +570,7 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </div>
 
                             <div class="product-price">
-                                From ₱<?= number_format($product['lowest_price'], 2) ?>
+                                ₱<?= number_format($product['lowest_price'], 2) ?>
                             </div>
 
                             <!-- Stock and Sold Info - Aligned horizontally -->
@@ -611,7 +614,8 @@ $favorites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     <script>
         document.querySelectorAll('.btn-remove-favorite').forEach(btn => {
-            btn.addEventListener('click', function () {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation(); // Prevent card click from triggering
                 const productId = this.getAttribute('data-product-id');
                 const card = this.closest('.col-md-6, .col-lg-4, .col-xl-3');
 

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 22, 2025 at 08:04 AM
+-- Generation Time: Oct 31, 2025 at 02:53 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -51,7 +51,6 @@ CREATE TABLE `addresses` (
 --
 
 INSERT INTO `addresses` (`address_id`, `user_id`, `address_line`, `address_line2`, `city`, `state`, `postal_code`, `country`, `is_default`, `date_created`, `date_updated`, `latitude`, `longitude`, `geocoded`, `geocoded_at`, `locationiq_confidence`) VALUES
-(3, 9, 'kasunduan extension', '', 'Quezon City', 'Metro Manila', '1121', 'Philippines', 1, '2025-09-17 12:56:11', '2025-09-17 12:56:11', NULL, NULL, 0, NULL, NULL),
 (4, 10, 'bagong silang', '', 'Quezon City', 'Metro Manila', '1119', 'Philippines', 1, '2025-09-17 15:35:32', '2025-09-17 15:35:32', NULL, NULL, 0, NULL, NULL),
 (6, 11, 'Blumentritt Road, Santa Cruz, Manila, Capital District, Metro Manila, 1014, Philippines', 'Near 7/11', 'Manila', 'Metro Manila', '1014', 'Philippines', 0, '2025-10-07 12:11:21', '2025-10-07 12:11:21', NULL, NULL, 0, NULL, NULL),
 (8, 11, 'De La Salle University Manila, 2401, Taft Avenue, Barangay 726, Malate, Manila, Capital District, Metro Manila, 1004, Philippines', 'Near 7/11', 'Manila', 'Metro Manila', '1004', 'Philippines', 1, '2025-10-08 13:22:38', '2025-10-08 13:22:38', NULL, NULL, 0, NULL, NULL),
@@ -62,7 +61,8 @@ INSERT INTO `addresses` (`address_id`, `user_id`, `address_line`, `address_line2
 (13, 3, 'Kasunduan Street, Commonwealth, 2nd District, Quezon City, Eastern Manila District, Metro Manila, 1121, Philippines', '', 'Quezon City', '', '1121', 'Philippines', 0, '2025-10-09 13:28:21', '2025-10-09 13:28:21', NULL, NULL, 0, NULL, NULL),
 (14, 11, '100 kasunduan extension barangay commonwealth', '', 'Quezon City', 'NCR', '1100', 'Philippines', 0, '2025-10-19 15:39:47', '2025-10-19 15:39:47', NULL, NULL, 0, NULL, NULL),
 (15, 11, '100 kasunduan extension barangay commonwealth', '', 'Quezon City', '', '1100', 'Philippines', 0, '2025-10-19 15:44:06', '2025-10-19 15:44:06', NULL, NULL, 0, NULL, NULL),
-(16, 20, '1239 Quirino Avenue, Barangay Tambo', '', 'Parañaque', 'NCR', '1700', 'Philippines', 0, '2025-10-22 05:25:54', '2025-10-22 05:25:54', NULL, NULL, 0, NULL, NULL);
+(16, 20, '1239 Quirino Avenue, Barangay Tambo', '', 'Parañaque', 'NCR', '1700', 'Philippines', 0, '2025-10-22 05:25:54', '2025-10-22 05:25:54', NULL, NULL, 0, NULL, NULL),
+(17, 9, '100-c Kasunduan Extension Brgy. Commonwealth Q.c.', 'Katena Hoa Multipurpose', 'QUEZON CITY', 'NCR', '1121', 'Philippines', 0, '2025-10-30 13:47:43', '2025-10-30 13:47:43', NULL, NULL, 0, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -339,7 +339,60 @@ INSERT INTO `batch_movements` (`movement_id`, `batch_id`, `product_id`, `movemen
 (224, 98, 20, 'sale', 1.0, 'order', 363, '2025-10-22 05:48:59', 20, 'Order #363 - Customer purchase'),
 (225, 86, 25, 'sale', 1.0, 'order', 364, '2025-10-22 05:51:35', 20, 'Order #364 - Customer purchase'),
 (226, 102, 25, 'sale', 1.0, 'order', 364, '2025-10-22 05:51:35', 20, 'Order #364 - Customer purchase'),
-(227, 87, 24, 'sale', 2.0, 'order', 365, '2025-10-22 05:57:59', 20, 'Order #365 - Customer purchase');
+(227, 87, 24, 'sale', 2.0, 'order', 365, '2025-10-22 05:57:59', 20, 'Order #365 - Customer purchase'),
+(228, 74, 17, 'sale', 7.0, 'order', 366, '2025-10-22 06:14:14', 20, 'Order #366 - Customer purchase'),
+(229, 74, 17, 'sale', 1.0, 'order', 367, '2025-10-22 07:04:18', 20, 'Order #367 - Customer purchase'),
+(230, 74, 17, 'sale', 15.0, 'order', 368, '2025-10-22 07:05:45', 3, 'Order #368 - Customer purchase'),
+(231, 87, 24, 'sale', 2.0, 'order', 369, '2025-10-22 12:44:47', 3, 'Order #369 - Customer purchase'),
+(232, 108, 28, 'sale', 1.0, 'order', 370, '2025-10-22 12:47:40', 3, 'Order #370 - Customer purchase'),
+(233, 108, 28, 'sale', 1.0, 'order', 371, '2025-10-22 12:54:57', 3, 'Order #371 - Customer purchase'),
+(234, 109, 28, 'sale', 2.0, 'order', 371, '2025-10-22 12:54:57', 3, 'Order #371 - Customer purchase'),
+(235, 109, 28, '', 3.0, 'order_cancellation', 371, '2025-10-22 12:55:06', 4, 'Order cancellation: Customer unable to visit the store'),
+(236, 101, 23, '', 15.0, 'order_cancellation', 359, '2025-10-22 12:55:52', 4, 'Order cancellation: Customer unable to visit the store'),
+(237, 101, 23, 'sale', 10.0, 'order', 372, '2025-10-22 15:45:07', 10, 'Order #372 - Customer purchase'),
+(238, 82, 20, 'sale', 2.0, 'order', 373, '2025-10-22 15:58:50', 3, 'Order #373 - Customer purchase'),
+(239, 95, 26, 'sale', 1.0, 'order', 373, '2025-10-22 15:58:50', 3, 'Order #373 - Customer purchase'),
+(240, 105, 22, 'sale', 1.0, 'order', 374, '2025-10-24 01:08:23', 3, 'Order #374 - Customer purchase'),
+(241, 105, 22, 'sale', 2.0, 'order', 375, '2025-10-24 01:51:44', 3, 'Order #375 - Customer purchase'),
+(242, 105, 22, 'sale', 1.0, 'order', 376, '2025-10-24 01:58:02', 3, 'Order #376 - Customer purchase'),
+(243, 95, 26, 'sale', 1.0, 'order', 377, '2025-10-24 02:01:00', 3, 'Order #377 - Customer purchase'),
+(244, 105, 22, 'sale', 1.0, 'order', 378, '2025-10-24 02:04:21', 3, 'Order #378 - Customer purchase'),
+(245, 100, 27, 'sale', 1.0, 'order', 379, '2025-10-24 15:06:14', 3, 'Order #379 - Customer purchase'),
+(246, 101, 23, 'sale', 1.0, 'order', 380, '2025-10-24 15:08:26', 3, 'Order #380 - Customer purchase'),
+(247, 109, 28, 'sale', 1.0, 'order', 381, '2025-10-25 10:40:13', 3, 'Order #381 - Customer purchase'),
+(248, 74, 17, 'sale', 12.0, 'order', 382, '2025-10-25 13:52:42', 3, 'Order #382 - Customer purchase'),
+(249, 105, 22, 'sale', 1.0, 'order', 383, '2025-10-25 13:54:42', 3, 'Order #383 - Customer purchase'),
+(250, 74, 17, '', 12.0, 'order_cancellation', 382, '2025-10-26 02:48:50', 4, 'Order cancellation: Customer did not pick up order within 3 hours (6.9 hours elapsed)'),
+(251, 105, 22, 'sale', 1.0, 'order', 384, '2025-10-26 04:52:53', 10, 'Order #384 - Customer purchase'),
+(252, 93, 31, 'sale', 1.0, 'order', 385, '2025-10-26 09:39:04', 3, 'Order #385 - Customer purchase'),
+(253, 105, 22, 'sale', 1.0, 'order', 386, '2025-10-26 09:40:28', 3, 'Order #386 - Customer purchase'),
+(254, 93, 31, 'sale', 1.0, 'order', 387, '2025-10-26 13:01:29', 3, 'Order #387 - Customer purchase'),
+(255, 82, 20, 'sale', 1.0, 'order', 388, '2025-10-26 13:06:22', 3, 'Order #388 - Customer purchase'),
+(256, 98, 20, 'sale', 4.0, 'order', 389, '2025-10-30 04:09:14', 3, 'Order #389 - Customer purchase'),
+(257, 99, 20, 'sale', 7.0, 'order', 389, '2025-10-30 04:09:14', 3, 'Order #389 - Customer purchase'),
+(258, 82, 20, 'sale', 1.0, 'order', 389, '2025-10-30 04:09:14', 3, 'Order #389 - Customer purchase'),
+(259, 95, 26, 'sale', 5.0, 'order', 390, '2025-10-30 04:17:19', 3, 'Order #390 - Customer purchase'),
+(260, 89, 30, 'sale', 5.0, 'order', 390, '2025-10-30 04:17:19', 3, 'Order #390 - Customer purchase'),
+(261, 101, 23, 'sale', 1.0, 'order', 391, '2025-10-30 12:32:42', 3, 'Order #391 - Customer purchase'),
+(262, 91, 29, 'sale', 1.0, 'order', 392, '2025-10-30 12:56:16', 3, 'Order #392 - Customer purchase'),
+(263, 101, 23, 'sale', 1.0, 'order', 393, '2025-10-30 13:11:14', 3, 'Order #393 - Customer purchase'),
+(264, 99, 20, 'sale', 40.0, 'order', 394, '2025-10-30 13:18:50', 9, 'Order #394 - Customer purchase'),
+(265, 82, 20, 'sale', 1.0, 'order', 394, '2025-10-30 13:18:50', 9, 'Order #394 - Customer purchase'),
+(266, 93, 31, 'sale', 10.0, 'order', 395, '2025-10-30 13:47:52', 9, 'Order #395 - Customer purchase'),
+(267, 106, 20, '', 1.0, 'order_cancellation', 388, '2025-10-31 07:56:10', 4, 'Order cancellation: Customer did not pick up order within 3 hours (11.6 hours elapsed)'),
+(268, 93, 31, '', 1.0, 'order_cancellation', 385, '2025-10-31 08:05:44', 4, 'Order cancellation: Customer did not pick up order within 3 hours (111.4 hours elapsed)'),
+(269, 110, 23, '', 1.0, 'order_cancellation', 393, '2025-10-31 08:06:27', 4, 'Order cancellation: Insufficient Payment'),
+(270, 101, 23, 'sale', 1.0, 'order', 396, '2025-10-31 08:12:01', 3, 'Order #396 - Customer purchase'),
+(271, 110, 23, '', 1.0, 'order_cancellation', 396, '2025-10-31 08:12:30', 4, 'Order cancellation: Insufficient Payment'),
+(272, 111, 25, 'sale', 3.0, 'order', 397, '2025-10-31 08:24:40', 3, 'Order #397 - Customer purchase'),
+(273, 100, 27, 'sale', 4.0, 'order', 398, '2025-10-31 11:12:59', 3, 'Order #398 - Customer purchase'),
+(274, 100, 27, '', 4.0, 'order_cancellation', 398, '2025-10-31 11:13:23', 4, 'Order cancellation: Customer unable to visit the store'),
+(275, 100, 27, 'sale', 4.0, 'order', 399, '2025-10-31 11:13:50', 3, 'Order #399 - Customer purchase'),
+(276, 117, 27, 'sale', 10.0, 'order', 400, '2025-10-31 11:22:12', 3, 'Order #400 - Customer purchase'),
+(277, 120, 23, 'sale', 20.0, 'order', 401, '2025-10-31 11:46:35', 10, 'Order #401 - Customer purchase'),
+(278, 121, 23, 'sale', 20.0, 'order', 401, '2025-10-31 11:46:35', 10, 'Order #401 - Customer purchase'),
+(279, 112, 24, 'sale', 10.0, 'order', 402, '2025-10-31 12:27:08', 10, 'Order #402 - Customer purchase'),
+(280, 115, 24, 'sale', 10.0, 'order', 402, '2025-10-31 12:27:08', 10, 'Order #402 - Customer purchase');
 
 -- --------------------------------------------------------
 
@@ -359,7 +412,7 @@ CREATE TABLE `brands` (
 --
 
 INSERT INTO `brands` (`id`, `name`, `is_archived`, `created_at`) VALUES
-(1, 'San Gabriel Beef', 1, '2025-07-12 14:00:25'),
+(1, 'San Gabriel Beef', 0, '2025-07-12 14:00:25'),
 (3, 'Zayn Bangus', 1, '2025-07-25 12:31:19'),
 (4, 'ANDOKS ', 1, '2025-08-05 15:19:56'),
 (5, 'GOODS GOODS', 1, '2025-08-05 15:20:14'),
@@ -400,24 +453,31 @@ CREATE TABLE `brand_product_stock` (
 --
 
 INSERT INTO `brand_product_stock` (`id`, `product_id`, `brand_id`, `reorder_point`, `average_daily_sales`, `movement_type`, `last_calculated`, `created_at`, `updated_at`) VALUES
-(1, 17, 13, 46.30, 6.43, 'Slow-Moving', '2025-10-19 16:46:20', '2025-10-17 00:58:40', '2025-10-19 08:46:20'),
+(1, 17, 13, 51.41, 7.14, 'Slow-Moving', '2025-10-25 21:52:42', '2025-10-17 00:58:40', '2025-10-25 13:52:42'),
 (2, 17, 12, 41.69, 5.79, 'Slow-Moving', '2025-10-19 03:03:10', '2025-10-17 00:58:40', '2025-10-18 19:03:10'),
 (3, 17, 11, 61.20, 8.50, 'Slow-Moving', '2025-10-19 16:18:07', '2025-10-17 00:58:40', '2025-10-19 08:18:07'),
-(25, 20, 13, 1.00, 0.59, 'Non-Moving', '2025-10-22 11:49:33', '2025-10-19 05:15:46', '2025-10-22 03:49:33'),
+(25, 20, 13, 1.00, 0.43, 'Non-Moving', '2025-10-30 21:18:50', '2025-10-19 05:15:46', '2025-10-30 13:18:50'),
 (27, 20, 14, 158.48, 21.71, 'Fast-Moving', '2025-10-19 21:30:03', '2025-10-19 05:37:01', '2025-10-19 13:30:03'),
 (51, 25, 19, 1.00, 0.86, 'Non-Moving', '2025-10-22 13:51:35', '2025-10-19 11:39:11', '2025-10-22 05:51:35'),
-(52, 24, 19, 7.20, 1.00, 'Slow-Moving', '2025-10-22 13:57:59', '2025-10-19 11:39:32', '2025-10-22 05:57:59'),
-(53, 21, 15, 7.20, 1.00, 'Slow-Moving', '2025-10-21 11:14:27', '2025-10-19 11:39:48', '2025-10-21 03:14:27'),
-(54, 30, 20, 1.00, 0.00, 'Non-Moving', '2025-10-19 19:40:21', '2025-10-19 11:40:21', '2025-10-19 11:40:21'),
+(52, 24, 19, 9.29, 1.29, 'Slow-Moving', '2025-10-22 20:44:47', '2025-10-19 11:39:32', '2025-10-22 12:44:47'),
+(53, 21, 15, 1.00, 0.00, 'Non-Moving', '2025-10-31 17:43:12', '2025-10-19 11:39:48', '2025-10-31 09:43:12'),
+(54, 30, 20, 1.00, 0.71, 'Non-Moving', '2025-10-30 12:17:19', '2025-10-19 11:40:21', '2025-10-30 04:17:19'),
 (55, 32, 16, 1.00, 0.29, 'Non-Moving', '2025-10-19 23:58:28', '2025-10-19 11:40:34', '2025-10-19 15:58:28'),
-(56, 29, 20, 1.00, 0.14, 'Non-Moving', '2025-10-22 13:45:09', '2025-10-19 11:42:09', '2025-10-22 05:45:09'),
-(57, 22, 12, 43.20, 6.00, 'Slow-Moving', '2025-10-22 13:45:09', '2025-10-19 11:42:28', '2025-10-22 05:45:09'),
-(58, 31, 16, 1.00, 0.00, 'Non-Moving', '2025-10-19 19:42:42', '2025-10-19 11:42:42', '2025-10-19 11:42:42'),
+(56, 29, 20, 1.00, 0.14, 'Non-Moving', '2025-10-30 20:56:16', '2025-10-19 11:42:09', '2025-10-30 12:56:16'),
+(57, 22, 12, 51.41, 7.14, 'Slow-Moving', '2025-10-26 17:40:28', '2025-10-19 11:42:28', '2025-10-26 09:40:28'),
+(58, 31, 16, 12.31, 1.71, 'Slow-Moving', '2025-10-30 21:47:52', '2025-10-19 11:42:42', '2025-10-30 13:47:52'),
 (59, 28, 17, 31.90, 4.43, 'Slow-Moving', '2025-10-21 09:31:59', '2025-10-19 11:42:54', '2025-10-21 01:31:59'),
-(60, 26, 17, 10.30, 1.43, 'Slow-Moving', '2025-10-19 23:53:46', '2025-10-19 11:43:32', '2025-10-19 15:53:46'),
-(61, 20, 11, 1.00, 0.86, 'Non-Moving', '2025-10-22 13:48:59', '2025-10-19 12:14:13', '2025-10-22 05:48:59'),
-(65, 27, 15, 1.00, 0.71, 'Non-Moving', '2025-10-19 23:44:06', '2025-10-19 14:10:49', '2025-10-19 15:44:06'),
-(66, 23, 18, 15.41, 2.14, 'Slow-Moving', '2025-10-22 01:24:55', '2025-10-19 14:11:33', '2025-10-21 17:24:55');
+(60, 26, 17, 1.00, 0.86, 'Non-Moving', '2025-10-30 12:17:19', '2025-10-19 11:43:32', '2025-10-30 04:17:19'),
+(61, 20, 11, 52.49, 7.29, 'Slow-Moving', '2025-10-30 21:18:50', '2025-10-19 12:14:13', '2025-10-30 13:18:50'),
+(65, 27, 15, 9.29, 1.29, 'Slow-Moving', '2025-10-31 19:42:07', '2025-10-19 14:10:49', '2025-10-31 11:42:07'),
+(66, 23, 18, 1.00, 0.57, 'Non-Moving', '2025-10-31 16:12:01', '2025-10-19 14:11:33', '2025-10-31 08:12:01'),
+(99, 28, 15, 1.00, 0.71, 'Non-Moving', '2025-10-25 18:40:13', '2025-10-22 12:46:54', '2025-10-25 10:40:13'),
+(115, 25, 20, 1.00, 0.43, 'Non-Moving', '2025-10-31 16:24:40', '2025-10-25 13:29:57', '2025-10-31 08:24:40'),
+(135, 24, 1, 20.59, 2.86, 'Slow-Moving', '2025-10-31 20:27:08', '2025-10-31 08:50:29', '2025-10-31 12:27:08'),
+(141, 27, 18, 1.00, 0.00, 'Non-Moving', '2025-10-31 19:16:48', '2025-10-31 11:16:48', '2025-10-31 11:16:48'),
+(142, 27, 12, 10.30, 1.43, 'Slow-Moving', '2025-10-31 19:22:12', '2025-10-31 11:20:55', '2025-10-31 11:22:12'),
+(144, 27, 13, 1.00, 0.00, 'Non-Moving', '2025-10-31 19:30:00', '2025-10-31 11:30:00', '2025-10-31 11:30:00'),
+(146, 23, 11, 41.11, 5.71, 'Slow-Moving', '2025-10-31 19:46:35', '2025-10-31 11:43:56', '2025-10-31 11:46:35');
 
 -- --------------------------------------------------------
 
@@ -566,10 +626,40 @@ INSERT INTO `cart` (`cart_id`, `user_id`, `session_token`, `is_active`, `created
 (126, 9, NULL, 0, '2025-10-22 03:48:11', '2025-10-22 03:48:39'),
 (127, 9, NULL, 0, '2025-10-22 03:48:41', '2025-10-22 03:49:42'),
 (128, 9, NULL, 0, '2025-10-22 03:49:44', '2025-10-22 03:49:59'),
-(129, 9, NULL, 1, '2025-10-22 03:50:36', '2025-10-22 05:05:51'),
-(130, 10, NULL, 1, '2025-10-22 05:06:45', '2025-10-22 05:06:45'),
+(129, 9, NULL, 0, '2025-10-22 03:50:36', '2025-10-30 13:17:18'),
+(130, 10, NULL, 0, '2025-10-22 05:06:45', '2025-10-22 15:44:21'),
 (131, 20, NULL, 0, '2025-10-22 05:11:07', '2025-10-22 05:57:40'),
-(132, 20, NULL, 1, '2025-10-22 05:57:50', '2025-10-22 05:57:50');
+(132, 20, NULL, 1, '2025-10-22 05:57:50', '2025-10-22 07:04:07'),
+(133, 3, NULL, 0, '2025-10-22 07:05:29', '2025-10-22 12:43:57'),
+(134, 3, NULL, 0, '2025-10-22 12:44:41', '2025-10-22 12:47:57'),
+(135, 3, NULL, 0, '2025-10-22 12:54:51', '2025-10-22 15:55:18'),
+(136, 10, NULL, 0, '2025-10-22 15:44:41', '2025-10-22 15:45:07'),
+(137, 3, NULL, 0, '2025-10-22 15:56:26', '2025-10-22 15:58:50'),
+(138, 3, NULL, 0, '2025-10-22 16:06:05', '2025-10-22 16:06:27'),
+(139, 3, NULL, 0, '2025-10-22 16:08:14', '2025-10-23 03:35:48'),
+(140, 3, NULL, 0, '2025-10-23 03:35:55', '2025-10-23 03:36:16'),
+(141, 3, NULL, 0, '2025-10-23 03:36:37', '2025-10-23 03:51:54'),
+(142, 3, NULL, 0, '2025-10-23 03:51:58', '2025-10-23 03:52:08'),
+(143, 3, NULL, 0, '2025-10-23 03:52:10', '2025-10-23 03:56:47'),
+(144, 3, NULL, 0, '2025-10-23 03:56:49', '2025-10-23 03:59:08'),
+(145, 3, NULL, 0, '2025-10-23 04:00:10', '2025-10-24 00:42:42'),
+(146, 3, NULL, 0, '2025-10-24 00:42:47', '2025-10-24 01:37:18'),
+(147, 3, NULL, 0, '2025-10-24 01:51:31', '2025-10-24 13:00:38'),
+(148, 3, NULL, 0, '2025-10-24 14:26:32', '2025-10-25 09:16:00'),
+(149, 3, NULL, 0, '2025-10-25 10:40:06', '2025-10-25 11:39:13'),
+(150, 3, NULL, 0, '2025-10-25 11:39:17', '2025-10-25 11:39:29'),
+(151, 3, NULL, 0, '2025-10-25 11:39:46', '2025-10-25 11:40:58'),
+(152, 3, NULL, 0, '2025-10-25 11:41:06', '2025-10-25 11:41:52'),
+(153, 3, NULL, 0, '2025-10-25 13:38:55', '2025-10-25 13:52:42'),
+(154, 3, NULL, 0, '2025-10-25 13:54:22', '2025-10-26 09:38:42'),
+(155, 10, NULL, 0, '2025-10-26 04:52:22', '2025-10-26 04:52:53'),
+(156, 3, NULL, 0, '2025-10-26 09:38:56', '2025-10-26 12:24:04'),
+(157, 3, NULL, 0, '2025-10-26 12:24:17', '2025-10-26 14:49:44'),
+(158, 3, NULL, 0, '2025-10-30 04:08:42', '2025-10-30 11:33:57'),
+(159, 3, NULL, 0, '2025-10-30 11:34:01', '2025-10-31 07:56:44'),
+(160, 9, NULL, 1, '2025-10-30 13:17:23', '2025-10-30 13:46:48'),
+(161, 3, NULL, 0, '2025-10-31 08:11:54', '2025-10-31 11:45:37'),
+(162, 10, NULL, 1, '2025-10-31 11:46:16', '2025-10-31 12:26:27');
 
 -- --------------------------------------------------------
 
@@ -590,13 +680,6 @@ CREATE TABLE `cart_items` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `cart_items`
---
-
-INSERT INTO `cart_items` (`cartitem_id`, `cart_id`, `user_id`, `product_id`, `brand_id`, `batch_id`, `quantity`, `unit`, `unit_price`, `created_at`, `updated_at`) VALUES
-(2321, 129, 9, 20, 11, 107, 5.0, 'kilo', 0.00, '2025-10-22 05:05:51', '2025-10-22 05:05:51');
 
 -- --------------------------------------------------------
 
@@ -675,8 +758,9 @@ CREATE TABLE `discount_codes` (
 --
 
 INSERT INTO `discount_codes` (`id`, `code`, `discount_type`, `discount_value`, `is_active`, `expires_at`) VALUES
-(4, 'MIKEMADZ10', 'percent', 10.00, 1, '2026-04-27 21:01:00'),
-(5, 'TEST', 'fixed', 50.00, 1, '2028-06-09 12:35:00');
+(4, 'MIKEMADZ5', 'percent', 5.00, 1, '2026-04-27 21:01:00'),
+(6, 'WELCOME2', 'percent', 2.00, 1, '2025-12-25 23:43:00'),
+(7, 'SAVEMORE', 'percent', 3.00, 1, '2025-10-27 21:42:00');
 
 -- --------------------------------------------------------
 
@@ -700,7 +784,9 @@ CREATE TABLE `discount_code_usage` (
 INSERT INTO `discount_code_usage` (`id`, `discount_code_id`, `user_id`, `order_id`, `discount_amount`, `used_at`) VALUES
 (1, 4, 3, 239, 40.00, '2025-10-09 11:54:09'),
 (2, 4, 11, 245, 15.00, '2025-10-09 12:31:51'),
-(3, 5, 11, 247, 50.00, '2025-10-09 12:38:56');
+(4, 6, 10, 372, 370.00, '2025-10-22 23:45:07'),
+(5, 6, 3, 373, 438.00, '2025-10-22 23:58:50'),
+(6, 4, 10, 384, 18.50, '2025-10-26 12:52:53');
 
 -- --------------------------------------------------------
 
@@ -734,7 +820,14 @@ INSERT INTO `email_verification` (`emailverify_id`, `user_id`, `otp`, `expires_a
 (16, 31, '440550', '2025-10-18 17:19:11', 0, '2025-10-18 15:09:11'),
 (17, 32, '318139', '2025-10-18 17:19:46', 1, '2025-10-18 15:09:46'),
 (21, 33, '379184', '2025-10-19 17:32:58', 0, '2025-10-19 15:22:58'),
-(22, 34, '960869', '2025-10-19 17:34:36', 1, '2025-10-19 15:24:36');
+(22, 34, '960869', '2025-10-19 17:34:36', 1, '2025-10-19 15:24:36'),
+(26, 35, '039661', '2025-10-25 13:30:49', 0, '2025-10-25 11:20:49'),
+(28, 36, '948555', '2025-10-29 04:58:16', 0, '2025-10-29 03:48:16'),
+(29, 37, '853272', '2025-10-29 05:02:02', 0, '2025-10-29 03:52:02'),
+(33, 38, '542311', '2025-10-30 04:49:41', 0, '2025-10-30 03:39:41'),
+(34, 39, '868742', '2025-10-30 04:50:37', 1, '2025-10-30 03:40:37'),
+(36, 40, '702467', '2025-10-30 05:04:33', 0, '2025-10-30 03:54:33'),
+(37, 41, '172201', '2025-10-30 05:05:10', 0, '2025-10-30 03:55:10');
 
 -- --------------------------------------------------------
 
@@ -760,7 +853,7 @@ CREATE TABLE `faq_questions` (
 
 INSERT INTO `faq_questions` (`faq_id`, `user_id`, `question`, `answer`, `answered_by`, `status`, `created_at`, `answered_at`, `updated_at`) VALUES
 (1, 3, 'Working Hours?', '7am to 12 Midnight', 4, 'answered', '2025-10-21 02:37:02', '2025-10-21 02:39:41', '2025-10-21 02:39:41'),
-(2, 9, 'Paano po namin malalaman yung information ni Rider at yung location tracking niya?', 'We’ll give you the app name, transaction number, rider’s name, and plate number after we ship the products so you can track the delivery. You can access this information in your profile section. Thank you!', 4, 'answered', '2025-10-21 02:58:22', '2025-10-21 03:03:15', '2025-10-21 03:03:15');
+(2, 9, 'Paano po namin malalaman yung information ni Rider at yung location tracking niya?', 'We’ll give you the app name, transaction number, rider’s name, and plate number after we ship the products so you can track the delivery. You can access this information in your profile section. Thank you!', 4, 'answered', '2025-10-21 02:58:22', '2025-10-21 03:03:15', '2025-10-25 11:15:10');
 
 -- --------------------------------------------------------
 
@@ -1324,7 +1417,78 @@ INSERT INTO `history_logs` (`historylog_id`, `history_action_type_id`, `referenc
 (442, 36, NULL, NULL, 'Role Deleted: Deleted role: crew1', 4, '2025-10-21 23:54:12'),
 (443, 36, NULL, NULL, 'Order Received Confirmed: Order ID: 323 automatically confirmed after 48 hours', 9, '2025-10-22 00:16:29'),
 (444, 11, NULL, NULL, 'Restocking: Product: Beef Sirloin, Quantity: 5, Cost: ₱4250', 4, '2025-10-22 11:49:33'),
-(445, 11, NULL, NULL, 'Restocking: Product: Beef Sirloin, Quantity: 5, Cost: ₱3750', 4, '2025-10-22 11:50:24');
+(445, 11, NULL, NULL, 'Restocking: Product: Beef Sirloin, Quantity: 5, Cost: ₱3750', 4, '2025-10-22 11:50:24'),
+(446, 11, NULL, NULL, 'Restocking: Product: Ground Pork, Quantity: 2, Cost: ₱500', 4, '2025-10-22 20:46:54'),
+(447, 11, NULL, NULL, 'Restocking: Product: Ground Pork, Quantity: 2, Cost: ₱580', 4, '2025-10-22 20:47:22'),
+(448, 36, NULL, NULL, 'Manual Pull Out: Product: TEST, Batch: B4-20250919-003, Quantity: 20.0, Reason: Expired', 4, '2025-10-22 21:53:25'),
+(449, 36, NULL, NULL, 'Manual Pull Out: Product: TRIMMINGS, Batch: TRIMMINGS-BATCH002, Quantity: 15.0, Reason: Expired', 4, '2025-10-22 21:53:58'),
+(450, 36, NULL, NULL, 'Manual Pull Out: Product: TEST, Batch: B4-20250919-002, Quantity: 25.0, Reason: Expired', 4, '2025-10-22 21:56:44'),
+(451, 36, NULL, NULL, 'Manual Pull Out: Product: TRIMMINGS, Batch: TRIMMINGS-BATCH003, Quantity: 25.0, Reason: Expired', 4, '2025-10-22 21:56:52'),
+(452, 36, NULL, NULL, 'Manual Pull Out: Product: BANGUS, Batch: BANGUS-BATCH003, Quantity: 25.0, Reason: Expired', 4, '2025-10-22 21:58:13'),
+(453, 36, NULL, NULL, 'Discount Code Created: Created discount code: WELCOME20', 4, '2025-10-22 23:43:57'),
+(454, 36, NULL, NULL, 'Order Received Confirmed: Order ID: 373 marked as received by customer', 3, '2025-10-23 00:01:22'),
+(455, 36, NULL, NULL, 'Purchase Order Created: PO: PO-20251024-0001, Supplier: Marion Brix Quiling, Items: 1', 4, '2025-10-24 09:25:59'),
+(456, 36, NULL, NULL, 'Restocking Status Update: Product: Chicken Skin, Status: Received, Ordered: 15, Received: 15', 4, '2025-10-24 09:26:42'),
+(457, 36, NULL, NULL, 'Order Received Confirmed: Order ID: 376 marked as received by customer', 3, '2025-10-24 10:00:26'),
+(458, 36, NULL, NULL, 'Order Received Confirmed: Order ID: 377 marked as received by customer', 3, '2025-10-24 10:03:40'),
+(459, 36, NULL, NULL, 'Order Received Confirmed: Order ID: 375 marked as received by customer', 3, '2025-10-24 10:03:44'),
+(460, 36, NULL, NULL, 'Order Received Confirmed: Order ID: 378 marked as received by customer', 3, '2025-10-25 18:41:03'),
+(461, 36, NULL, NULL, 'Unarchived Supplier: Supplier ID: 6, Name: TEST TEST TEST', 4, '2025-10-25 19:01:11'),
+(462, 36, NULL, NULL, 'User Deactivated: Username: marquils', 4, '2025-10-25 19:21:33'),
+(463, 36, NULL, NULL, 'Assigned Product to Supplier: Supplier: Cheraine Goods, Product: Beef Shank', 4, '2025-10-25 21:27:21'),
+(464, 11, NULL, NULL, 'Restocking: Product: Beef Shank, Quantity: 10, Cost: ₱2500', 4, '2025-10-25 21:29:57'),
+(465, 36, NULL, NULL, 'Assigned Product to Supplier: Supplier: Jay Inc., Product: Beef Tapa', 4, '2025-10-25 21:31:22'),
+(466, 36, NULL, NULL, 'Purchase Order Created: PO: PO-20251025-0001, Supplier: Jay Inc., Items: 1', 4, '2025-10-25 21:31:51'),
+(467, 36, NULL, NULL, 'Purchase Order Created: PO: PO-20251025-0002, Supplier: Andoks, Items: 2', 4, '2025-10-25 21:34:24'),
+(468, 36, NULL, NULL, 'Discount Code Created: Created discount code: SAVEMORE', 4, '2025-10-25 21:42:43'),
+(469, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-25 21:43:13'),
+(470, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 10:54:28'),
+(471, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 10:54:59'),
+(472, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 11:01:39'),
+(473, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 11:01:49'),
+(474, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 11:08:42'),
+(475, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 11:08:54'),
+(476, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 11:08:58'),
+(477, 36, NULL, NULL, 'Discount Code Deleted: Deleted discount code: TEST', 4, '2025-10-26 11:13:12'),
+(478, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 11:13:24'),
+(479, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 11:15:29'),
+(480, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: WELCOME20', 4, '2025-10-26 11:15:33'),
+(481, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: MIKEMADZ10', 4, '2025-10-26 11:15:37'),
+(482, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 11:15:52'),
+(483, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: SAVEMORE', 4, '2025-10-26 11:16:04'),
+(484, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: MIKEMADZ5', 4, '2025-10-26 11:16:13'),
+(485, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: MIKEMADZ5', 4, '2025-10-26 11:16:17'),
+(486, 36, NULL, NULL, 'Discount Code Updated: Updated discount code: WELCOME2', 4, '2025-10-26 11:16:22'),
+(487, 36, NULL, NULL, 'Order Received Confirmed: Order ID: 386 automatically confirmed after 48 hours', 3, '2025-10-29 11:01:36'),
+(488, 36, NULL, NULL, 'Order Received Confirmed: Order ID: 390 marked as received by customer', 3, '2025-10-30 12:18:24'),
+(489, 36, NULL, NULL, 'Order Received Confirmed: Order ID: 358 automatically confirmed after 48 hours', 9, '2025-10-30 21:17:54'),
+(490, 36, NULL, NULL, 'Restocking Status Update: Product: Chicken Fillet, Status: Cancelled', 4, '2025-10-31 16:41:37'),
+(491, 36, NULL, NULL, 'Restocking Status Update: Product: Beef Tapa, Status: Cancelled', 4, '2025-10-31 16:41:40'),
+(492, 36, NULL, NULL, 'Restocking Status Update: Product: Beef Tapa, Status: Cancelled', 4, '2025-10-31 16:41:43'),
+(493, 36, NULL, NULL, 'Purchase Order Created: PO: PO-20251031-0001, Supplier: Jay Inc., Items: 1', 4, '2025-10-31 16:41:55'),
+(494, 36, NULL, NULL, 'Brand Restored: Restored brand: San Gabriel Beef', 4, '2025-10-31 16:49:25'),
+(495, 36, NULL, NULL, 'Restocking Status Update: Product: Beef Tapa, Status: Received, Ordered: 10, Received: 10', 4, '2025-10-31 16:50:29'),
+(496, 36, NULL, NULL, 'Assigned Product to Supplier: Supplier: SGB Goods, Product: Chicken Fillet', 4, '2025-10-31 16:51:41'),
+(497, 36, NULL, NULL, 'Purchase Order Created: PO: PO-20251031-0002, Supplier: SGB Goods, Items: 1', 4, '2025-10-31 16:58:34'),
+(498, 36, NULL, NULL, 'Restocking Status Update: Product: Chicken Fillet, Status: Cancelled', 4, '2025-10-31 16:58:50'),
+(499, 36, NULL, NULL, 'Purchase Order Created: PO: PO-20251031-0003, Supplier: SGB Goods, Items: 1', 4, '2025-10-31 17:39:39'),
+(500, 36, NULL, NULL, 'Restocking Status Update: Product: Chicken Fillet, Status: Cancelled', 4, '2025-10-31 17:40:54'),
+(501, 36, NULL, NULL, 'Purchase Order Created: PO: PO-20251031-0004, Supplier: Andoks, Items: 1', 4, '2025-10-31 17:41:04'),
+(502, 36, NULL, NULL, 'Restocking Status Update: Product: Chicken Fillet, Status: Received, Ordered: 8, Received: 8', 4, '2025-10-31 17:41:29'),
+(503, 11, NULL, NULL, 'Restocking: Product: Chicken Fillet, Quantity: 10, Cost: ₱2000', 4, '2025-10-31 17:43:12'),
+(504, 11, NULL, NULL, 'Restocking: Product: Beef Tapa, Quantity: 10, Cost: ₱2500', 4, '2025-10-31 17:43:34'),
+(505, 36, NULL, NULL, 'Assigned Product to Supplier: Supplier: ZAYN GOODS, Product: Beef Shank', 4, '2025-10-31 18:32:57'),
+(506, 36, NULL, NULL, 'Assigned Product to Supplier: Supplier: ZAYN GOODS, Product: Pork Adobo Cut', 4, '2025-10-31 19:14:27'),
+(507, 11, NULL, NULL, 'Restocking: Product: Pork Adobo Cut, Quantity: 10, Cost: ₱2500', 4, '2025-10-31 19:16:48'),
+(508, 11, NULL, NULL, 'Restocking: Product: Pork Adobo Cut, Quantity: 20, Cost: ₱6000', 4, '2025-10-31 19:20:55'),
+(509, 11, NULL, NULL, 'Restocking: Product: Pork Adobo Cut, Quantity: 10, Cost: ₱3000', 4, '2025-10-31 19:30:00'),
+(510, 36, NULL, NULL, 'Purchase Order Created: PO: PO-20251031-0005, Supplier: Jay Inc., Items: 1', 4, '2025-10-31 19:41:19'),
+(511, 36, NULL, NULL, 'Restocking Status Update: Product: Pork Adobo Cut, Status: Received, Ordered: 20, Received: 20', 4, '2025-10-31 19:42:07'),
+(512, 36, NULL, NULL, 'Assigned Product to Supplier: Supplier: SGB Goods, Product: Chicken Skin', 4, '2025-10-31 19:43:16'),
+(513, 11, NULL, NULL, 'Restocking: Product: Chicken Skin, Quantity: 20, Cost: ₱3000', 4, '2025-10-31 19:43:56'),
+(514, 11, NULL, NULL, 'Restocking: Product: Chicken Skin, Quantity: 20, Cost: ₱5000', 4, '2025-10-31 19:44:45'),
+(515, 36, NULL, NULL, 'Purchase Order Created: PO: PO-20251031-0006, Supplier: SGB Goods, Items: 1', 4, '2025-10-31 19:52:26'),
+(516, 36, NULL, NULL, 'Purchase Order Created: PO: PO-20251031-0007, Supplier: Andoks, Items: 1', 4, '2025-10-31 20:28:03');
 
 -- --------------------------------------------------------
 
@@ -1440,7 +1604,17 @@ INSERT INTO `notifications` (`id`, `user_id`, `order_id`, `message`, `is_read`, 
 (73, 3, 331, 'Your order has been cancelled by admin: Customer unable to visit the store', 0, '2025-10-19 22:18:05'),
 (74, 3, 332, 'Your order has been cancelled by admin: Customer unable to visit the store', 0, '2025-10-19 22:20:16'),
 (75, 3, 333, 'Your order has been cancelled by admin: Customer unable to visit the store', 0, '2025-10-19 22:20:25'),
-(76, 3, 337, 'Your order has been cancelled by admin: Customer did not pick up order within 3 hours (9.4 hours elapsed)', 0, '2025-10-20 08:31:35');
+(76, 3, 337, 'Your order has been cancelled by admin: Customer did not pick up order within 3 hours (9.4 hours elapsed)', 0, '2025-10-20 08:31:35'),
+(77, 3, 369, 'Your order has been cancelled by admin: Ride did not show up', 0, '2025-10-22 20:45:08'),
+(78, 3, 370, 'Your order has been cancelled by admin: Customer unable to visit the store', 0, '2025-10-22 20:48:09'),
+(79, 3, 371, 'Your order has been cancelled by admin: Customer unable to visit the store', 0, '2025-10-22 20:55:06'),
+(80, 9, 359, 'Your order has been cancelled by admin: Customer unable to visit the store', 0, '2025-10-22 20:55:52'),
+(81, 3, 382, 'Your order has been cancelled by admin: Customer did not pick up order within 3 hours (6.9 hours elapsed)', 0, '2025-10-26 10:48:50'),
+(82, 3, 388, 'Your order has been cancelled by admin: Customer did not pick up order within 3 hours (11.6 hours elapsed)', 0, '2025-10-31 15:56:10'),
+(83, 3, 385, 'Your order has been cancelled by admin: Customer did not pick up order within 3 hours (111.4 hours elapsed)', 0, '2025-10-31 16:05:44'),
+(84, 3, 393, 'Your order has been cancelled by admin: Insufficient Payment', 0, '2025-10-31 16:06:27'),
+(85, 3, 396, 'Your order has been cancelled by admin: Insufficient Payment', 0, '2025-10-31 16:12:30'),
+(86, 3, 398, 'Your order has been cancelled by admin: Customer unable to visit the store', 0, '2025-10-31 19:13:23');
 
 -- --------------------------------------------------------
 
@@ -1457,6 +1631,7 @@ CREATE TABLE `orders` (
   `delivered_at` datetime DEFAULT NULL,
   `delivery_option` varchar(50) NOT NULL DEFAULT 'Pickup',
   `plate_number` varchar(20) DEFAULT NULL,
+  `rider_contact_number` varchar(11) DEFAULT NULL,
   `transaction_number` varchar(19) DEFAULT NULL,
   `pickup_ready_at` datetime DEFAULT NULL,
   `address_id` int(11) DEFAULT NULL,
@@ -1468,212 +1643,249 @@ CREATE TABLE `orders` (
 -- Dumping data for table `orders`
 --
 
-INSERT INTO `orders` (`orders_id`, `user_id`, `orderstatus_id`, `created_at`, `total_price`, `delivered_at`, `delivery_option`, `plate_number`, `transaction_number`, `pickup_ready_at`, `address_id`, `application_name`, `rider_name`) VALUES
-(158, 45, 0, '2025-07-25 13:13:06', 209.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(159, 45, 0, '2025-07-25 13:23:37', 418.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(160, 45, 0, '2025-07-25 20:32:32', 722.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(161, 45, 0, '2025-07-25 20:33:13', 209.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(162, 45, 0, '2025-07-25 20:33:45', 209.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(163, 46, 0, '2025-08-09 09:31:06', 231.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(164, 46, 0, '2025-08-15 23:08:35', 1339.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(165, 46, 0, '2025-08-16 08:05:25', 184.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(167, 3, 4, '2025-09-06 10:56:28', 814.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(168, 3, 5, '2025-09-06 11:22:33', 407.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(169, 3, 4, '2025-09-06 13:15:21', 539.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(170, 3, 4, '2025-09-06 13:30:45', 132.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(171, 3, 4, '2025-09-06 13:39:41', 264.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(172, 3, 7, '2025-09-08 21:48:14', 275.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(173, 9, 4, '2025-09-16 23:09:49', 240.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(174, 9, 4, '2025-09-17 20:56:27', 960.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(175, 10, 4, '2025-09-17 23:35:58', 240.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(176, 10, 4, '2025-09-17 23:37:31', 2400.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(177, 10, 4, '2025-09-18 22:16:49', 180.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(178, 10, 4, '2025-09-18 22:18:21', 240.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(179, 10, 5, '2025-09-18 22:22:18', 180.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(180, 10, 4, '2025-09-18 22:22:54', 180.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(181, 3, 4, '2025-09-19 11:15:24', 144.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(182, 3, 4, '2025-09-22 10:35:08', 144.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(183, 3, 4, '2025-09-22 13:08:36', 198.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(184, 3, 4, '2025-09-23 17:33:28', 396.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(185, 3, 4, '2025-09-23 17:34:56', 396.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(186, 3, 5, '2025-09-23 19:29:56', 198.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(187, 3, 5, '2025-09-23 19:30:00', 198.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(188, 3, 5, '2025-09-23 19:30:04', 198.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(189, 3, 4, '2025-09-23 19:30:23', 240.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(190, 3, 4, '2025-09-23 19:31:25', 180.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(191, 3, 4, '2025-09-24 16:45:37', 942.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(192, 3, 4, '2025-09-30 20:34:23', 2410.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(193, 3, 4, '2025-09-30 20:51:51', 10.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(194, 3, 4, '2025-09-30 20:59:40', 8.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(195, 3, 4, '2025-09-30 21:02:18', 10.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(196, 10, 5, '2025-10-07 10:39:49', 12.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(199, 10, 4, '2025-10-07 11:13:14', 748.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(200, 10, 4, '2025-10-07 11:18:10', 630.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(201, 10, 4, '2025-10-07 11:23:43', 270.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(202, 10, 4, '2025-10-07 11:31:40', 270.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(203, 10, 4, '2025-10-07 11:36:01', 2070.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(204, 10, 4, '2025-10-07 11:55:27', 540.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(205, 10, 5, '2025-10-07 11:56:06', 630.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(206, 10, 5, '2025-10-07 12:03:39', 270.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(207, 10, 4, '2025-10-07 12:23:52', 270.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(208, 10, 4, '2025-10-07 12:29:15', 25.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(209, 10, 4, '2025-10-07 12:33:42', 12.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(210, 10, 4, '2025-10-07 12:39:26', 3996.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(211, 10, 4, '2025-10-07 12:43:14', 495.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(212, 10, 4, '2025-10-07 12:43:50', 693.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(213, 3, 4, '2025-10-08 14:08:47', 1627.50, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(214, 3, 5, '2025-10-08 14:14:29', 10.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(215, 3, 5, '2025-10-08 18:23:47', 35.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(216, 3, 5, '2025-10-08 18:45:44', 20.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(217, 3, 5, '2025-10-08 18:45:50', 20.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(218, 3, 5, '2025-10-08 18:46:01', 20.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(219, 3, 5, '2025-10-08 18:46:16', 20.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(220, 3, 5, '2025-10-08 18:46:21', 20.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL),
-(221, 3, 4, '2025-10-08 18:47:30', 20.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(222, 3, 4, '2025-10-08 19:00:53', 20.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(223, 3, 5, '2025-10-08 19:01:37', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(224, 11, 4, '2025-10-08 21:23:20', 300.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(225, 11, 4, '2025-10-08 21:34:03', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(226, 11, 4, '2025-10-08 21:36:22', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(227, 11, 4, '2025-10-08 21:42:57', 150.00, NULL, 'delivery', NULL, NULL, NULL, 8, NULL, NULL),
-(228, 11, 4, '2025-10-08 21:58:48', 150.00, NULL, 'delivery', NULL, NULL, NULL, 8, NULL, NULL),
-(229, 11, 4, '2025-10-08 22:11:19', 150.00, NULL, 'delivery', NULL, NULL, NULL, 8, NULL, NULL),
-(230, 3, 4, '2025-10-08 22:12:36', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL),
-(231, 3, 4, '2025-10-08 22:31:35', 300.00, NULL, 'delivery', NULL, NULL, NULL, 10, NULL, NULL),
-(232, 3, 4, '2025-10-08 22:50:44', 150.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(233, 3, 4, '2025-10-08 22:53:07', 250.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(234, 3, 4, '2025-10-08 22:58:16', 250.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(235, 3, 4, '2025-10-08 23:02:07', 250.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(236, 3, 4, '2025-10-08 23:07:38', 250.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(237, 3, 4, '2025-10-08 23:10:32', 250.00, NULL, 'delivery', NULL, NULL, NULL, 12, NULL, NULL),
-(238, 3, 4, '2025-10-08 23:14:58', 6750.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(239, 3, 4, '2025-10-09 11:54:09', 400.00, NULL, 'delivery', NULL, NULL, NULL, 10, NULL, NULL),
-(240, 3, 4, '2025-10-09 11:55:53', 400.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(241, 3, 4, '2025-10-09 11:56:09', 400.00, NULL, 'delivery', NULL, NULL, NULL, 10, NULL, NULL),
-(242, 3, 4, '2025-10-09 11:56:36', 400.00, NULL, 'pickup', NULL, NULL, NULL, 12, NULL, NULL),
-(243, 3, 4, '2025-10-09 12:28:08', 1200.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(244, 3, 4, '2025-10-09 12:29:59', 300.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(245, 11, 4, '2025-10-09 12:31:51', 150.00, NULL, 'delivery', NULL, NULL, NULL, 9, NULL, NULL),
-(246, 11, 4, '2025-10-09 12:34:15', 150.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(247, 11, 4, '2025-10-09 12:38:56', 100.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(248, 11, 4, '2025-10-09 12:53:55', 150.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(249, 3, 4, '2025-10-09 14:31:38', 150.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(250, 3, 5, '2025-10-09 21:28:21', 300.00, NULL, 'delivery', NULL, NULL, NULL, 13, NULL, NULL),
-(251, 3, 5, '2025-10-11 23:11:54', 2166.00, NULL, 'delivery', NULL, NULL, NULL, 13, NULL, NULL),
-(252, 3, 5, '2025-10-11 23:13:00', 2166.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(253, 3, 5, '2025-10-11 23:22:48', 1415.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(254, 3, 5, '2025-10-12 11:23:12', 1415.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(255, 11, 5, '2025-10-12 11:50:22', 1415.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(256, 11, 5, '2025-10-12 12:39:51', 1415.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(257, 11, 5, '2025-10-12 12:44:05', 1415.00, NULL, 'delivery', NULL, NULL, NULL, 9, NULL, NULL),
-(258, 11, 5, '2025-10-12 12:47:00', 1415.00, NULL, 'delivery', NULL, NULL, NULL, 8, NULL, NULL),
-(259, 11, 5, '2025-10-12 12:49:56', 1415.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(260, 11, 5, '2025-10-12 12:59:06', 1415.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(261, 11, 5, '2025-10-12 13:09:06', 1415.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(262, 11, 5, '2025-10-12 13:11:27', 585.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(263, 11, 5, '2025-10-12 13:16:20', 585.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(264, 3, 5, '2025-10-12 13:52:45', 50.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(265, 3, 5, '2025-10-12 14:07:02', 50.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(266, 3, 5, '2025-10-12 14:12:29', 1200.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(267, 3, 5, '2025-10-12 14:12:42', 1200.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(268, 3, 4, '2025-10-12 14:12:56', 650.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(269, 3, 5, '2025-10-12 14:13:35', 550.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(270, 3, 4, '2025-10-12 14:17:57', 650.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(271, 3, 4, '2025-10-12 14:20:00', 150.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(272, 3, 5, '2025-10-12 14:21:24', 450.00, NULL, 'delivery', NULL, NULL, NULL, 12, NULL, NULL),
-(273, 3, 5, '2025-10-12 14:21:30', 450.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(274, 3, 5, '2025-10-12 14:21:47', 450.00, NULL, 'delivery', NULL, NULL, NULL, 13, NULL, NULL),
-(275, 3, 4, '2025-10-12 14:22:02', 150.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(276, 3, 4, '2025-10-12 14:22:20', 300.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(277, 3, 4, '2025-10-12 14:23:26', 102.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(278, 3, 5, '2025-10-12 14:23:52', 51.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(279, 3, 5, '2025-10-12 14:26:31', 2150.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(280, 3, 5, '2025-10-12 14:26:56', 2150.00, NULL, 'delivery', NULL, NULL, NULL, 13, NULL, NULL),
-(281, 3, 5, '2025-10-12 14:32:55', 2150.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(282, 3, 4, '2025-10-12 14:33:18', 225.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(283, 3, 5, '2025-10-12 14:33:33', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(284, 3, 5, '2025-10-12 14:38:41', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(285, 3, 5, '2025-10-12 14:39:05', 550.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(286, 3, 5, '2025-10-12 14:39:18', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(287, 3, 5, '2025-10-12 14:41:33', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(288, 3, 5, '2025-10-12 14:43:06', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(289, 3, 5, '2025-10-12 14:43:37', 700.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(290, 3, 5, '2025-10-12 14:46:17', 700.00, NULL, 'delivery', NULL, NULL, NULL, 13, NULL, NULL),
-(291, 3, 5, '2025-10-12 14:46:48', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(292, 3, 4, '2025-10-12 14:47:24', 550.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(293, 3, 5, '2025-10-12 14:48:11', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(294, 3, 5, '2025-10-12 14:51:11', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(295, 3, 5, '2025-10-12 14:52:03', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(296, 3, 5, '2025-10-12 14:52:11', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(297, 3, 5, '2025-10-12 14:52:35', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(298, 3, 5, '2025-10-12 14:53:21', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(299, 3, 5, '2025-10-12 14:56:42', 700.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(300, 3, 4, '2025-10-12 15:00:06', 550.00, NULL, 'delivery', NULL, NULL, NULL, 13, NULL, NULL),
-(301, 3, 4, '2025-10-12 15:08:27', 550.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(302, 3, 4, '2025-10-12 15:08:59', 275.00, NULL, 'delivery', NULL, NULL, NULL, 12, NULL, NULL),
-(303, 3, 4, '2025-10-12 19:29:53', 250.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(304, 3, 4, '2025-10-12 22:46:03', 150.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(305, 3, 4, '2025-10-12 22:50:10', 75.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(306, 3, 4, '2025-10-12 22:58:53', 150.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(307, 3, 4, '2025-10-12 23:06:05', 150.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(308, 11, 4, '2025-10-12 23:51:21', 150.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(309, 11, 4, '2025-10-12 23:52:14', 150.00, NULL, 'delivery', NULL, NULL, NULL, 8, NULL, NULL),
-(310, 11, 4, '2025-10-12 23:55:58', 150.00, NULL, 'delivery', NULL, NULL, NULL, 8, NULL, NULL),
-(311, 11, 4, '2025-10-13 00:02:52', 300.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(312, 3, 4, '2025-10-13 15:15:04', 150.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(313, 3, 5, '2025-10-13 15:51:47', 150.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(314, 3, 5, '2025-10-13 15:52:13', 150.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(315, 3, 5, '2025-10-13 15:52:58', 51.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(316, 3, 5, '2025-10-13 15:54:09', 51.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(317, 3, 5, '2025-10-16 23:13:29', 1173.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(318, 3, 4, '2025-10-17 08:53:03', 15000.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(319, 3, 5, '2025-10-17 09:00:27', 3000.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(320, 9, 4, '2025-10-17 10:55:50', 15000.00, NULL, 'pickup', NULL, NULL, NULL, 3, NULL, NULL),
-(321, 9, 4, '2025-10-17 10:56:31', 1750.00, NULL, 'delivery', NULL, NULL, NULL, 3, NULL, NULL),
-(322, 9, 4, '2025-10-19 02:06:00', 3500.00, NULL, 'delivery', 'CBA-2142', '9878568975685687775', NULL, 3, NULL, NULL),
-(323, 9, 4, '2025-10-19 02:24:18', 1050.00, NULL, 'delivery', 'WQO-231', '5676512', NULL, 3, 'Lalamove', 'Gian Zayn Mosqueda'),
-(324, 9, 5, '2025-10-19 02:52:40', 350.00, NULL, 'delivery', NULL, NULL, NULL, 3, NULL, NULL),
-(325, 9, 5, '2025-10-19 03:03:10', 350.00, NULL, 'delivery', NULL, NULL, NULL, 3, NULL, NULL),
-(326, 9, 5, '2025-10-19 03:05:28', 350.00, NULL, 'pickup', NULL, NULL, NULL, 3, NULL, NULL),
-(327, 9, 5, '2025-10-19 03:07:47', 350.00, NULL, 'delivery', NULL, NULL, NULL, 3, NULL, NULL),
-(328, 3, 4, '2025-10-19 16:18:07', 4600.00, NULL, 'pickup', NULL, NULL, '2025-10-19 22:58:54', 11, NULL, NULL),
-(329, 3, 5, '2025-10-19 16:19:58', 1410.00, NULL, 'delivery', NULL, NULL, NULL, 13, NULL, NULL),
-(330, 3, 5, '2025-10-19 16:21:36', 1410.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(331, 3, 5, '2025-10-19 16:22:54', 1120.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(332, 3, 5, '2025-10-19 16:23:46', 990.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(333, 3, 5, '2025-10-19 16:26:07', 640.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(334, 3, 1, '2025-10-19 16:29:00', 770.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(335, 3, 4, '2025-10-19 16:30:59', 640.00, NULL, 'pickup', NULL, NULL, '2025-10-19 22:57:30', 11, NULL, NULL),
-(336, 3, 4, '2025-10-19 16:37:18', 640.00, NULL, 'pickup', NULL, NULL, '2025-10-19 17:07:18', 11, NULL, NULL),
-(337, 3, 5, '2025-10-19 16:38:12', 640.00, NULL, 'pickup', NULL, NULL, '2025-10-19 17:08:12', 11, NULL, NULL),
-(338, 3, 4, '2025-10-19 16:46:20', 350.00, NULL, 'pickup', NULL, NULL, '2025-10-19 17:16:20', 11, NULL, NULL),
-(339, 3, 4, '2025-10-19 16:51:54', 640.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(340, 3, 5, '2025-10-19 16:52:09', 847.00, NULL, 'delivery', NULL, NULL, NULL, 11, NULL, NULL),
-(341, 3, 4, '2025-10-19 16:52:37', 2560.00, NULL, 'pickup', NULL, NULL, NULL, 11, NULL, NULL),
-(342, 3, 4, '2025-10-19 16:52:59', 640.00, NULL, 'delivery', 'ASD-XUQ', '8797989789879789787', NULL, 11, NULL, NULL),
-(343, 11, 4, '2025-10-19 21:28:49', 44800.00, NULL, 'pickup', NULL, NULL, NULL, 8, NULL, NULL),
-(344, 11, 4, '2025-10-19 21:30:03', 44800.00, NULL, 'delivery', NULL, NULL, NULL, 9, NULL, NULL),
-(345, 11, 4, '2025-10-19 22:17:01', 4260.00, NULL, 'delivery', NULL, NULL, NULL, 9, NULL, NULL),
-(346, 11, 4, '2025-10-19 22:34:07', 3900.00, NULL, 'delivery', 'XYZ-791', '1231231231233213212', NULL, 9, NULL, NULL),
-(347, 11, 4, '2025-10-19 23:44:06', 1525.00, NULL, 'delivery', 'XXX-2142', '9898908908998899898', NULL, 15, NULL, NULL),
-(348, 11, 4, '2025-10-19 23:53:46', 3500.00, NULL, 'delivery', 'ACD-4214', '6565765776576576576', NULL, 9, NULL, NULL),
-(349, 11, 4, '2025-10-19 23:58:28', 300.00, NULL, 'pickup', NULL, NULL, '2025-10-19 23:58:51', 8, NULL, NULL),
-(350, 11, 4, '2025-10-20 08:31:05', 248.00, NULL, 'pickup', NULL, NULL, '2025-10-20 08:31:19', 8, NULL, NULL),
-(351, 11, 4, '2025-10-20 13:08:23', 350.00, NULL, 'delivery', 'EWA-5712', '9898989898898988988', NULL, 15, NULL, NULL),
-(352, 11, 4, '2025-10-20 13:11:12', 240.00, NULL, 'pickup', NULL, NULL, '2025-10-20 13:12:49', 8, NULL, NULL),
-(353, 11, 4, '2025-10-20 21:13:52', 1600.00, NULL, 'pickup', NULL, NULL, '2025-10-21 09:35:32', 8, NULL, NULL),
-(354, 3, 4, '2025-10-21 09:31:59', 450.00, NULL, 'pickup', NULL, NULL, '2025-10-21 09:35:29', 11, NULL, NULL),
-(355, 3, 4, '2025-10-21 09:47:51', 400.00, NULL, 'pickup', NULL, NULL, '2025-10-21 09:48:07', 11, NULL, NULL),
-(356, 10, 4, '2025-10-21 11:14:27', 1488.00, NULL, 'pickup', NULL, NULL, '2025-10-21 11:14:33', 4, NULL, NULL),
-(357, 11, 4, '2025-10-21 11:19:24', 1580.00, NULL, 'pickup', NULL, NULL, '2025-10-21 11:19:33', 8, NULL, NULL),
-(358, 9, 3, '2025-10-22 00:22:04', 5550.00, NULL, 'delivery', 'WQW-712', '3421354324897895434', NULL, 3, 'Lalamove', 'Marion Brix Quiling'),
-(359, 9, 1, '2025-10-22 01:24:55', 2775.00, NULL, 'pickup', NULL, NULL, NULL, 3, NULL, NULL),
-(360, 9, 4, '2025-10-22 11:51:00', 4100.00, NULL, 'pickup', NULL, NULL, '2025-10-22 11:51:52', 3, NULL, NULL),
-(361, 10, 4, '2025-10-22 13:07:45', 3700.00, NULL, 'pickup', NULL, NULL, '2025-10-22 13:07:58', 4, NULL, NULL),
-(362, 20, 4, '2025-10-22 13:45:09', 690.00, NULL, 'pickup', NULL, NULL, '2025-10-22 13:45:25', 16, NULL, NULL),
-(363, 20, 4, '2025-10-22 13:48:59', 820.00, NULL, 'pickup', NULL, NULL, '2025-10-22 13:49:19', 16, NULL, NULL),
-(364, 20, 4, '2025-10-22 13:51:35', 790.00, NULL, 'pickup', NULL, NULL, '2025-10-22 13:51:42', 16, NULL, NULL),
-(365, 20, 4, '2025-10-22 13:57:59', 800.00, NULL, 'pickup', NULL, NULL, '2025-10-22 13:59:06', 16, NULL, NULL);
+INSERT INTO `orders` (`orders_id`, `user_id`, `orderstatus_id`, `created_at`, `total_price`, `delivered_at`, `delivery_option`, `plate_number`, `rider_contact_number`, `transaction_number`, `pickup_ready_at`, `address_id`, `application_name`, `rider_name`) VALUES
+(158, 45, 0, '2025-07-25 13:13:06', 209.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(159, 45, 0, '2025-07-25 13:23:37', 418.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(160, 45, 0, '2025-07-25 20:32:32', 722.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(161, 45, 0, '2025-07-25 20:33:13', 209.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(162, 45, 0, '2025-07-25 20:33:45', 209.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(163, 46, 0, '2025-08-09 09:31:06', 231.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(164, 46, 0, '2025-08-15 23:08:35', 1339.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(165, 46, 0, '2025-08-16 08:05:25', 184.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(167, 3, 4, '2025-09-06 10:56:28', 814.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(168, 3, 5, '2025-09-06 11:22:33', 407.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(169, 3, 4, '2025-09-06 13:15:21', 539.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(170, 3, 4, '2025-09-06 13:30:45', 132.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(171, 3, 4, '2025-09-06 13:39:41', 264.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(172, 3, 7, '2025-09-08 21:48:14', 275.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(173, 9, 4, '2025-09-16 23:09:49', 240.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(174, 9, 4, '2025-09-17 20:56:27', 960.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(175, 10, 4, '2025-09-17 23:35:58', 240.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(176, 10, 4, '2025-09-17 23:37:31', 2400.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(177, 10, 4, '2025-09-18 22:16:49', 180.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(178, 10, 4, '2025-09-18 22:18:21', 240.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(179, 10, 5, '2025-09-18 22:22:18', 180.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(180, 10, 4, '2025-09-18 22:22:54', 180.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(181, 3, 4, '2025-09-19 11:15:24', 144.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(182, 3, 4, '2025-09-22 10:35:08', 144.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(183, 3, 4, '2025-09-22 13:08:36', 198.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(184, 3, 4, '2025-09-23 17:33:28', 396.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(185, 3, 4, '2025-09-23 17:34:56', 396.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(186, 3, 5, '2025-09-23 19:29:56', 198.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(187, 3, 5, '2025-09-23 19:30:00', 198.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(188, 3, 5, '2025-09-23 19:30:04', 198.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(189, 3, 4, '2025-09-23 19:30:23', 240.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(190, 3, 4, '2025-09-23 19:31:25', 180.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(191, 3, 4, '2025-09-24 16:45:37', 942.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(192, 3, 4, '2025-09-30 20:34:23', 2410.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(193, 3, 4, '2025-09-30 20:51:51', 10.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(194, 3, 4, '2025-09-30 20:59:40', 8.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(195, 3, 4, '2025-09-30 21:02:18', 10.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(196, 10, 5, '2025-10-07 10:39:49', 12.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(199, 10, 4, '2025-10-07 11:13:14', 748.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(200, 10, 4, '2025-10-07 11:18:10', 630.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(201, 10, 4, '2025-10-07 11:23:43', 270.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(202, 10, 4, '2025-10-07 11:31:40', 270.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(203, 10, 4, '2025-10-07 11:36:01', 2070.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(204, 10, 4, '2025-10-07 11:55:27', 540.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(205, 10, 5, '2025-10-07 11:56:06', 630.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(206, 10, 5, '2025-10-07 12:03:39', 270.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(207, 10, 4, '2025-10-07 12:23:52', 270.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(208, 10, 4, '2025-10-07 12:29:15', 25.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(209, 10, 4, '2025-10-07 12:33:42', 12.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(210, 10, 4, '2025-10-07 12:39:26', 3996.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(211, 10, 4, '2025-10-07 12:43:14', 495.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(212, 10, 4, '2025-10-07 12:43:50', 693.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(213, 3, 4, '2025-10-08 14:08:47', 1627.50, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(214, 3, 5, '2025-10-08 14:14:29', 10.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(215, 3, 5, '2025-10-08 18:23:47', 35.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(216, 3, 5, '2025-10-08 18:45:44', 20.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(217, 3, 5, '2025-10-08 18:45:50', 20.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(218, 3, 5, '2025-10-08 18:46:01', 20.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(219, 3, 5, '2025-10-08 18:46:16', 20.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(220, 3, 5, '2025-10-08 18:46:21', 20.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(221, 3, 4, '2025-10-08 18:47:30', 20.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(222, 3, 4, '2025-10-08 19:00:53', 20.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(223, 3, 5, '2025-10-08 19:01:37', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(224, 11, 4, '2025-10-08 21:23:20', 300.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(225, 11, 4, '2025-10-08 21:34:03', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(226, 11, 4, '2025-10-08 21:36:22', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(227, 11, 4, '2025-10-08 21:42:57', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(228, 11, 4, '2025-10-08 21:58:48', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(229, 11, 4, '2025-10-08 22:11:19', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(230, 3, 4, '2025-10-08 22:12:36', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(231, 3, 4, '2025-10-08 22:31:35', 300.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 10, NULL, NULL),
+(232, 3, 4, '2025-10-08 22:50:44', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(233, 3, 4, '2025-10-08 22:53:07', 250.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(234, 3, 4, '2025-10-08 22:58:16', 250.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(235, 3, 4, '2025-10-08 23:02:07', 250.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(236, 3, 4, '2025-10-08 23:07:38', 250.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(237, 3, 4, '2025-10-08 23:10:32', 250.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 12, NULL, NULL),
+(238, 3, 4, '2025-10-08 23:14:58', 6750.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(239, 3, 4, '2025-10-09 11:54:09', 400.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 10, NULL, NULL),
+(240, 3, 4, '2025-10-09 11:55:53', 400.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(241, 3, 4, '2025-10-09 11:56:09', 400.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 10, NULL, NULL),
+(242, 3, 4, '2025-10-09 11:56:36', 400.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 12, NULL, NULL),
+(243, 3, 4, '2025-10-09 12:28:08', 1200.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(244, 3, 4, '2025-10-09 12:29:59', 300.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(245, 11, 4, '2025-10-09 12:31:51', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 9, NULL, NULL),
+(246, 11, 4, '2025-10-09 12:34:15', 150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(247, 11, 4, '2025-10-09 12:38:56', 100.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(248, 11, 4, '2025-10-09 12:53:55', 150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(249, 3, 4, '2025-10-09 14:31:38', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(250, 3, 5, '2025-10-09 21:28:21', 300.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(251, 3, 5, '2025-10-11 23:11:54', 2166.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(252, 3, 5, '2025-10-11 23:13:00', 2166.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(253, 3, 5, '2025-10-11 23:22:48', 1415.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(254, 3, 5, '2025-10-12 11:23:12', 1415.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(255, 11, 5, '2025-10-12 11:50:22', 1415.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(256, 11, 5, '2025-10-12 12:39:51', 1415.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(257, 11, 5, '2025-10-12 12:44:05', 1415.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 9, NULL, NULL),
+(258, 11, 5, '2025-10-12 12:47:00', 1415.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(259, 11, 5, '2025-10-12 12:49:56', 1415.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(260, 11, 5, '2025-10-12 12:59:06', 1415.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(261, 11, 5, '2025-10-12 13:09:06', 1415.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(262, 11, 5, '2025-10-12 13:11:27', 585.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(263, 11, 5, '2025-10-12 13:16:20', 585.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(264, 3, 5, '2025-10-12 13:52:45', 50.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(265, 3, 5, '2025-10-12 14:07:02', 50.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(266, 3, 5, '2025-10-12 14:12:29', 1200.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(267, 3, 5, '2025-10-12 14:12:42', 1200.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(268, 3, 4, '2025-10-12 14:12:56', 650.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(269, 3, 5, '2025-10-12 14:13:35', 550.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(270, 3, 4, '2025-10-12 14:17:57', 650.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(271, 3, 4, '2025-10-12 14:20:00', 150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(272, 3, 5, '2025-10-12 14:21:24', 450.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 12, NULL, NULL),
+(273, 3, 5, '2025-10-12 14:21:30', 450.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(274, 3, 5, '2025-10-12 14:21:47', 450.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(275, 3, 4, '2025-10-12 14:22:02', 150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(276, 3, 4, '2025-10-12 14:22:20', 300.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(277, 3, 4, '2025-10-12 14:23:26', 102.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(278, 3, 5, '2025-10-12 14:23:52', 51.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(279, 3, 5, '2025-10-12 14:26:31', 2150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(280, 3, 5, '2025-10-12 14:26:56', 2150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(281, 3, 5, '2025-10-12 14:32:55', 2150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(282, 3, 4, '2025-10-12 14:33:18', 225.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(283, 3, 5, '2025-10-12 14:33:33', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(284, 3, 5, '2025-10-12 14:38:41', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(285, 3, 5, '2025-10-12 14:39:05', 550.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(286, 3, 5, '2025-10-12 14:39:18', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(287, 3, 5, '2025-10-12 14:41:33', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(288, 3, 5, '2025-10-12 14:43:06', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(289, 3, 5, '2025-10-12 14:43:37', 700.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(290, 3, 5, '2025-10-12 14:46:17', 700.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(291, 3, 5, '2025-10-12 14:46:48', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(292, 3, 4, '2025-10-12 14:47:24', 550.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(293, 3, 5, '2025-10-12 14:48:11', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(294, 3, 5, '2025-10-12 14:51:11', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(295, 3, 5, '2025-10-12 14:52:03', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(296, 3, 5, '2025-10-12 14:52:11', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(297, 3, 5, '2025-10-12 14:52:35', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(298, 3, 5, '2025-10-12 14:53:21', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(299, 3, 5, '2025-10-12 14:56:42', 700.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(300, 3, 4, '2025-10-12 15:00:06', 550.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(301, 3, 4, '2025-10-12 15:08:27', 550.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(302, 3, 4, '2025-10-12 15:08:59', 275.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 12, NULL, NULL),
+(303, 3, 4, '2025-10-12 19:29:53', 250.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(304, 3, 4, '2025-10-12 22:46:03', 150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(305, 3, 4, '2025-10-12 22:50:10', 75.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(306, 3, 4, '2025-10-12 22:58:53', 150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(307, 3, 4, '2025-10-12 23:06:05', 150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(308, 11, 4, '2025-10-12 23:51:21', 150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(309, 11, 4, '2025-10-12 23:52:14', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(310, 11, 4, '2025-10-12 23:55:58', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(311, 11, 4, '2025-10-13 00:02:52', 300.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(312, 3, 4, '2025-10-13 15:15:04', 150.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(313, 3, 5, '2025-10-13 15:51:47', 150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(314, 3, 5, '2025-10-13 15:52:13', 150.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(315, 3, 5, '2025-10-13 15:52:58', 51.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(316, 3, 5, '2025-10-13 15:54:09', 51.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(317, 3, 5, '2025-10-16 23:13:29', 1173.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(318, 3, 4, '2025-10-17 08:53:03', 15000.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(319, 3, 5, '2025-10-17 09:00:27', 3000.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(320, 9, 4, '2025-10-17 10:55:50', 15000.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(321, 9, 4, '2025-10-17 10:56:31', 1750.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(322, 9, 4, '2025-10-19 02:06:00', 3500.00, NULL, 'delivery', 'CBA-2142', NULL, '9878568975685687775', NULL, NULL, NULL, NULL),
+(323, 9, 4, '2025-10-19 02:24:18', 1050.00, NULL, 'delivery', 'WQO-231', NULL, '5676512', NULL, NULL, 'Lalamove', 'Gian Zayn Mosqueda'),
+(324, 9, 5, '2025-10-19 02:52:40', 350.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(325, 9, 5, '2025-10-19 03:03:10', 350.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(326, 9, 5, '2025-10-19 03:05:28', 350.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(327, 9, 5, '2025-10-19 03:07:47', 350.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(328, 3, 4, '2025-10-19 16:18:07', 4600.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-19 22:58:54', 11, NULL, NULL),
+(329, 3, 5, '2025-10-19 16:19:58', 1410.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(330, 3, 5, '2025-10-19 16:21:36', 1410.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(331, 3, 5, '2025-10-19 16:22:54', 1120.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(332, 3, 5, '2025-10-19 16:23:46', 990.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(333, 3, 5, '2025-10-19 16:26:07', 640.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(334, 3, 4, '2025-10-19 16:29:00', 770.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-24 09:58:14', 11, NULL, NULL),
+(335, 3, 4, '2025-10-19 16:30:59', 640.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-19 22:57:30', 11, NULL, NULL),
+(336, 3, 4, '2025-10-19 16:37:18', 640.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-19 17:07:18', 11, NULL, NULL),
+(337, 3, 5, '2025-10-19 16:38:12', 640.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-19 17:08:12', 11, NULL, NULL),
+(338, 3, 4, '2025-10-19 16:46:20', 350.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-19 17:16:20', 11, NULL, NULL),
+(339, 3, 4, '2025-10-19 16:51:54', 640.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(340, 3, 5, '2025-10-19 16:52:09', 847.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(341, 3, 4, '2025-10-19 16:52:37', 2560.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(342, 3, 4, '2025-10-19 16:52:59', 640.00, NULL, 'delivery', 'ASD-XUQ', NULL, '8797989789879789787', NULL, 11, NULL, NULL),
+(343, 11, 4, '2025-10-19 21:28:49', 44800.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 8, NULL, NULL),
+(344, 11, 4, '2025-10-19 21:30:03', 44800.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 9, NULL, NULL),
+(345, 11, 4, '2025-10-19 22:17:01', 4260.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 9, NULL, NULL),
+(346, 11, 4, '2025-10-19 22:34:07', 3900.00, NULL, 'delivery', 'XYZ-791', NULL, '1231231231233213212', NULL, 9, NULL, NULL),
+(347, 11, 4, '2025-10-19 23:44:06', 1525.00, NULL, 'delivery', 'XXX-2142', NULL, '9898908908998899898', NULL, 15, NULL, NULL),
+(348, 11, 4, '2025-10-19 23:53:46', 3500.00, NULL, 'delivery', 'ACD-4214', NULL, '6565765776576576576', NULL, 9, NULL, NULL),
+(349, 11, 4, '2025-10-19 23:58:28', 300.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-19 23:58:51', 8, NULL, NULL),
+(350, 11, 4, '2025-10-20 08:31:05', 248.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-20 08:31:19', 8, NULL, NULL),
+(351, 11, 4, '2025-10-20 13:08:23', 350.00, NULL, 'delivery', 'EWA-5712', NULL, '9898989898898988988', NULL, 15, NULL, NULL),
+(352, 11, 4, '2025-10-20 13:11:12', 240.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-20 13:12:49', 8, NULL, NULL),
+(353, 11, 4, '2025-10-20 21:13:52', 1600.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-21 09:35:32', 8, NULL, NULL),
+(354, 3, 4, '2025-10-21 09:31:59', 450.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-21 09:35:29', 11, NULL, NULL),
+(355, 3, 4, '2025-10-21 09:47:51', 400.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-21 09:48:07', 11, NULL, NULL),
+(356, 10, 4, '2025-10-21 11:14:27', 1488.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-21 11:14:33', 4, NULL, NULL),
+(357, 11, 4, '2025-10-21 11:19:24', 1580.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-21 11:19:33', 8, NULL, NULL),
+(358, 9, 4, '2025-10-22 00:22:04', 5550.00, NULL, 'delivery', 'WQW-712', NULL, '3421354324897895434', NULL, NULL, 'Lalamove', 'Marion Brix Quiling'),
+(359, 9, 5, '2025-10-22 01:24:55', 2775.00, NULL, 'pickup', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(360, 9, 4, '2025-10-22 11:51:00', 4100.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-22 11:51:52', NULL, NULL, NULL),
+(361, 10, 4, '2025-10-22 13:07:45', 3700.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-22 13:07:58', 4, NULL, NULL),
+(362, 20, 4, '2025-10-22 13:45:09', 690.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-22 13:45:25', 16, NULL, NULL),
+(363, 20, 4, '2025-10-22 13:48:59', 820.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-22 13:49:19', 16, NULL, NULL),
+(364, 20, 4, '2025-10-22 13:51:35', 790.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-22 13:51:42', 16, NULL, NULL),
+(365, 20, 4, '2025-10-22 13:57:59', 800.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-22 13:59:06', 16, NULL, NULL),
+(366, 20, 4, '2025-10-22 14:14:14', 2450.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-22 14:14:22', 16, NULL, NULL),
+(367, 20, 4, '2025-10-22 15:04:18', 350.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-22 15:04:24', 16, NULL, NULL),
+(368, 3, 4, '2025-10-22 15:05:45', 5250.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-22 15:05:57', 11, NULL, NULL),
+(369, 3, 5, '2025-10-22 20:44:47', 800.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(370, 3, 5, '2025-10-22 20:47:40', 600.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(371, 3, 5, '2025-10-22 20:54:57', 1020.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(372, 10, 4, '2025-10-22 23:45:07', 1480.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-22 23:45:23', 4, NULL, NULL),
+(373, 3, 4, '2025-10-22 23:58:50', 1752.00, NULL, 'delivery', 'XYZ-791', NULL, '8656756778878', NULL, 11, 'Lalamove', 'Marianne'),
+(374, 3, 4, '2025-10-24 09:08:23', 370.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-24 09:57:31', 11, NULL, NULL),
+(375, 3, 4, '2025-10-24 09:51:43', 740.00, NULL, 'delivery', 'ADE-2131', NULL, '213123512', NULL, 13, 'Lalamove', 'Davidson'),
+(376, 3, 4, '2025-10-24 09:58:02', 370.00, NULL, 'delivery', 'WWE-2133', NULL, '7456456', NULL, 12, 'Lalamove', 'Kervie'),
+(377, 3, 4, '2025-10-24 10:01:00', 350.00, NULL, 'delivery', 'POQ-2130', NULL, '4141124', NULL, 13, 'Lalamove', 'Jay'),
+(378, 3, 4, '2025-10-24 10:04:21', 370.00, NULL, 'delivery', 'GDO-2131', NULL, '712312', NULL, 12, 'Lalamove', 'Brix'),
+(379, 3, 4, '2025-10-24 23:06:14', 70.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-24 23:22:50', 11, NULL, NULL),
+(380, 3, 4, '2025-10-24 23:08:26', 350.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-25 18:40:29', 11, NULL, NULL),
+(381, 3, 4, '2025-10-25 18:40:13', 340.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-25 18:40:32', 11, NULL, NULL),
+(382, 3, 5, '2025-10-25 21:52:42', 4200.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-25 21:52:55', 11, NULL, NULL),
+(383, 3, 2, '2025-10-25 21:54:42', 370.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(384, 10, 4, '2025-10-26 12:52:53', 351.50, NULL, 'pickup', NULL, NULL, NULL, '2025-10-26 12:53:13', 4, NULL, NULL),
+(385, 3, 5, '2025-10-26 17:39:04', 130.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-26 17:39:40', 11, NULL, NULL),
+(386, 3, 4, '2025-10-26 17:40:28', 370.00, NULL, 'delivery', 'SAZ-1212', '09213197822', '78734123213', NULL, 13, 'Lalamove', 'Gian'),
+(387, 3, 2, '2025-10-26 21:01:29', 130.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(388, 3, 5, '2025-10-26 21:06:22', 920.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-30 21:19:06', 11, NULL, NULL),
+(389, 3, 2, '2025-10-30 12:09:14', 9940.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(390, 3, 4, '2025-10-30 12:17:19', 2400.00, NULL, 'delivery', 'WQO-232', '09321312321', '5464564512323213335', NULL, 13, 'Lalamove', 'Gian Zayn Mosqueda'),
+(391, 3, 2, '2025-10-30 20:32:42', 50.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 12, NULL, NULL),
+(392, 3, 2, '2025-10-30 20:56:16', 320.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(393, 3, 5, '2025-10-30 21:11:14', 350.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 10, NULL, NULL),
+(394, 9, 2, '2025-10-30 21:18:50', 33720.00, NULL, 'delivery', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(395, 9, 4, '2025-10-30 21:47:52', 1300.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-31 16:24:51', 17, NULL, NULL),
+(396, 3, 5, '2025-10-31 16:12:01', 350.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(397, 3, 8, '2025-10-31 16:24:40', 930.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-31 16:24:49', 11, NULL, NULL),
+(398, 3, 5, '2025-10-31 19:12:59', 1220.00, NULL, 'pickup', NULL, NULL, NULL, NULL, 11, NULL, NULL),
+(399, 3, 4, '2025-10-31 19:13:50', 1220.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-31 19:13:59', 11, NULL, NULL),
+(400, 3, 2, '2025-10-31 19:22:12', 3700.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 13, NULL, NULL),
+(401, 10, 8, '2025-10-31 19:46:35', 12000.00, NULL, 'pickup', NULL, NULL, NULL, '2025-10-31 20:27:20', 4, NULL, NULL),
+(402, 10, 2, '2025-10-31 20:27:08', 6400.00, NULL, 'delivery', NULL, NULL, NULL, NULL, 4, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -1771,7 +1983,17 @@ INSERT INTO `order_cancellations` (`id`, `order_id`, `reason`, `cancelled_by`, `
 (77, 331, 'Customer unable to visit the store', 'superadmin', '2025-10-19 14:18:05', NULL, NULL, NULL),
 (78, 332, 'Customer unable to visit the store', 'superadmin', '2025-10-19 14:20:16', NULL, NULL, NULL),
 (79, 333, 'Customer unable to visit the store', 'superadmin', '2025-10-19 14:20:25', NULL, NULL, NULL),
-(80, 337, 'Customer did not pick up order within 3 hours (9.4 hours elapsed)', 'superadmin', '2025-10-20 00:31:35', NULL, NULL, NULL);
+(80, 337, 'Customer did not pick up order within 3 hours (9.4 hours elapsed)', 'superadmin', '2025-10-20 00:31:35', NULL, NULL, NULL),
+(81, 369, 'Ride did not show up', 'superadmin', '2025-10-22 12:45:08', NULL, NULL, NULL),
+(82, 370, 'Customer unable to visit the store', 'superadmin', '2025-10-22 12:48:09', NULL, NULL, NULL),
+(83, 371, 'Customer unable to visit the store', 'superadmin', '2025-10-22 12:55:06', NULL, NULL, NULL),
+(84, 359, 'Customer unable to visit the store', 'superadmin', '2025-10-22 12:55:52', NULL, NULL, NULL),
+(85, 382, 'Customer did not pick up order within 3 hours (6.9 hours elapsed) - REFUND REQUIRED (Payment: Gcash)', 'superadmin', '2025-10-26 02:48:50', NULL, NULL, NULL),
+(86, 388, 'Customer did not pick up order within 3 hours (11.6 hours elapsed) - REFUND REQUIRED (Payment: Gcash)', 'superadmin', '2025-10-31 07:56:10', NULL, NULL, NULL),
+(87, 385, 'Customer did not pick up order within 3 hours (111.4 hours elapsed)', 'superadmin', '2025-10-31 08:05:44', NULL, NULL, NULL),
+(88, 393, 'Insufficient Payment', 'superadmin', '2025-10-31 08:06:27', NULL, NULL, NULL),
+(89, 396, 'Insufficient Payment', 'superadmin', '2025-10-31 08:12:30', 'uploads/cancellation_receipts/order_396_2025-10-31_09-12-31.jpg', 'order_396_2025-10-31_09-12-31.jpg', '2025-10-31 08:12:31'),
+(90, 398, 'Customer unable to visit the store', 'superadmin', '2025-10-31 11:13:23', NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -1971,7 +2193,48 @@ INSERT INTO `order_items` (`orderitems_id`, `order_id`, `product_id`, `brand_id`
 (224, 362, 29, 20, 91, 1.0, 320.00),
 (225, 363, 20, 11, 107, 1.0, 820.00),
 (226, 364, 25, 19, 102, 2.0, 395.00),
-(227, 365, 24, 19, 87, 2.0, 400.00);
+(227, 365, 24, 19, 87, 2.0, 400.00),
+(228, 366, 17, 13, 74, 7.0, 350.00),
+(229, 367, 17, 13, 74, 1.0, 350.00),
+(230, 368, 17, 13, 74, 15.0, 350.00),
+(231, 369, 24, 19, 87, 2.0, 400.00),
+(232, 370, 28, 15, 108, 1.0, 340.00),
+(233, 371, 28, 15, 109, 3.0, 340.00),
+(234, 372, 23, 18, 101, 10.0, 185.00),
+(235, 373, 20, 13, 106, 2.0, 920.00),
+(236, 373, 26, 17, 95, 1.0, 350.00),
+(237, 374, 22, 12, 105, 1.0, 370.00),
+(238, 375, 22, 12, 105, 2.0, 370.00),
+(239, 376, 22, 12, 105, 1.0, 370.00),
+(240, 377, 26, 17, 95, 1.0, 350.00),
+(241, 378, 22, 12, 105, 1.0, 370.00),
+(242, 379, 27, 15, 100, 1.0, 305.00),
+(243, 380, 23, 18, 110, 1.0, 350.00),
+(244, 381, 28, 15, 109, 1.0, 340.00),
+(245, 382, 17, 13, 74, 12.0, 350.00),
+(246, 383, 22, 12, 105, 1.0, 370.00),
+(247, 384, 22, 12, 105, 1.0, 370.00),
+(248, 385, 31, 16, 93, 1.0, 130.00),
+(249, 386, 22, 12, 105, 1.0, 370.00),
+(250, 387, 31, 16, 93, 1.0, 130.00),
+(251, 388, 20, 13, 106, 1.0, 920.00),
+(252, 389, 20, 11, 107, 11.0, 820.00),
+(253, 389, 20, 13, 106, 1.0, 920.00),
+(254, 390, 26, 17, 95, 5.0, 350.00),
+(255, 390, 30, 20, 89, 5.0, 130.00),
+(256, 391, 23, 18, 110, 1.0, 350.00),
+(257, 392, 29, 20, 91, 1.0, 320.00),
+(258, 393, 23, 18, 110, 1.0, 350.00),
+(259, 394, 20, 11, 107, 40.0, 820.00),
+(260, 394, 20, 13, 106, 1.0, 920.00),
+(261, 395, 31, 16, 93, 10.0, 130.00),
+(262, 396, 23, 18, 110, 1.0, 350.00),
+(263, 397, 25, 20, 111, 3.0, 310.00),
+(264, 398, 27, 15, 100, 4.0, 305.00),
+(265, 399, 27, 15, 100, 4.0, 305.00),
+(266, 400, 27, 12, 117, 10.0, 370.00),
+(267, 401, 23, 11, 121, 40.0, 300.00),
+(268, 402, 24, 1, 115, 20.0, 320.00);
 
 -- --------------------------------------------------------
 
@@ -2027,8 +2290,8 @@ INSERT INTO `order_ratings` (`rating_id`, `order_id`, `user_id`, `rating`, `revi
 (29, 355, 3, 5, '', '2025-10-21 03:17:09', '2025-10-21 03:17:09', NULL, NULL),
 (30, 357, 11, 4, 'Super tender after simmering for a few hours! The bone marrow melts perfectly, and the soup comes out rich and flavorful. Feels like eating in Tagaytay!', '2025-10-21 03:19:59', '2025-10-21 03:19:59', NULL, NULL),
 (31, 322, 9, 4, '', '2025-10-21 16:13:40', '2025-10-21 16:13:40', NULL, NULL),
-(32, 323, 9, 4, 'Medyo matigas kapag minadali ang luto, pero sobrang sarap kapag pinakuluan nang matagal.', '2025-10-22 03:28:41', '2025-10-22 03:28:41', 'uploads/rating_images/rating_323_9_1761103721.jpg', '2025-10-22 03:28:41'),
-(33, 360, 9, 5, 'Malambot, malasa, at perfect pang-steak o ginisa', '2025-10-22 03:54:23', '2025-10-22 03:54:23', 'uploads/rating_images/rating_360_9_1761105263.jpg', '2025-10-22 03:54:23'),
+(32, 323, 9, 4, 'Medyo matigas kapag minadali ang luto, pero sobrang sarap kapag pinakuluan nang matagal.', '2025-10-22 03:28:41', '2025-10-22 06:12:00', NULL, NULL),
+(33, 360, 9, 5, 'Malambot, malasa, at perfect pang-steak o ginisa', '2025-10-22 03:54:23', '2025-10-22 06:12:00', NULL, NULL),
 (34, 321, 9, 4, 'Thank you Seller!', '2025-10-22 05:05:23', '2025-10-22 05:05:23', NULL, NULL),
 (35, 211, 10, 4, '', '2025-10-22 05:06:10', '2025-10-22 05:06:10', NULL, NULL),
 (36, 210, 10, 3, '', '2025-10-22 05:06:19', '2025-10-22 05:06:19', NULL, NULL),
@@ -2036,7 +2299,18 @@ INSERT INTO `order_ratings` (`rating_id`, `order_id`, `user_id`, `rating`, `revi
 (38, 362, 20, 4, 'Thank you po!', '2025-10-22 05:48:04', '2025-10-22 05:48:04', NULL, NULL),
 (39, 363, 20, 5, 'Sarap pang Steak!!', '2025-10-22 05:49:52', '2025-10-22 05:49:52', NULL, NULL),
 (40, 364, 20, 4, 'solid pang bulalo talaga, thank you selleeeeer!!', '2025-10-22 05:52:39', '2025-10-22 05:52:39', NULL, NULL),
-(41, 365, 20, 4, '', '2025-10-22 05:59:44', '2025-10-22 05:59:44', NULL, NULL);
+(41, 365, 20, 4, '', '2025-10-22 05:59:44', '2025-10-22 05:59:44', NULL, NULL),
+(42, 366, 20, 2, '', '2025-10-22 06:19:52', '2025-10-22 06:19:52', NULL, NULL),
+(43, 367, 20, 4, '', '2025-10-22 07:04:44', '2025-10-22 07:04:44', NULL, NULL),
+(44, 368, 3, 4, 'Thank you MikeMadz!!', '2025-10-22 07:06:31', '2025-10-22 07:06:31', NULL, NULL),
+(45, 372, 10, 4, '', '2025-10-22 15:46:29', '2025-10-22 15:46:29', NULL, NULL),
+(46, 373, 3, 5, 'solid!!', '2025-10-22 16:02:11', '2025-10-22 16:02:11', NULL, NULL),
+(47, 386, 3, 3, '', '2025-10-30 04:09:23', '2025-10-30 04:09:23', NULL, NULL),
+(48, 381, 3, 3, '', '2025-10-30 04:09:32', '2025-10-30 04:09:32', NULL, NULL),
+(49, 380, 3, 3, '', '2025-10-30 04:09:40', '2025-10-30 04:09:40', NULL, NULL),
+(50, 379, 3, 4, '', '2025-10-30 04:09:48', '2025-10-30 04:09:48', NULL, NULL),
+(51, 378, 3, 5, '', '2025-10-30 04:09:56', '2025-10-30 04:09:56', NULL, NULL),
+(52, 390, 3, 3, 'ty', '2025-10-30 04:21:24', '2025-10-30 04:21:24', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -2283,7 +2557,44 @@ INSERT INTO `payments` (`payments_id`, `orders_id`, `amount`, `method`, `payment
 (199, 362, 690.00, '', '2025-10-22 13:45:09', '', '', 1),
 (200, 363, 820.00, '', '2025-10-22 13:48:59', '', '', 1),
 (201, 364, 790.00, '', '2025-10-22 13:51:35', '', '', 1),
-(202, 365, 800.00, '', '2025-10-22 13:57:59', '', '', 1);
+(202, 365, 800.00, '', '2025-10-22 13:57:59', '', '', 1),
+(203, 366, 2450.00, 'Gcash', '2025-10-22 14:14:14', '68f876369324a_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '665898912', 1),
+(204, 367, 350.00, '', '2025-10-22 15:04:18', '', '', 1),
+(205, 368, 5250.00, 'Gcash', '2025-10-22 15:05:45', '68f882497a722_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '125325632', 1),
+(206, 369, 800.00, '', '2025-10-22 20:44:47', '', '', 1),
+(207, 370, 600.00, '', '2025-10-22 20:47:40', '', '', 1),
+(208, 371, 1020.00, '', '2025-10-22 20:54:57', '', '', 1),
+(209, 372, 1480.00, '', '2025-10-22 23:45:07', '', '', 1),
+(210, 373, 1752.00, '', '2025-10-22 23:58:50', '', '', 1),
+(211, 374, 370.00, '', '2025-10-24 09:08:23', '', '', 1),
+(212, 375, 740.00, '', '2025-10-24 09:51:43', '', '', 1),
+(213, 376, 370.00, '', '2025-10-24 09:58:02', '', '', 1),
+(214, 377, 350.00, '', '2025-10-24 10:01:00', '', '', 1),
+(215, 378, 370.00, '', '2025-10-24 10:04:21', '', '', 1),
+(216, 379, 70.00, '', '2025-10-24 23:06:14', '', '', 1),
+(217, 380, 350.00, '', '2025-10-24 23:08:26', '', '', 1),
+(218, 381, 340.00, '', '2025-10-25 18:40:13', '', '', 1),
+(219, 382, 4200.00, 'Gcash', '2025-10-25 21:52:42', '68fcd62a71d4d_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '2131264', 1),
+(220, 383, 370.00, '', '2025-10-25 21:54:42', '', '', 1),
+(221, 384, 351.50, '', '2025-10-26 12:52:53', '', '', 1),
+(222, 385, 130.00, '', '2025-10-26 17:39:04', '', '', 1),
+(223, 386, 370.00, 'Gcash', '2025-10-26 17:40:28', '68fdec8cb0baa_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '321312', 1),
+(224, 387, 130.00, 'Gcash', '2025-10-26 21:01:29', '68fe1ba929bc9_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '184731261', 1),
+(225, 388, 920.00, 'Gcash', '2025-10-26 21:06:22', '68fe1cce0191f_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '09897878873', 1),
+(226, 389, 9940.00, 'Gcash', '2025-10-30 12:09:14', '6902e4eab9150_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '8767832423432', 1),
+(227, 390, 2400.00, 'Gcash', '2025-10-30 12:17:19', '6902e6cfe8475_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '2222222222222', 1),
+(228, 391, 50.00, '', '2025-10-30 20:32:42', '', '', 1),
+(229, 392, 320.00, '', '2025-10-30 20:56:16', '', '', 1),
+(230, 393, 350.00, 'Gcash', '2025-10-30 21:11:14', '690363f2df316_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '31232123', 1),
+(231, 394, 33720.00, 'Gcash', '2025-10-30 21:18:50', '690365baaf231_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '2321321331235', 1),
+(232, 395, 1300.00, '', '2025-10-30 21:47:52', '', '', 1),
+(233, 396, 350.00, '', '2025-10-31 16:12:01', '', '', 1),
+(234, 397, 930.00, '', '2025-10-31 16:24:40', '', '', 1),
+(235, 398, 1220.00, '', '2025-10-31 19:12:59', '', '', 1),
+(236, 399, 1220.00, '', '2025-10-31 19:13:50', '', '', 1),
+(237, 400, 3700.00, 'Gcash', '2025-10-31 19:22:12', '69049be411a16_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '3212323131212', 1),
+(238, 401, 12000.00, 'Gcash', '2025-10-31 19:46:35', '6904a19b2c46f_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '3232323223322', 1),
+(239, 402, 6400.00, 'Gcash', '2025-10-31 20:27:08', '6904ab1c449df_c3b3ef3d94cddaf939d67ae0f9126927.jpg', '3232323223323', 1);
 
 -- --------------------------------------------------------
 
@@ -2460,117 +2771,133 @@ CREATE TABLE `product_batches` (
   `reference_type` enum('restock','adjustment','manual') DEFAULT 'restock',
   `reference_id` int(11) DEFAULT NULL,
   `notes` text DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT 1
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `is_processed_expired` tinyint(1) DEFAULT 0,
+  `processed_expired_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `product_batches`
 --
 
-INSERT INTO `product_batches` (`batch_id`, `product_id`, `supplier_id`, `brand_id`, `batch_number`, `quantity_received`, `quantity_remaining`, `unit_cost`, `expiration_date`, `received_date`, `created_at`, `created_by`, `reference_type`, `reference_id`, `notes`, `is_active`) VALUES
-(1, 1, NULL, 4, 'TRIMMINGS-BATCH001', 20.0, 0.0, NULL, '2025-09-10', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 0),
-(2, 1, NULL, 4, 'TRIMMINGS-BATCH002', 15.0, 15.0, NULL, '2025-09-20', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 1),
-(3, 1, NULL, 4, 'TRIMMINGS-BATCH003', 25.0, 25.0, NULL, '2025-10-05', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 1),
-(4, 2, NULL, 5, 'BANGUS-BATCH001', 20.0, 0.0, NULL, '2025-09-10', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 0),
-(5, 2, NULL, 5, 'BANGUS-BATCH002', 15.0, 0.0, NULL, '2025-09-20', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 0),
-(6, 2, NULL, 5, 'BANGUS-BATCH003', 25.0, 25.0, NULL, '2025-10-05', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 1),
-(7, 5, 7, 4, 'B5-20250919-001', 10.0, 0.0, 25.00, '2025-10-19', '2025-09-19', '2025-09-19 02:23:11', 1, 'manual', NULL, 'Test batch from interface', 1),
-(10, 5, 7, 4, 'B5-20250919-002', 50.0, 47.0, 25.00, '2025-10-19', '2025-09-19', '2025-09-19 02:25:59', 10, 'manual', NULL, 'Test batch from interface', 1),
-(11, 5, 7, 4, 'B5-20250919-003', 10.0, 10.0, 150.00, '2026-03-19', '2025-09-19', '2025-09-19 02:36:00', 4, 'restock', 10, 'Restocking: ', 1),
-(12, 5, 3, 4, 'B5-20250919-004', 10.0, 10.0, NULL, '2026-03-26', '2025-09-19', '2025-09-19 02:38:21', 4, 'adjustment', 5, 'Stock adjustment: Quality Control', 1),
-(13, 7, 5, 6, 'B7-20250919-001', 10.0, 8.0, 120.00, '2026-02-19', '2025-09-19', '2025-09-19 03:08:01', 4, 'restock', 11, 'Restocking: ', 1),
-(14, 7, 1, 6, 'B7-20250919-002', 10.0, 10.0, 120.00, '2026-01-15', '2025-09-19', '2025-09-19 03:14:50', 4, 'restock', 12, 'Restocking: ', 1),
-(15, 4, NULL, 1, 'B4-20250919-001', 50.0, 0.0, NULL, '2025-10-04', '2025-09-19', '2025-09-19 03:19:27', 10, 'restock', 999, 'Test batch for order integration', 0),
-(16, 4, NULL, 1, 'B4-20250919-002', 30.0, 25.0, NULL, '2025-10-19', '2025-09-19', '2025-09-19 03:19:27', 10, 'restock', 999, 'Test batch 2 - expires later', 1),
-(17, 4, NULL, 1, 'B4-20250919-003', 20.0, 20.0, NULL, '2025-09-24', '2025-09-19', '2025-09-19 03:19:27', 10, 'restock', 999, 'Test batch 3 - expires sooner', 1),
-(18, 7, 1, 6, 'B7-20250922-001', 10.0, 10.0, NULL, '2026-03-23', '2025-09-22', '2025-09-22 03:57:22', 4, 'adjustment', 6, 'Stock adjustment: Other', 1),
-(19, 9, 7, 10, 'B9-20250922-001', 1.0, 0.0, 100.00, '2026-06-16', '2025-09-23', '2025-09-22 04:57:34', 4, 'restock', 13, 'Restocking: ', 1),
-(20, 9, 3, 10, 'B9-20250922-002', 30.0, 0.0, 100.00, '2026-03-28', '2025-09-22', '2025-09-22 04:59:56', 4, 'restock', 14, 'Restocking: ', 1),
-(21, 9, 3, 10, 'B9-20250922-003', 30.0, 0.0, 100.00, '2026-03-22', '2025-09-22', '2025-09-22 05:04:22', 4, 'restock', 15, 'Restocking: ', 1),
-(22, 8, 5, 5, 'B8-20250923-001', 1.0, 0.0, 100.00, '2026-11-23', '2025-09-23', '2025-09-23 09:21:21', 4, 'restock', 16, 'Restocking: ', 1),
-(23, 8, 1, 5, 'B8-20250923-002', 1.0, 0.0, 100.00, '2026-11-23', '2025-09-23', '2025-09-23 09:22:21', 4, 'restock', 17, 'Restocking: ', 1),
-(24, 9, 7, 10, 'B9-20250923-001', 2.0, 0.0, 100.00, '2026-10-23', '2025-09-23', '2025-09-23 09:30:13', 4, 'restock', 18, 'Restocking: ', 1),
-(25, 9, 3, 10, 'B9-20250923-002', 2.0, 0.0, 100.00, '2026-12-19', '2025-09-23', '2025-09-23 09:30:54', 4, 'restock', 19, 'Restocking: ', 1),
-(26, 9, 7, 10, 'B9-20250923-003', 2.0, 0.0, NULL, '2026-03-23', '2025-09-23', '2025-09-23 09:34:21', 4, 'adjustment', 12, 'Stock adjustment: Other', 1),
-(27, 9, 3, 10, 'B9-20250923-004', 2.0, 0.0, 100.00, '2026-03-24', '2025-09-23', '2025-09-23 09:57:34', 4, 'restock', 20, 'Restocking: ', 1),
-(28, 9, 3, 10, 'B9-20250923-005', 1.0, 0.0, 100.00, '2025-12-23', '2025-09-23', '2025-09-23 14:08:26', 4, 'restock', 21, 'Restocking: ', 1),
-(29, 10, 3, 5, 'B10-20250924-001', 10.0, 2.0, 100.00, '2025-12-24', '2025-09-24', '2025-09-24 09:28:42', 4, 'restock', 22, 'Restocking: ', 1),
-(30, 11, 7, 4, 'B11-20250927-001', 9.0, 4.0, 150.00, '2025-12-27', '2025-09-27', '2025-09-27 15:30:59', 4, 'restock', 23, 'Restocking: ', 1),
-(31, 8, 1, 5, 'B8-20251007-001', 100.0, 57.8, 100.00, '2026-01-07', '2025-10-07', '2025-10-07 02:46:47', 4, 'restock', 24, 'Restocking: ', 1),
-(32, 6, 5, 4, 'B6-20251007-001', 50.0, 42.0, 100.00, '2026-01-07', '2025-10-07', '2025-10-07 02:47:34', 4, 'restock', 25, 'Restocking: ', 1),
-(33, 9, 3, 10, 'B9-20251007-001', 2.5, 0.0, 100.00, '2026-01-07', '2025-10-07', '2025-10-07 04:41:54', 4, 'restock', 26, 'Restocking: ', 1),
-(34, 9, 7, 10, 'B9-20251007-002', 3.5, 0.0, 100.00, '2026-01-07', '2025-10-07', '2025-10-07 04:42:10', 4, 'restock', 27, 'Restocking: ', 1),
-(35, 9, 3, 10, 'B9-20251007-003', 2.5, 2.5, 70.00, '2026-01-07', '2025-10-07', '2025-10-07 05:10:48', 4, 'restock', 28, 'Restocking: ', 1),
-(36, 12, 1, 1, 'B12-20251007-001', 2.5, 2.5, 10.00, '2026-01-07', '2025-10-07', '2025-10-07 05:28:21', 4, 'restock', 29, 'Restocking: ', 1),
-(37, 12, 1, 1, 'B12-20251007-002', 3.5, 3.5, 15.00, '2026-01-07', '2025-10-07', '2025-10-07 05:29:18', 4, 'restock', 30, 'Restocking: ', 1),
-(38, 13, 1, 6, 'B13-20251008-001', 10.0, 10.0, 10.00, '2026-01-08', '2025-10-08', '2025-10-08 04:15:57', 4, 'restock', 31, 'Restocking: ', 1),
-(39, 13, 1, 6, 'B13-20251008-002', 10.0, 10.0, 100.00, '2026-01-08', '2025-10-08', '2025-10-08 04:18:27', 4, 'restock', 32, 'Restocking: ', 1),
-(40, 14, 5, 1, 'B14-20251008-001', 10.5, 0.0, 105.00, '2026-01-08', '2025-10-08', '2025-10-08 05:56:26', 4, 'restock', 33, 'Restocking: ', 1),
-(41, 14, 5, 1, 'B14-20251008-002', 1.0, 0.0, 100.00, '2026-01-08', '2025-10-08', '2025-10-08 10:20:02', 4, 'restock', 34, 'Restocking: ', 1),
-(42, 14, 5, 1, 'B14-20251008-003', 10.0, 0.0, 100.00, '2026-01-08', '2025-10-08', '2025-10-08 11:22:04', 4, 'restock', 35, 'Restocking: ', 1),
-(43, 14, 5, 1, 'B14-20251008-004', 50.0, 0.0, 200.00, '2026-01-08', '2025-10-08', '2025-10-08 14:52:29', 4, 'restock', 36, 'Restocking: ', 1),
-(44, 14, 7, 1, 'B14-20251008-005', 2.0, 0.0, 100.00, '2026-01-08', '2025-10-08', '2025-10-08 15:14:01', 4, 'restock', 37, 'Restocking: ', 1),
-(45, 14, 5, 1, 'B14-20251008-006', 10.0, 0.0, 350.00, '2026-01-08', '2025-10-08', '2025-10-08 15:15:50', 4, 'restock', 38, 'Restocking: ', 1),
-(46, 14, 5, 1, 'B14-20251009-001', 1.0, 0.0, 100.00, '2026-01-09', '2025-10-09', '2025-10-09 04:06:27', 4, 'restock', 39, 'Restocking: ', 1),
-(47, 14, 5, 1, 'B14-20251009-002', 1.0, 0.0, 500.00, '2026-01-09', '2025-10-09', '2025-10-09 04:28:37', 4, 'restock', 40, 'Restocking: ', 1),
-(48, 14, 5, 1, 'B14-20251009-003', 10.0, 3.0, 100.00, '2026-01-09', '2025-10-09', '2025-10-09 04:31:04', 4, 'restock', 41, 'Restocking: ', 1),
-(49, 15, 3, 4, 'B15-20251010-001', 10.0, 10.0, 100.00, '2026-01-10', '2025-10-10', '2025-10-10 06:13:18', 4, 'restock', 42, 'Restocking: ', 1),
-(50, 15, 3, 5, 'B15-20251010-002', 10.0, 10.0, 500.00, '2026-01-10', '2025-10-10', '2025-10-10 06:14:13', 4, 'restock', 43, 'Restocking: ', 1),
-(51, 15, 3, 6, 'B15-20251010-003', 15.0, 15.0, 900.00, '2026-01-10', '2025-10-10', '2025-10-10 07:01:40', 4, 'restock', 44, 'Restocking: ', 1),
-(52, 14, 5, 4, 'B14-20251010-001', 35.0, 35.0, 500.00, '2026-01-10', '2025-10-10', '2025-10-10 07:15:28', 4, 'restock', 45, 'Restocking: ', 1),
-(53, 16, 1, 11, 'B16-20251010-001', 35.0, 35.0, 555.00, '2026-01-10', '2025-10-10', '2025-10-10 11:25:05', 4, 'restock', 46, 'Restocking: ', 1),
-(54, 16, 1, 12, 'B16-20251010-002', 13.0, 13.0, 800.00, '2026-01-10', '2025-10-10', '2025-10-10 11:26:49', 4, 'restock', 47, 'Restocking: ', 1),
-(55, 16, 1, 11, 'B16-20251012-001', 30.0, 30.0, 1000.00, '2026-01-12', '2025-10-12', '2025-10-12 04:52:34', 4, 'restock', 48, 'Restocking: ', 1),
-(56, 17, 7, 12, 'B17-20251012-001', 1.0, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 05:24:06', 4, 'restock', 49, 'Restocking: ', 1),
-(57, 17, 7, 12, 'B17-20251012-002', 1.0, 0.0, 500.00, '2026-01-12', '2025-10-12', '2025-10-12 05:59:48', 4, 'restock', 50, 'Restocking: ', 1),
-(58, 17, 7, 12, 'B17-20251012-003', 1.0, 0.0, 500.00, '2026-01-12', '2025-10-12', '2025-10-12 06:11:05', 4, 'restock', 51, 'Restocking: ', 1),
-(59, 17, 7, 11, 'B17-20251012-004', 2.0, 0.0, 600.00, '2026-01-12', '2025-10-12', '2025-10-12 06:11:22', 4, 'restock', 52, 'Restocking: ', 1),
-(60, 17, 7, 12, 'B17-20251012-005', 1.0, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 06:19:35', 4, 'restock', 53, 'Restocking: ', 1),
-(61, 17, 7, 12, 'B17-20251012-006', 1.0, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 06:19:43', 4, 'restock', 54, 'Restocking: ', 1),
-(62, 17, 7, 11, 'B17-20251012-007', 2.0, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 06:20:40', 4, 'restock', 55, 'Restocking: ', 1),
-(63, 17, 7, 12, 'B17-20251012-008', 2.0, 0.0, 1.00, '2026-01-12', '2025-10-12', '2025-10-12 06:22:39', 4, 'restock', 56, 'Restocking: ', 1),
-(64, 17, 7, 11, 'B17-20251012-009', 1.0, 0.0, 1.00, '2026-01-12', '2025-10-12', '2025-10-12 06:23:14', 4, 'restock', 57, 'Restocking: ', 1),
-(65, 17, 7, 12, 'B17-20251012-010', 2.5, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 06:25:44', 4, 'restock', 58, 'Restocking: ', 1),
-(66, 17, 7, 11, 'B17-20251012-011', 5.5, 0.0, 500.00, '2026-01-12', '2025-10-12', '2025-10-12 06:26:01', 4, 'restock', 59, 'Restocking: ', 1),
-(67, 17, 7, 12, 'B17-20251012-012', 1.0, 0.0, 50.00, '2026-01-12', '2025-10-12', '2025-10-12 11:25:00', 4, 'restock', 60, 'Restocking: ', 1),
-(68, 17, 7, 11, 'B17-20251012-013', 2.5, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 11:27:08', 4, 'restock', 61, 'Restocking: ', 1),
-(69, 17, 7, 12, 'B17-20251012-014', 10.0, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 14:58:39', 4, 'restock', 62, 'Restocking: ', 1),
-(70, 17, 7, 11, 'B17-20251013-001', 50.0, 0.0, 1.00, '2026-01-13', '2025-10-13', '2025-10-13 07:52:49', 4, 'restock', 63, 'Restocking: ', 1),
-(71, 17, 5, 11, 'B17-20251016-001', 10.0, 0.0, 150.00, '2026-01-16', '2025-10-16', '2025-10-16 06:02:54', 4, 'restock', 64, 'Restocking: ', 1),
-(72, 17, 5, 13, 'B17-20251016-002', 50.0, 0.0, 450.00, '2026-01-16', '2025-10-16', '2025-10-16 15:33:51', 4, 'restock', 65, 'Restocking: ', 1),
-(73, 17, 5, 12, 'B17-20251016-003', 20.0, 0.0, 300.00, '2026-01-16', '2025-10-16', '2025-10-16 15:34:22', 4, 'restock', 66, 'Restocking: ', 1),
-(74, 17, 5, 13, 'B17-20251017-001', 50.0, 35.0, 300.00, '2026-01-17', '2025-10-17', '2025-10-17 00:51:45', 4, 'restock', 67, 'Restocking: ', 1),
-(75, 17, 5, 11, 'B17-20251017-002', 30.0, 0.0, 550.00, '2026-01-17', '2025-10-17', '2025-10-17 00:52:33', 4, 'restock', 68, 'Restocking: ', 1),
-(76, 18, 1, 1, 'B18-20251018-001', 50.0, 0.0, NULL, '2025-10-17', '2025-10-13', '2025-10-18 15:55:23', 1, '', NULL, 'Test expired batch', 0),
-(77, 19, 1, 1, 'B19-20251018-001', 50.0, 0.0, NULL, '2025-10-17', '2025-10-13', '2025-10-18 15:59:40', 1, '', NULL, 'Test expired batch', 0),
-(78, 20, 8, 13, 'B20-20251019-001', 54.0, 54.0, 500.00, '2026-02-26', '2025-10-19', '2025-10-19 05:15:46', 4, 'restock', 69, 'Restocking: ', 1),
-(79, 20, 8, 13, 'B20-20251019-002', 1.0, 0.0, 600.00, '2026-01-19', '2025-10-19', '2025-10-19 05:33:54', 4, 'restock', 70, 'Restocking: ', 1),
-(80, 20, 8, 14, 'B20-20251019-003', 10.0, 0.0, 500.00, '2026-01-19', '2025-10-19', '2025-10-19 05:37:01', 4, 'restock', 71, 'Restocking: ', 1),
-(81, 20, 8, 14, 'B20-20251019-004', 550.0, 8.0, 2.00, '2026-01-19', '2025-10-19', '2025-10-19 05:37:23', 4, 'restock', 72, 'Restocking: ', 1),
-(82, 20, 8, 13, 'B20-20251019-005', 10.0, 6.9, 500.00, '2026-01-19', '2025-10-19', '2025-10-19 05:38:56', 4, 'restock', 73, 'Restocking: ', 1),
-(83, 20, 8, 14, 'B20-20251019-006', 1.0, 1.0, 570.00, '2026-01-19', '2025-10-19', '2025-10-19 05:41:48', 4, 'restock', 74, 'Restocking: ', 1),
-(84, 20, 8, 13, 'B20-20251019-007', 10.0, 10.0, 700.00, '2026-01-19', '2025-10-19', '2025-10-19 05:50:40', 4, 'restock', 75, 'Restocking: ', 1),
-(85, 17, 5, 11, 'B17-20251019-001', 2.0, 0.0, 500.00, '2026-01-19', '2025-10-19', '2025-10-19 06:16:30', 4, 'restock', 76, 'Restocking: ', 1),
-(86, 25, 8, 19, 'B25-20251019-001', 5.0, 0.0, 256.00, '2026-01-19', '2025-10-19', '2025-10-19 11:39:11', 4, 'restock', 77, 'Restocking: ', 1),
-(87, 24, 9, 19, 'B24-20251019-001', 9.0, 2.0, 330.00, '2026-01-19', '2025-10-19', '2025-10-19 11:39:32', 4, 'restock', 78, 'Restocking: ', 1),
-(88, 21, 9, 15, 'B21-20251019-001', 7.0, 0.0, 218.00, '2026-01-19', '2025-10-19', '2025-10-19 11:39:48', 4, 'restock', 79, 'Restocking: ', 1),
-(89, 30, 3, 20, 'B30-20251019-001', 10.0, 10.0, 100.00, '2026-01-19', '2025-10-19', '2025-10-19 11:40:21', 4, 'restock', 80, 'Restocking: ', 1),
-(90, 32, 8, 16, 'B32-20251019-001', 12.0, 10.0, 120.00, '2026-01-19', '2025-10-19', '2025-10-19 11:40:34', 4, 'restock', 81, 'Restocking: ', 1),
-(91, 29, 11, 20, 'B29-20251019-001', 14.0, 13.0, 250.00, '2026-01-19', '2025-10-19', '2025-10-19 11:42:09', 4, 'restock', 82, 'Restocking: ', 1),
-(92, 22, 7, 12, 'B22-20251019-001', 11.0, 0.0, 350.00, '2026-01-19', '2025-10-19', '2025-10-19 11:42:28', 4, 'restock', 83, 'Restocking: ', 1),
-(93, 31, 11, 16, 'B31-20251019-001', 15.0, 15.0, 120.00, '2026-01-19', '2025-10-19', '2025-10-19 11:42:42', 4, 'restock', 84, 'Restocking: ', 1),
-(94, 28, 10, 17, 'B28-20251019-001', 17.0, 0.0, 234.00, '2026-01-19', '2025-10-19', '2025-10-19 11:42:54', 4, 'restock', 85, 'Restocking: ', 1),
-(95, 26, 10, 17, 'B26-20251019-001', 21.0, 11.0, 320.00, '2026-01-19', '2025-10-19', '2025-10-19 11:43:32', 4, 'restock', 86, 'Restocking: ', 1),
-(98, 20, 9, 11, 'B20-20251019-010', 10.0, 4.0, 800.00, '2026-01-19', '2025-10-19', '2025-10-19 12:14:13', 4, 'restock', 87, 'Restocking: ', 1),
-(99, 20, 9, 11, 'B20-20251019-009', 149.0, 149.0, 0.00, '2026-01-19', '2025-10-19', '2025-10-19 14:00:47', 4, 'restock', 91, 'Restocking: ', 1),
-(100, 27, 10, 15, 'B27-20251019-001', 10.0, 5.0, 235.00, '2026-01-19', '2025-10-19', '2025-10-19 14:10:49', 4, 'restock', 92, 'Restocking: ', 1),
-(101, 23, 5, 18, 'B23-20251019-001', 21.0, 6.0, 135.00, '2026-01-19', '2025-10-19', '2025-10-19 14:11:33', 4, 'restock', 93, 'Restocking: ', 1),
-(102, 25, 8, 19, 'B25-20251019-002', 1.0, 0.0, 335.00, '2026-01-19', '2025-10-19', '2025-10-19 14:16:01', 4, 'restock', 94, 'Restocking: ', 1),
-(103, 22, 7, 12, 'B22-20251020-001', 15.0, 0.0, 0.00, '2026-01-20', '2025-10-20', '2025-10-20 01:08:09', 4, 'restock', 95, 'Restocking: ', 1),
-(104, 28, 10, 17, 'B28-20251020-001', 14.0, 0.0, 0.00, '2026-01-20', '2025-10-20', '2025-10-20 01:55:21', 4, 'restock', 96, 'Restocking: ', 1),
-(105, 22, 7, 12, 'B22-20251020-002', 45.0, 29.0, 330.00, '2026-01-20', '2025-10-20', '2025-10-20 14:22:20', 4, 'restock', 97, 'Restocking: ', 1),
-(106, 20, 8, 13, 'B20-20251022-001', 5.0, 5.0, 850.00, '2026-01-22', '2025-10-22', '2025-10-22 03:49:33', 4, 'restock', 98, 'Restocking: ', 1),
-(107, 20, 9, 11, 'B20-20251022-002', 5.0, 5.0, 750.00, '2026-01-22', '2025-10-22', '2025-10-22 03:50:24', 4, 'restock', 99, 'Restocking: ', 1);
+INSERT INTO `product_batches` (`batch_id`, `product_id`, `supplier_id`, `brand_id`, `batch_number`, `quantity_received`, `quantity_remaining`, `unit_cost`, `expiration_date`, `received_date`, `created_at`, `created_by`, `reference_type`, `reference_id`, `notes`, `is_active`, `is_processed_expired`, `processed_expired_at`) VALUES
+(1, 1, NULL, 4, 'TRIMMINGS-BATCH001', 20.0, 0.0, NULL, '2025-09-10', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 0, 0, NULL),
+(2, 1, NULL, 4, 'TRIMMINGS-BATCH002', 15.0, 0.0, NULL, '2025-09-20', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 1, 1, '2025-10-22 21:53:58'),
+(3, 1, NULL, 4, 'TRIMMINGS-BATCH003', 25.0, 0.0, NULL, '2025-10-05', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 1, 1, '2025-10-22 21:56:52'),
+(4, 2, NULL, 5, 'BANGUS-BATCH001', 20.0, 0.0, NULL, '2025-09-10', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 0, 0, NULL),
+(5, 2, NULL, 5, 'BANGUS-BATCH002', 15.0, 0.0, NULL, '2025-09-20', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 0, 0, NULL),
+(6, 2, NULL, 5, 'BANGUS-BATCH003', 25.0, 0.0, NULL, '2025-10-05', NULL, '2025-09-05 13:07:28', 4, 'restock', NULL, NULL, 1, 1, '2025-10-22 21:58:13'),
+(7, 5, 7, 4, 'B5-20250919-001', 10.0, 0.0, 25.00, '2025-10-19', '2025-09-19', '2025-09-19 02:23:11', 1, 'manual', NULL, 'Test batch from interface', 1, 0, NULL),
+(10, 5, 7, 4, 'B5-20250919-002', 50.0, 47.0, 25.00, '2025-10-19', '2025-09-19', '2025-09-19 02:25:59', 10, 'manual', NULL, 'Test batch from interface', 1, 0, NULL),
+(11, 5, 7, 4, 'B5-20250919-003', 10.0, 10.0, 150.00, '2026-03-19', '2025-09-19', '2025-09-19 02:36:00', 4, 'restock', 10, 'Restocking: ', 1, 0, NULL),
+(12, 5, 3, 4, 'B5-20250919-004', 10.0, 10.0, NULL, '2026-03-26', '2025-09-19', '2025-09-19 02:38:21', 4, 'adjustment', 5, 'Stock adjustment: Quality Control', 1, 0, NULL),
+(13, 7, 5, 6, 'B7-20250919-001', 10.0, 8.0, 120.00, '2026-02-19', '2025-09-19', '2025-09-19 03:08:01', 4, 'restock', 11, 'Restocking: ', 1, 0, NULL),
+(14, 7, 1, 6, 'B7-20250919-002', 10.0, 10.0, 120.00, '2026-01-15', '2025-09-19', '2025-09-19 03:14:50', 4, 'restock', 12, 'Restocking: ', 1, 0, NULL),
+(15, 4, NULL, 1, 'B4-20250919-001', 50.0, 0.0, NULL, '2025-10-04', '2025-09-19', '2025-09-19 03:19:27', 10, 'restock', 999, 'Test batch for order integration', 1, 0, NULL),
+(16, 4, NULL, 1, 'B4-20250919-002', 30.0, 0.0, NULL, '2025-10-19', '2025-09-19', '2025-09-19 03:19:27', 10, 'restock', 999, 'Test batch 2 - expires later', 1, 1, '2025-10-22 21:56:44'),
+(17, 4, NULL, 1, 'B4-20250919-003', 20.0, 0.0, NULL, '2025-09-24', '2025-09-19', '2025-09-19 03:19:27', 10, 'restock', 999, 'Test batch 3 - expires sooner', 1, 1, '2025-10-22 21:53:25'),
+(18, 7, 1, 6, 'B7-20250922-001', 10.0, 10.0, NULL, '2026-03-23', '2025-09-22', '2025-09-22 03:57:22', 4, 'adjustment', 6, 'Stock adjustment: Other', 1, 0, NULL),
+(19, 9, 7, 10, 'B9-20250922-001', 1.0, 0.0, 100.00, '2026-06-16', '2025-09-23', '2025-09-22 04:57:34', 4, 'restock', 13, 'Restocking: ', 1, 0, NULL),
+(20, 9, 3, 10, 'B9-20250922-002', 30.0, 0.0, 100.00, '2026-03-28', '2025-09-22', '2025-09-22 04:59:56', 4, 'restock', 14, 'Restocking: ', 1, 0, NULL),
+(21, 9, 3, 10, 'B9-20250922-003', 30.0, 0.0, 100.00, '2026-03-22', '2025-09-22', '2025-09-22 05:04:22', 4, 'restock', 15, 'Restocking: ', 1, 0, NULL),
+(22, 8, 5, 5, 'B8-20250923-001', 1.0, 0.0, 100.00, '2026-11-23', '2025-09-23', '2025-09-23 09:21:21', 4, 'restock', 16, 'Restocking: ', 1, 0, NULL),
+(23, 8, 1, 5, 'B8-20250923-002', 1.0, 0.0, 100.00, '2026-11-23', '2025-09-23', '2025-09-23 09:22:21', 4, 'restock', 17, 'Restocking: ', 1, 0, NULL),
+(24, 9, 7, 10, 'B9-20250923-001', 2.0, 0.0, 100.00, '2026-10-23', '2025-09-23', '2025-09-23 09:30:13', 4, 'restock', 18, 'Restocking: ', 1, 0, NULL),
+(25, 9, 3, 10, 'B9-20250923-002', 2.0, 0.0, 100.00, '2026-12-19', '2025-09-23', '2025-09-23 09:30:54', 4, 'restock', 19, 'Restocking: ', 1, 0, NULL),
+(26, 9, 7, 10, 'B9-20250923-003', 2.0, 0.0, NULL, '2026-03-23', '2025-09-23', '2025-09-23 09:34:21', 4, 'adjustment', 12, 'Stock adjustment: Other', 1, 0, NULL),
+(27, 9, 3, 10, 'B9-20250923-004', 2.0, 0.0, 100.00, '2026-03-24', '2025-09-23', '2025-09-23 09:57:34', 4, 'restock', 20, 'Restocking: ', 1, 0, NULL),
+(28, 9, 3, 10, 'B9-20250923-005', 1.0, 0.0, 100.00, '2025-12-23', '2025-09-23', '2025-09-23 14:08:26', 4, 'restock', 21, 'Restocking: ', 1, 0, NULL),
+(29, 10, 3, 5, 'B10-20250924-001', 10.0, 2.0, 100.00, '2025-12-24', '2025-09-24', '2025-09-24 09:28:42', 4, 'restock', 22, 'Restocking: ', 1, 0, NULL),
+(30, 11, 7, 4, 'B11-20250927-001', 9.0, 4.0, 150.00, '2025-12-27', '2025-09-27', '2025-09-27 15:30:59', 4, 'restock', 23, 'Restocking: ', 1, 0, NULL),
+(31, 8, 1, 5, 'B8-20251007-001', 100.0, 57.8, 100.00, '2026-01-07', '2025-10-07', '2025-10-07 02:46:47', 4, 'restock', 24, 'Restocking: ', 1, 0, NULL),
+(32, 6, 5, 4, 'B6-20251007-001', 50.0, 42.0, 100.00, '2026-01-07', '2025-10-07', '2025-10-07 02:47:34', 4, 'restock', 25, 'Restocking: ', 1, 0, NULL),
+(33, 9, 3, 10, 'B9-20251007-001', 2.5, 0.0, 100.00, '2026-01-07', '2025-10-07', '2025-10-07 04:41:54', 4, 'restock', 26, 'Restocking: ', 1, 0, NULL),
+(34, 9, 7, 10, 'B9-20251007-002', 3.5, 0.0, 100.00, '2026-01-07', '2025-10-07', '2025-10-07 04:42:10', 4, 'restock', 27, 'Restocking: ', 1, 0, NULL),
+(35, 9, 3, 10, 'B9-20251007-003', 2.5, 2.5, 70.00, '2026-01-07', '2025-10-07', '2025-10-07 05:10:48', 4, 'restock', 28, 'Restocking: ', 1, 0, NULL),
+(36, 12, 1, 1, 'B12-20251007-001', 2.5, 2.5, 10.00, '2026-01-07', '2025-10-07', '2025-10-07 05:28:21', 4, 'restock', 29, 'Restocking: ', 1, 0, NULL),
+(37, 12, 1, 1, 'B12-20251007-002', 3.5, 3.5, 15.00, '2026-01-07', '2025-10-07', '2025-10-07 05:29:18', 4, 'restock', 30, 'Restocking: ', 1, 0, NULL),
+(38, 13, 1, 6, 'B13-20251008-001', 10.0, 10.0, 10.00, '2026-01-08', '2025-10-08', '2025-10-08 04:15:57', 4, 'restock', 31, 'Restocking: ', 1, 0, NULL),
+(39, 13, 1, 6, 'B13-20251008-002', 10.0, 10.0, 100.00, '2026-01-08', '2025-10-08', '2025-10-08 04:18:27', 4, 'restock', 32, 'Restocking: ', 1, 0, NULL),
+(40, 14, 5, 1, 'B14-20251008-001', 10.5, 0.0, 105.00, '2026-01-08', '2025-10-08', '2025-10-08 05:56:26', 4, 'restock', 33, 'Restocking: ', 1, 0, NULL),
+(41, 14, 5, 1, 'B14-20251008-002', 1.0, 0.0, 100.00, '2026-01-08', '2025-10-08', '2025-10-08 10:20:02', 4, 'restock', 34, 'Restocking: ', 1, 0, NULL),
+(42, 14, 5, 1, 'B14-20251008-003', 10.0, 0.0, 100.00, '2026-01-08', '2025-10-08', '2025-10-08 11:22:04', 4, 'restock', 35, 'Restocking: ', 1, 0, NULL),
+(43, 14, 5, 1, 'B14-20251008-004', 50.0, 0.0, 200.00, '2026-01-08', '2025-10-08', '2025-10-08 14:52:29', 4, 'restock', 36, 'Restocking: ', 1, 0, NULL),
+(44, 14, 7, 1, 'B14-20251008-005', 2.0, 0.0, 100.00, '2026-01-08', '2025-10-08', '2025-10-08 15:14:01', 4, 'restock', 37, 'Restocking: ', 1, 0, NULL),
+(45, 14, 5, 1, 'B14-20251008-006', 10.0, 0.0, 350.00, '2026-01-08', '2025-10-08', '2025-10-08 15:15:50', 4, 'restock', 38, 'Restocking: ', 1, 0, NULL),
+(46, 14, 5, 1, 'B14-20251009-001', 1.0, 0.0, 100.00, '2026-01-09', '2025-10-09', '2025-10-09 04:06:27', 4, 'restock', 39, 'Restocking: ', 1, 0, NULL),
+(47, 14, 5, 1, 'B14-20251009-002', 1.0, 0.0, 500.00, '2026-01-09', '2025-10-09', '2025-10-09 04:28:37', 4, 'restock', 40, 'Restocking: ', 1, 0, NULL),
+(48, 14, 5, 1, 'B14-20251009-003', 10.0, 3.0, 100.00, '2026-01-09', '2025-10-09', '2025-10-09 04:31:04', 4, 'restock', 41, 'Restocking: ', 1, 0, NULL),
+(49, 15, 3, 4, 'B15-20251010-001', 10.0, 10.0, 100.00, '2026-01-10', '2025-10-10', '2025-10-10 06:13:18', 4, 'restock', 42, 'Restocking: ', 1, 0, NULL),
+(50, 15, 3, 5, 'B15-20251010-002', 10.0, 10.0, 500.00, '2026-01-10', '2025-10-10', '2025-10-10 06:14:13', 4, 'restock', 43, 'Restocking: ', 1, 0, NULL),
+(51, 15, 3, 6, 'B15-20251010-003', 15.0, 15.0, 900.00, '2026-01-10', '2025-10-10', '2025-10-10 07:01:40', 4, 'restock', 44, 'Restocking: ', 1, 0, NULL),
+(52, 14, 5, 4, 'B14-20251010-001', 35.0, 35.0, 500.00, '2026-01-10', '2025-10-10', '2025-10-10 07:15:28', 4, 'restock', 45, 'Restocking: ', 1, 0, NULL),
+(53, 16, 1, 11, 'B16-20251010-001', 35.0, 35.0, 555.00, '2026-01-10', '2025-10-10', '2025-10-10 11:25:05', 4, 'restock', 46, 'Restocking: ', 1, 0, NULL),
+(54, 16, 1, 12, 'B16-20251010-002', 13.0, 13.0, 800.00, '2026-01-10', '2025-10-10', '2025-10-10 11:26:49', 4, 'restock', 47, 'Restocking: ', 1, 0, NULL),
+(55, 16, 1, 11, 'B16-20251012-001', 30.0, 30.0, 1000.00, '2026-01-12', '2025-10-12', '2025-10-12 04:52:34', 4, 'restock', 48, 'Restocking: ', 1, 0, NULL),
+(56, 17, 7, 12, 'B17-20251012-001', 1.0, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 05:24:06', 4, 'restock', 49, 'Restocking: ', 1, 0, NULL),
+(57, 17, 7, 12, 'B17-20251012-002', 1.0, 0.0, 500.00, '2026-01-12', '2025-10-12', '2025-10-12 05:59:48', 4, 'restock', 50, 'Restocking: ', 1, 0, NULL),
+(58, 17, 7, 12, 'B17-20251012-003', 1.0, 0.0, 500.00, '2026-01-12', '2025-10-12', '2025-10-12 06:11:05', 4, 'restock', 51, 'Restocking: ', 1, 0, NULL),
+(59, 17, 7, 11, 'B17-20251012-004', 2.0, 0.0, 600.00, '2026-01-12', '2025-10-12', '2025-10-12 06:11:22', 4, 'restock', 52, 'Restocking: ', 1, 0, NULL),
+(60, 17, 7, 12, 'B17-20251012-005', 1.0, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 06:19:35', 4, 'restock', 53, 'Restocking: ', 1, 0, NULL),
+(61, 17, 7, 12, 'B17-20251012-006', 1.0, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 06:19:43', 4, 'restock', 54, 'Restocking: ', 1, 0, NULL),
+(62, 17, 7, 11, 'B17-20251012-007', 2.0, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 06:20:40', 4, 'restock', 55, 'Restocking: ', 1, 0, NULL),
+(63, 17, 7, 12, 'B17-20251012-008', 2.0, 0.0, 1.00, '2026-01-12', '2025-10-12', '2025-10-12 06:22:39', 4, 'restock', 56, 'Restocking: ', 1, 0, NULL),
+(64, 17, 7, 11, 'B17-20251012-009', 1.0, 0.0, 1.00, '2026-01-12', '2025-10-12', '2025-10-12 06:23:14', 4, 'restock', 57, 'Restocking: ', 1, 0, NULL),
+(65, 17, 7, 12, 'B17-20251012-010', 2.5, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 06:25:44', 4, 'restock', 58, 'Restocking: ', 1, 0, NULL),
+(66, 17, 7, 11, 'B17-20251012-011', 5.5, 0.0, 500.00, '2026-01-12', '2025-10-12', '2025-10-12 06:26:01', 4, 'restock', 59, 'Restocking: ', 1, 0, NULL),
+(67, 17, 7, 12, 'B17-20251012-012', 1.0, 0.0, 50.00, '2026-01-12', '2025-10-12', '2025-10-12 11:25:00', 4, 'restock', 60, 'Restocking: ', 1, 0, NULL),
+(68, 17, 7, 11, 'B17-20251012-013', 2.5, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 11:27:08', 4, 'restock', 61, 'Restocking: ', 1, 0, NULL),
+(69, 17, 7, 12, 'B17-20251012-014', 10.0, 0.0, 100.00, '2026-01-12', '2025-10-12', '2025-10-12 14:58:39', 4, 'restock', 62, 'Restocking: ', 1, 0, NULL),
+(70, 17, 7, 11, 'B17-20251013-001', 50.0, 0.0, 1.00, '2026-01-13', '2025-10-13', '2025-10-13 07:52:49', 4, 'restock', 63, 'Restocking: ', 1, 0, NULL),
+(71, 17, 5, 11, 'B17-20251016-001', 10.0, 0.0, 150.00, '2026-01-16', '2025-10-16', '2025-10-16 06:02:54', 4, 'restock', 64, 'Restocking: ', 1, 0, NULL),
+(72, 17, 5, 13, 'B17-20251016-002', 50.0, 0.0, 450.00, '2026-01-16', '2025-10-16', '2025-10-16 15:33:51', 4, 'restock', 65, 'Restocking: ', 1, 0, NULL),
+(73, 17, 5, 12, 'B17-20251016-003', 20.0, 0.0, 300.00, '2026-01-16', '2025-10-16', '2025-10-16 15:34:22', 4, 'restock', 66, 'Restocking: ', 1, 0, NULL),
+(74, 17, 5, 13, 'B17-20251017-001', 50.0, 12.0, 300.00, '2026-01-17', '2025-10-17', '2025-10-17 00:51:45', 4, 'restock', 67, 'Restocking: ', 1, 0, NULL),
+(75, 17, 5, 11, 'B17-20251017-002', 30.0, 0.0, 550.00, '2026-01-17', '2025-10-17', '2025-10-17 00:52:33', 4, 'restock', 68, 'Restocking: ', 1, 0, NULL),
+(76, 18, 1, 1, 'B18-20251018-001', 50.0, 0.0, NULL, '2025-10-17', '2025-10-13', '2025-10-18 15:55:23', 1, '', NULL, 'Test expired batch', 0, 0, NULL),
+(77, 19, 1, 1, 'B19-20251018-001', 50.0, 0.0, NULL, '2025-10-17', '2025-10-13', '2025-10-18 15:59:40', 1, '', NULL, 'Test expired batch', 0, 0, NULL),
+(78, 20, 8, 13, 'B20-20251019-001', 54.0, 54.0, 500.00, '2026-02-26', '2025-10-19', '2025-10-19 05:15:46', 4, 'restock', 69, 'Restocking: ', 1, 0, NULL),
+(79, 20, 8, 13, 'B20-20251019-002', 1.0, 0.0, 600.00, '2026-01-19', '2025-10-19', '2025-10-19 05:33:54', 4, 'restock', 70, 'Restocking: ', 1, 0, NULL),
+(80, 20, 8, 14, 'B20-20251019-003', 10.0, 0.0, 500.00, '2026-01-19', '2025-10-19', '2025-10-19 05:37:01', 4, 'restock', 71, 'Restocking: ', 1, 0, NULL),
+(81, 20, 8, 14, 'B20-20251019-004', 550.0, 8.0, 2.00, '2026-01-19', '2025-10-19', '2025-10-19 05:37:23', 4, 'restock', 72, 'Restocking: ', 1, 0, NULL),
+(82, 20, 8, 13, 'B20-20251019-005', 10.0, 1.9, 500.00, '2026-01-19', '2025-10-19', '2025-10-19 05:38:56', 4, 'restock', 73, 'Restocking: ', 1, 0, NULL),
+(83, 20, 8, 14, 'B20-20251019-006', 1.0, 1.0, 570.00, '2026-01-19', '2025-10-19', '2025-10-19 05:41:48', 4, 'restock', 74, 'Restocking: ', 1, 0, NULL),
+(84, 20, 8, 13, 'B20-20251019-007', 10.0, 10.0, 700.00, '2026-01-19', '2025-10-19', '2025-10-19 05:50:40', 4, 'restock', 75, 'Restocking: ', 1, 0, NULL),
+(85, 17, 5, 11, 'B17-20251019-001', 2.0, 0.0, 500.00, '2026-01-19', '2025-10-19', '2025-10-19 06:16:30', 4, 'restock', 76, 'Restocking: ', 1, 0, NULL),
+(86, 25, 8, 19, 'B25-20251019-001', 5.0, 0.0, 256.00, '2026-01-19', '2025-10-19', '2025-10-19 11:39:11', 4, 'restock', 77, 'Restocking: ', 1, 0, NULL),
+(87, 24, 9, 19, 'B24-20251019-001', 9.0, 0.0, 330.00, '2026-01-19', '2025-10-19', '2025-10-19 11:39:32', 4, 'restock', 78, 'Restocking: ', 1, 0, NULL),
+(88, 21, 9, 15, 'B21-20251019-001', 7.0, 0.0, 218.00, '2026-01-19', '2025-10-19', '2025-10-19 11:39:48', 4, 'restock', 79, 'Restocking: ', 1, 0, NULL),
+(89, 30, 3, 20, 'B30-20251019-001', 10.0, 5.0, 100.00, '2026-01-19', '2025-10-19', '2025-10-19 11:40:21', 4, 'restock', 80, 'Restocking: ', 1, 0, NULL),
+(90, 32, 8, 16, 'B32-20251019-001', 12.0, 10.0, 120.00, '2026-01-19', '2025-10-19', '2025-10-19 11:40:34', 4, 'restock', 81, 'Restocking: ', 1, 0, NULL),
+(91, 29, 11, 20, 'B29-20251019-001', 14.0, 12.0, 250.00, '2026-01-19', '2025-10-19', '2025-10-19 11:42:09', 4, 'restock', 82, 'Restocking: ', 1, 0, NULL),
+(92, 22, 7, 12, 'B22-20251019-001', 11.0, 0.0, 350.00, '2026-01-19', '2025-10-19', '2025-10-19 11:42:28', 4, 'restock', 83, 'Restocking: ', 1, 0, NULL),
+(93, 31, 11, 16, 'B31-20251019-001', 15.0, 4.0, 120.00, '2026-01-19', '2025-10-19', '2025-10-19 11:42:42', 4, 'restock', 84, 'Restocking: ', 1, 0, NULL),
+(94, 28, 10, 17, 'B28-20251019-001', 17.0, 0.0, 234.00, '2026-01-19', '2025-10-19', '2025-10-19 11:42:54', 4, 'restock', 85, 'Restocking: ', 1, 0, NULL),
+(95, 26, 10, 17, 'B26-20251019-001', 21.0, 4.0, 320.00, '2026-01-19', '2025-10-19', '2025-10-19 11:43:32', 4, 'restock', 86, 'Restocking: ', 1, 0, NULL),
+(98, 20, 9, 11, 'B20-20251019-010', 10.0, 0.0, 800.00, '2026-01-19', '2025-10-19', '2025-10-19 12:14:13', 4, 'restock', 87, 'Restocking: ', 1, 0, NULL),
+(99, 20, 9, 11, 'B20-20251019-009', 149.0, 102.0, 0.00, '2026-01-19', '2025-10-19', '2025-10-19 14:00:47', 4, 'restock', 91, 'Restocking: ', 1, 0, NULL),
+(100, 27, 10, 15, 'B27-20251019-001', 10.0, 0.0, 235.00, '2026-01-19', '2025-10-19', '2025-10-19 14:10:49', 4, 'restock', 92, 'Restocking: ', 1, 0, NULL),
+(101, 23, 5, 18, 'B23-20251019-001', 21.0, 7.0, 135.00, '2026-01-19', '2025-10-19', '2025-10-19 14:11:33', 4, 'restock', 93, 'Restocking: ', 1, 0, NULL),
+(102, 25, 8, 19, 'B25-20251019-002', 1.0, 0.0, 335.00, '2026-01-19', '2025-10-19', '2025-10-19 14:16:01', 4, 'restock', 94, 'Restocking: ', 1, 0, NULL),
+(103, 22, 7, 12, 'B22-20251020-001', 15.0, 0.0, 0.00, '2026-01-20', '2025-10-20', '2025-10-20 01:08:09', 4, 'restock', 95, 'Restocking: ', 1, 0, NULL),
+(104, 28, 10, 17, 'B28-20251020-001', 14.0, 0.0, 0.00, '2026-01-20', '2025-10-20', '2025-10-20 01:55:21', 4, 'restock', 96, 'Restocking: ', 1, 0, NULL),
+(105, 22, 7, 12, 'B22-20251020-002', 45.0, 21.0, 330.00, '2026-01-20', '2025-10-20', '2025-10-20 14:22:20', 4, 'restock', 97, 'Restocking: ', 1, 0, NULL),
+(106, 20, 8, 13, 'B20-20251022-001', 5.0, 6.0, 850.00, '2026-01-22', '2025-10-22', '2025-10-22 03:49:33', 4, 'restock', 98, 'Restocking: ', 1, 0, NULL),
+(107, 20, 9, 11, 'B20-20251022-002', 5.0, 5.0, 750.00, '2026-01-22', '2025-10-22', '2025-10-22 03:50:24', 4, 'restock', 99, 'Restocking: ', 1, 0, NULL),
+(108, 28, 10, 15, 'B28-20251022-001', 2.0, 0.0, 250.00, '2026-01-22', '2025-10-22', '2025-10-22 12:46:54', 4, 'restock', 100, 'Restocking: ', 1, 0, NULL),
+(109, 28, 10, 15, 'B28-20251022-002', 2.0, 2.0, 290.00, '2026-01-22', '2025-10-22', '2025-10-22 12:47:22', 4, 'restock', 101, 'Restocking: ', 1, 0, NULL),
+(110, 23, 5, 18, 'B23-20251024-001', 15.0, 17.0, 300.00, '2026-01-24', '2025-10-24', '2025-10-24 01:26:42', 4, 'restock', 102, 'Restocking: ', 1, 0, NULL),
+(111, 25, 11, 20, 'B25-20251025-001', 10.0, 7.0, 250.00, '2026-01-25', '2025-10-25', '2025-10-25 13:29:57', 4, 'restock', 103, 'Restocking: ', 1, 0, NULL),
+(112, 24, 10, 1, 'B24-20251031-001', 10.0, 0.0, 10.00, '2026-01-31', '2025-10-31', '2025-10-31 08:50:29', 4, 'restock', 107, 'Restocking: ', 1, 0, NULL),
+(113, 21, 9, 15, 'B21-20251031-001', 8.0, 8.0, 8.00, '2026-01-31', '2025-10-31', '2025-10-31 09:41:29', 4, 'restock', 110, 'Restocking: ', 1, 0, NULL),
+(114, 21, 1, 15, 'B21-20251031-002', 10.0, 10.0, 200.00, '2026-01-31', '2025-10-31', '2025-10-31 09:43:12', 4, 'restock', 111, 'Restocking: ', 1, 0, NULL),
+(115, 24, 9, 1, 'B24-20251031-002', 10.0, 0.0, 250.00, '2026-01-31', '2025-10-31', '2025-10-31 09:43:34', 4, 'restock', 112, 'Restocking: ', 1, 0, NULL),
+(116, 27, 3, 18, 'B27-20251031-001', 10.0, 10.0, 250.00, '2026-01-31', '2025-10-31', '2025-10-31 11:16:48', 4, 'restock', 113, 'Restocking: ', 1, 0, NULL),
+(117, 27, 3, 12, 'B27-20251031-002', 20.0, 10.0, 300.00, '2026-01-31', '2025-10-31', '2025-10-31 11:20:55', 4, 'restock', 114, 'Restocking: ', 1, 0, NULL),
+(118, 27, 3, 13, 'B27-20251031-003', 10.0, 10.0, 300.00, '2026-01-31', '2025-10-31', '2025-10-31 11:30:00', 4, 'restock', 115, 'Restocking: ', 1, 0, NULL),
+(119, 27, 10, 15, 'B27-20251031-004', 20.0, 20.0, 325.00, '2026-01-31', '2025-10-31', '2025-10-31 11:42:07', 4, 'restock', 116, 'Restocking: ', 1, 0, NULL),
+(120, 23, 1, 11, 'B23-20251031-001', 20.0, 0.0, 150.00, '2026-01-31', '2025-10-31', '2025-10-31 11:43:56', 4, 'restock', 117, 'Restocking: ', 1, 0, NULL),
+(121, 23, 5, 11, 'B23-20251031-002', 20.0, 0.0, 250.00, '2026-01-31', '2025-10-31', '2025-10-31 11:44:45', 4, 'restock', 118, 'Restocking: ', 1, 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -2804,11 +3131,11 @@ CREATE TABLE `product_stock` (
 --
 
 INSERT INTO `product_stock` (`productstock_id`, `product_id`, `current_stock`, `reorder_point`, `max_stock`, `expiration_date`, `last_restock_date`) VALUES
-(1, 1, 3.00, 10.00, 0.00, '2025-12-05', '2025-09-05 00:00:00'),
-(2, 2, 2.00, 10.00, 0.00, '2026-01-01', '2025-09-04 00:00:00'),
+(1, 1, -37.00, 10.00, 0.00, '2025-12-05', '2025-09-05 00:00:00'),
+(2, 2, -23.00, 10.00, 0.00, '2026-01-01', '2025-09-04 00:00:00'),
 (3, 3, 0.00, 10.00, 0.00, NULL, NULL),
-(4, 2, 2.00, 10.00, 200.00, '2026-01-01', '2025-09-04 00:00:00'),
-(5, 4, 18.00, 10.00, 0.00, '2026-06-16', '2025-09-16 00:00:00'),
+(4, 2, -23.00, 10.00, 200.00, '2026-01-01', '2025-09-04 00:00:00'),
+(5, 4, -27.00, 10.00, 0.00, '2026-06-16', '2025-09-16 00:00:00'),
 (6, 5, 64.00, 10.00, 0.00, '2026-03-19', '2025-09-19 00:00:00'),
 (7, 6, 43.00, 10.00, 0.00, '2026-01-07', '2025-10-07 00:00:00'),
 (8, 7, 27.00, 10.00, 0.00, '2026-01-15', '2025-09-19 00:00:00'),
@@ -2821,21 +3148,21 @@ INSERT INTO `product_stock` (`productstock_id`, `product_id`, `current_stock`, `
 (15, 14, 38.00, 10.00, 0.00, '2026-01-10', '2025-10-10 00:00:00'),
 (16, 15, 35.00, 10.00, 0.00, '2026-01-10', '2025-10-10 00:00:00'),
 (17, 16, 78.00, 10.00, 0.00, '2026-01-12', '2025-10-12 00:00:00'),
-(18, 17, 35.00, 46.30, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
+(18, 17, 12.00, 51.41, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
 (19, 18, 50.00, 10.00, 0.00, NULL, NULL),
 (20, 19, 50.00, 10.00, 0.00, NULL, NULL),
-(21, 20, 242.90, 1.00, 0.00, '2026-01-22', '2025-10-22 00:00:00'),
-(22, 21, 0.00, 7.20, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
-(23, 22, 29.00, 43.20, 0.00, '2026-01-20', '2025-10-20 00:00:00'),
-(24, 23, 6.00, 15.41, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
-(25, 24, 2.00, 7.20, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
-(26, 25, 0.00, 1.00, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
-(27, 26, 11.00, 10.30, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
-(28, 27, 5.00, 1.00, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
-(29, 28, 0.00, 31.90, 0.00, '2026-01-19', '2025-10-20 00:00:00'),
-(30, 29, 13.00, 1.00, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
-(31, 30, 10.00, 1.00, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
-(32, 31, 15.00, 1.00, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
+(21, 20, 187.90, 1.00, 0.00, '2026-01-22', '2025-10-22 00:00:00'),
+(22, 21, 18.00, 1.00, 0.00, '2026-01-31', '2025-10-31 00:00:00'),
+(23, 22, 21.00, 51.41, 0.00, '2026-01-20', '2025-10-20 00:00:00'),
+(24, 23, 24.00, 41.11, 0.00, '2026-01-31', '2025-10-31 00:00:00'),
+(25, 24, 0.00, 20.59, 0.00, '2026-01-31', '2025-10-31 00:00:00'),
+(26, 25, 7.00, 1.00, 0.00, '2026-01-25', '2025-10-25 00:00:00'),
+(27, 26, 4.00, 1.00, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
+(28, 27, 50.00, 9.29, 0.00, '2026-01-31', '2025-10-31 00:00:00'),
+(29, 28, 2.00, 1.00, 0.00, '2026-01-22', '2025-10-22 00:00:00'),
+(30, 29, 12.00, 1.00, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
+(31, 30, 5.00, 1.00, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
+(32, 31, 4.00, 12.31, 0.00, '2026-01-19', '2025-10-19 00:00:00'),
 (33, 32, 10.00, 1.00, 0.00, '2026-01-19', '2025-10-19 00:00:00');
 
 -- --------------------------------------------------------
@@ -2884,7 +3211,8 @@ INSERT INTO `promo_messages` (`id`, `message_text`, `icon_class`, `is_active`, `
 (1, '₱1,000 OFF on orders ₱10,000+', 'fas fa-gift', 1, 1, '2025-09-27 15:45:20', '2025-09-27 16:05:41'),
 (2, 'Fast Delivery', 'fas fa-truck', 1, 2, '2025-09-27 15:45:20', '2025-09-27 16:06:17'),
 (3, 'Sign up & get 10% OFF your first order', 'fas fa-user-plus', 1, 3, '2025-09-27 15:45:20', '2025-09-27 15:45:20'),
-(4, 'Premium Quality Products Guaranteed', 'fas fa-star', 1, 4, '2025-09-27 15:45:20', '2025-09-27 15:45:20');
+(4, 'Premium Quality Products Guaranteed', 'fas fa-star', 1, 4, '2025-09-27 15:45:20', '2025-09-27 15:45:20'),
+(8, 'Fresh Chuchu', 'fas fa-gift', 1, 5, '2025-10-26 02:32:36', '2025-10-26 02:32:36');
 
 -- --------------------------------------------------------
 
@@ -2922,7 +3250,23 @@ INSERT INTO `rating_images` (`image_id`, `rating_id`, `image_path`, `image_order
 (15, 40, 'uploads/rating_images/rating_364_20_3_1761112359.jpg', 3, '2025-10-22 05:52:39'),
 (16, 41, 'uploads/rating_images/rating_365_20_1_1761112784.jpg', 1, '2025-10-22 05:59:44'),
 (17, 41, 'uploads/rating_images/rating_365_20_2_1761112784.jpg', 2, '2025-10-22 05:59:44'),
-(18, 41, 'uploads/rating_images/rating_365_20_3_1761112784.jpg', 3, '2025-10-22 05:59:44');
+(18, 41, 'uploads/rating_images/rating_365_20_3_1761112784.jpg', 3, '2025-10-22 05:59:44'),
+(19, 32, 'uploads/rating_images/rating_323_9_1761103721.jpg', 1, '2025-10-22 06:11:16'),
+(20, 33, 'uploads/rating_images/rating_360_9_1761105263.jpg', 1, '2025-10-22 06:11:16'),
+(21, 42, 'uploads/rating_images/rating_366_20_1_1761113992.png', 1, '2025-10-22 06:19:52'),
+(22, 42, 'uploads/rating_images/rating_366_20_2_1761113992.png', 2, '2025-10-22 06:19:52'),
+(23, 42, 'uploads/rating_images/rating_366_20_3_1761113992.png', 3, '2025-10-22 06:19:52'),
+(24, 43, 'uploads/rating_images/rating_367_20_1_1761116684.jpg', 1, '2025-10-22 07:04:44'),
+(25, 43, 'uploads/rating_images/rating_367_20_2_1761116684.jpg', 2, '2025-10-22 07:04:44'),
+(26, 43, 'uploads/rating_images/rating_367_20_3_1761116684.jpg', 3, '2025-10-22 07:04:44'),
+(27, 44, 'uploads/rating_images/rating_368_3_1_1761116791.jpg', 1, '2025-10-22 07:06:31'),
+(28, 44, 'uploads/rating_images/rating_368_3_2_1761116791.jpg', 2, '2025-10-22 07:06:31'),
+(29, 44, 'uploads/rating_images/rating_368_3_3_1761116791.jpg', 3, '2025-10-22 07:06:31'),
+(30, 45, 'uploads/rating_images/rating_372_10_1_1761147989.jpeg', 1, '2025-10-22 15:46:29'),
+(31, 45, 'uploads/rating_images/rating_372_10_2_1761147989.jpg', 2, '2025-10-22 15:46:29'),
+(32, 45, 'uploads/rating_images/rating_372_10_3_1761147989.jpeg', 3, '2025-10-22 15:46:29'),
+(33, 46, 'uploads/rating_images/rating_373_3_1_1761148931.jpg', 1, '2025-10-22 16:02:11'),
+(34, 52, 'uploads/rating_images/rating_390_3_1_1761798084.jpg', 1, '2025-10-30 04:21:24');
 
 -- --------------------------------------------------------
 
@@ -3076,7 +3420,28 @@ INSERT INTO `restocking` (`restocking_id`, `po_number`, `is_purchase_order`, `pr
 (96, 'PO-20251020-0002', 1, 28, 10, 17, 104, 15, 250.00, 3750.00, '2025-10-20', '2026-01-20', NULL, 2, '', 4, '2025-10-20 01:54:28', 14.00),
 (97, 'PO-20251020-0003', 1, 22, 7, 12, 105, 50, 330.00, 14850.00, '2025-10-20', '2026-01-20', NULL, 2, '', 4, '2025-10-20 14:21:38', 45.00),
 (98, NULL, 0, 20, 8, 13, 106, 5, 850.00, 4250.00, '2025-10-22', '2026-01-22', NULL, 2, NULL, 4, '2025-10-22 03:49:33', NULL),
-(99, NULL, 0, 20, 9, 11, 107, 5, 750.00, 3750.00, '2025-10-22', '2026-01-22', NULL, 2, NULL, 4, '2025-10-22 03:50:24', NULL);
+(99, NULL, 0, 20, 9, 11, 107, 5, 750.00, 3750.00, '2025-10-22', '2026-01-22', NULL, 2, NULL, 4, '2025-10-22 03:50:24', NULL),
+(100, NULL, 0, 28, 10, 15, 108, 2, 250.00, 500.00, '2025-10-22', '2026-01-22', NULL, 2, NULL, 4, '2025-10-22 12:46:54', NULL),
+(101, NULL, 0, 28, 10, 15, 109, 2, 290.00, 580.00, '2025-10-22', '2026-01-22', NULL, 2, NULL, 4, '2025-10-22 12:47:22', NULL),
+(102, 'PO-20251024-0001', 1, 23, 5, 18, 110, 15, 300.00, 4500.00, '2025-10-24', '2026-01-24', NULL, 2, '', 4, '2025-10-24 01:25:59', 15.00),
+(103, NULL, 0, 25, 11, 20, 111, 10, 250.00, 2500.00, '2025-10-25', '2026-01-25', NULL, 2, NULL, 4, '2025-10-25 13:29:57', NULL),
+(104, 'PO-20251025-0001', 1, 24, 10, 1, NULL, 50, NULL, NULL, '2025-10-25', NULL, NULL, 3, '', 4, '2025-10-25 13:31:51', 50.00),
+(105, 'PO-20251025-0002', 1, 24, 9, 19, NULL, 10, NULL, NULL, '2025-10-25', NULL, NULL, 3, '', 4, '2025-10-25 13:34:24', 10.00),
+(106, 'PO-20251025-0002', 1, 21, 9, 15, NULL, 10, NULL, NULL, '2025-10-25', NULL, NULL, 3, '', 4, '2025-10-25 13:34:24', 10.00),
+(107, 'PO-20251031-0001', 1, 24, 10, 1, 112, 10, 10.00, 100.00, '2025-10-31', '2026-01-31', NULL, 2, '', 4, '2025-10-31 08:41:55', 10.00),
+(108, 'PO-20251031-0002', 1, 21, 1, 1, NULL, 8, NULL, NULL, '2025-10-31', NULL, NULL, 3, '', 4, '2025-10-31 08:58:34', 8.00),
+(109, 'PO-20251031-0003', 1, 21, 1, 1, NULL, 8, NULL, NULL, '2025-10-31', NULL, NULL, 3, '', 4, '2025-10-31 09:39:39', 8.00),
+(110, 'PO-20251031-0004', 1, 21, 9, 15, 113, 8, 8.00, 64.00, '2025-10-31', '2026-01-31', NULL, 2, '', 4, '2025-10-31 09:41:04', 8.00),
+(111, NULL, 0, 21, 1, 15, 114, 10, 200.00, 2000.00, '2025-10-31', '2026-01-31', NULL, 2, NULL, 4, '2025-10-31 09:43:12', NULL),
+(112, NULL, 0, 24, 9, 1, 115, 10, 250.00, 2500.00, '2025-10-31', '2026-01-31', NULL, 2, NULL, 4, '2025-10-31 09:43:34', NULL),
+(113, NULL, 0, 27, 3, 18, 116, 10, 250.00, 2500.00, '2025-10-31', '2026-01-31', NULL, 2, NULL, 4, '2025-10-31 11:16:48', NULL),
+(114, NULL, 0, 27, 3, 12, 117, 20, 300.00, 6000.00, '2025-10-31', '2026-01-31', NULL, 2, NULL, 4, '2025-10-31 11:20:55', NULL),
+(115, NULL, 0, 27, 3, 13, 118, 10, 300.00, 3000.00, '2025-10-31', '2026-01-31', NULL, 2, NULL, 4, '2025-10-31 11:30:00', NULL),
+(116, 'PO-20251031-0005', 1, 27, 10, 15, 119, 20, 325.00, 6500.00, '2025-10-31', '2026-01-31', NULL, 2, '', 4, '2025-10-31 11:41:19', 20.00),
+(117, NULL, 0, 23, 1, 11, 120, 20, 150.00, 3000.00, '2025-10-31', '2026-01-31', NULL, 2, NULL, 4, '2025-10-31 11:43:56', NULL),
+(118, NULL, 0, 23, 5, 11, 121, 20, 250.00, 5000.00, '2025-10-31', '2026-01-31', NULL, 2, NULL, 4, '2025-10-31 11:44:45', NULL),
+(119, 'PO-20251031-0006', 1, 23, 1, 11, NULL, 42, NULL, NULL, '2025-10-31', NULL, NULL, 1, '', 4, '2025-10-31 11:52:26', NULL),
+(120, 'PO-20251031-0007', 1, 24, 9, 1, NULL, 21, NULL, NULL, '2025-10-31', NULL, NULL, 1, '', 4, '2025-10-31 12:28:03', NULL);
 
 -- --------------------------------------------------------
 
@@ -3280,7 +3645,12 @@ INSERT INTO `stock_adjustment` (`stockadjustment_id`, `product_id`, `adjustment_
 (32, 19, 2, 50, 100, 50, 'Expired', 'Automatic expiration processing - Batch: B19-20251018-001, Expired: 2025-10-17', 1, '2025-10-17', 2, '2025-10-18 15:59:40'),
 (33, 20, 2, 200, 625, 425, 'Supplier Return', NULL, 8, NULL, 4, '2025-10-19 05:40:00'),
 (34, 20, 2, 100, 425, 325, 'Supplier Return', NULL, 8, NULL, 4, '2025-10-19 05:40:44'),
-(35, 20, 2, 100, 325, 225, 'Supplier Return', NULL, 8, NULL, 4, '2025-10-19 05:41:10');
+(35, 20, 2, 100, 325, 225, 'Supplier Return', NULL, 8, NULL, 4, '2025-10-19 05:41:10'),
+(36, 4, 2, 20, 18, -2, 'Expired', 'Manual pull out - Batch: B4-20250919-003', NULL, '2025-09-24', 4, '2025-10-22 13:53:25'),
+(37, 1, 2, 15, 3, -12, 'Expired', 'Manual pull out - Batch: TRIMMINGS-BATCH002', NULL, '2025-09-20', 4, '2025-10-22 13:53:58'),
+(38, 4, 2, 25, -2, -27, 'Expired', 'Manual pull out - Batch: B4-20250919-002', NULL, '2025-10-19', 4, '2025-10-22 13:56:44'),
+(39, 1, 2, 25, -12, -37, 'Expired', 'Manual pull out - Batch: TRIMMINGS-BATCH003', NULL, '2025-10-05', 4, '2025-10-22 13:56:52'),
+(40, 2, 2, 25, 2, -23, 'Expired', 'Manual pull out - Batch: BANGUS-BATCH003', NULL, '2025-10-05', 4, '2025-10-22 13:58:13');
 
 -- --------------------------------------------------------
 
@@ -3439,7 +3809,34 @@ INSERT INTO `stock_movements` (`stockmovement_id`, `product_id`, `stockmovementt
 (129, 28, 1, 14.0, 2.0, 16.0, 96, 'restock', 'Restocking - Status Updated', 4, '2025-10-20 01:55:21', NULL),
 (130, 22, 1, 45.0, 10.0, 55.0, 97, 'restock', 'Restocking - Status Updated', 4, '2025-10-20 14:22:20', NULL),
 (131, 20, 1, 5.0, 238.0, 243.0, 98, 'restock', 'Restocking', 4, '2025-10-22 03:49:33', NULL),
-(132, 20, 1, 5.0, 243.0, 248.0, 99, 'restock', 'Restocking', 4, '2025-10-22 03:50:24', NULL);
+(132, 20, 1, 5.0, 243.0, 248.0, 99, 'restock', 'Restocking', 4, '2025-10-22 03:50:24', NULL),
+(133, 28, 1, 2.0, 0.0, 2.0, 100, 'restock', 'Restocking', 4, '2025-10-22 12:46:54', NULL),
+(134, 28, 1, 2.0, 2.0, 4.0, 101, 'restock', 'Restocking', 4, '2025-10-22 12:47:22', NULL),
+(135, 28, 3, 3.0, 0.0, 3.0, 371, 'order_cancellation', 'Order cancellation: Customer unable to visit the store', 4, '2025-10-22 12:55:06', NULL),
+(136, 23, 3, 15.0, 6.0, 21.0, 359, 'order_cancellation', 'Order cancellation: Customer unable to visit the store', 4, '2025-10-22 12:55:52', NULL),
+(137, 4, 2, 20.0, 18.0, -2.0, 36, 'stock_adjustment', 'Expired', 4, '2025-10-22 13:53:25', NULL),
+(138, 1, 2, 15.0, 3.0, -12.0, 37, 'stock_adjustment', 'Expired', 4, '2025-10-22 13:53:58', NULL),
+(139, 4, 2, 25.0, -2.0, -27.0, 38, 'stock_adjustment', 'Expired', 4, '2025-10-22 13:56:44', NULL),
+(140, 1, 2, 25.0, -12.0, -37.0, 39, 'stock_adjustment', 'Expired', 4, '2025-10-22 13:56:52', NULL),
+(141, 2, 2, 25.0, 2.0, -23.0, 40, 'stock_adjustment', 'Expired', 4, '2025-10-22 13:58:13', NULL),
+(142, 23, 1, 15.0, 11.0, 26.0, 102, 'restock', 'Restocking - Status Updated', 4, '2025-10-24 01:26:42', NULL),
+(143, 25, 1, 10.0, 0.0, 10.0, 103, 'restock', 'Restocking', 4, '2025-10-25 13:29:57', NULL),
+(144, 17, 3, 12.0, 0.0, 12.0, 382, 'order_cancellation', 'Order cancellation: Customer did not pick up order within 3 hours (6.9 hours elapsed)', 4, '2025-10-26 02:48:50', NULL),
+(145, 20, 3, 1.0, 186.9, 187.9, 388, 'order_cancellation', 'Order cancellation: Customer did not pick up order within 3 hours (11.6 hours elapsed)', 4, '2025-10-31 07:56:10', NULL),
+(146, 31, 3, 1.0, 3.0, 4.0, 385, 'order_cancellation', 'Order cancellation: Customer did not pick up order within 3 hours (111.4 hours elapsed)', 4, '2025-10-31 08:05:44', NULL),
+(147, 23, 3, 1.0, 23.0, 24.0, 393, 'order_cancellation', 'Order cancellation: Insufficient Payment', 4, '2025-10-31 08:06:27', NULL),
+(148, 23, 3, 1.0, 23.0, 24.0, 396, 'order_cancellation', 'Order cancellation: Insufficient Payment', 4, '2025-10-31 08:12:30', NULL),
+(149, 24, 1, 10.0, 0.0, 10.0, 107, 'restock', 'Restocking - Status Updated', 4, '2025-10-31 08:50:29', NULL),
+(150, 21, 1, 8.0, 0.0, 8.0, 110, 'restock', 'Restocking - Status Updated', 4, '2025-10-31 09:41:29', NULL),
+(151, 21, 1, 10.0, 8.0, 18.0, 111, 'restock', 'Restocking', 4, '2025-10-31 09:43:12', NULL),
+(152, 24, 1, 10.0, 10.0, 20.0, 112, 'restock', 'Restocking', 4, '2025-10-31 09:43:34', NULL),
+(153, 27, 3, 4.0, 0.0, 4.0, 398, 'order_cancellation', 'Order cancellation: Customer unable to visit the store', 4, '2025-10-31 11:13:23', NULL),
+(154, 27, 1, 10.0, 0.0, 10.0, 113, 'restock', 'Restocking', 4, '2025-10-31 11:16:48', NULL),
+(155, 27, 1, 20.0, 10.0, 30.0, 114, 'restock', 'Restocking', 4, '2025-10-31 11:20:55', NULL),
+(156, 27, 1, 10.0, 20.0, 30.0, 115, 'restock', 'Restocking', 4, '2025-10-31 11:30:00', NULL),
+(157, 27, 1, 20.0, 30.0, 50.0, 116, 'restock', 'Restocking - Status Updated', 4, '2025-10-31 11:42:07', NULL),
+(158, 23, 1, 20.0, 24.0, 44.0, 117, 'restock', 'Restocking', 4, '2025-10-31 11:43:56', NULL),
+(159, 23, 1, 20.0, 44.0, 64.0, 118, 'restock', 'Restocking', 4, '2025-10-31 11:44:45', NULL);
 
 -- --------------------------------------------------------
 
@@ -3492,7 +3889,7 @@ INSERT INTO `suppliers` (`supplier_id`, `name`, `phone`, `email`, `address_line`
 (3, 'ZAYN GOODS', '09213197822', 'gi@gmail.com', '', NULL, NULL, NULL, '', 0, '2025-07-25 12:27:22', '2025-09-24 08:53:49'),
 (4, 'Marion Brix Quiling', '09213197822', 'brixquils16@gmail.com', '100-c Kasunduan Extension Brgy. Commonwealth Q.c.\r\nKatena Hoa Multipurpose', NULL, NULL, NULL, '', 1, '2025-09-03 12:20:02', '2025-09-03 12:23:49'),
 (5, 'Marion Brix Quiling', '09213197822', 'brixquils16@gmail.com', '100-c Kasunduan Extension Brgy. Commonwealth Q.c.\r\nKatena Hoa Multipurpose', NULL, NULL, NULL, '', 0, '2025-09-03 12:22:48', '2025-09-03 12:22:48'),
-(6, 'TEST TEST TEST', '09213197822', 'test@gmail.com', '100-c Kasunduan Extension Brgy. Commonwealth Q.c.\r\nKatena Hoa Multipurpose', NULL, NULL, NULL, '', 1, '2025-09-09 15:00:23', '2025-10-19 11:35:45'),
+(6, 'TEST TEST TEST', '09213197822', 'test@gmail.com', '100-c Kasunduan Extension Brgy. Commonwealth Q.c.\r\nKatena Hoa Multipurpose', NULL, NULL, NULL, '', 0, '2025-09-09 15:00:23', '2025-10-25 11:01:11'),
 (7, 'BALIWAG', '09213197822', 'jay@gmail.com', '10th avenue, caloocan', NULL, NULL, NULL, '', 0, '2025-09-10 15:19:19', '2025-09-10 15:19:19'),
 (8, 'Davidson Frozen', '09213197822', 'kulot@gmail.com', '324 Batasan, Quezon City', NULL, NULL, NULL, '', 0, '2025-10-19 05:14:44', '2025-10-19 05:14:44'),
 (9, 'Andoks', '09213138726', 'kali@gmail.com', '361 Caloocan Quezon City', NULL, NULL, NULL, '', 0, '2025-10-19 11:31:56', '2025-10-19 11:31:56'),
@@ -3556,7 +3953,13 @@ INSERT INTO `supplier_products` (`id`, `supplier_id`, `product_id`, `is_primary`
 (36, 9, 24, 0, 1, '2025-10-19 11:35:37', 4, NULL),
 (37, 11, 29, 0, 1, '2025-10-19 11:37:09', 4, NULL),
 (38, 11, 31, 0, 1, '2025-10-19 11:37:24', 4, NULL),
-(39, 5, 23, 0, 1, '2025-10-19 14:11:11', 4, NULL);
+(39, 5, 23, 0, 1, '2025-10-19 14:11:11', 4, NULL),
+(40, 11, 25, 0, 1, '2025-10-25 13:27:21', 4, NULL),
+(41, 10, 24, 0, 1, '2025-10-25 13:31:22', 4, NULL),
+(42, 1, 21, 0, 1, '2025-10-31 08:51:41', 4, NULL),
+(43, 3, 25, 0, 1, '2025-10-31 10:32:57', 4, NULL),
+(44, 3, 27, 0, 1, '2025-10-31 11:14:27', 4, NULL),
+(45, 1, 23, 0, 1, '2025-10-31 11:43:16', 4, NULL);
 
 -- --------------------------------------------------------
 
@@ -3643,7 +4046,7 @@ INSERT INTO `users` (`user_id`, `username`, `password`, `is_active`, `date_creat
 (9, 'giancarmen', '$2y$10$Fympd4rSTpswM1WFJrBNuuAoYq2gOsZlr3XFbmgNQBzRJUcAmnxeu', 1, '2025-09-15 14:28:22', '2025-09-17 12:19:13', 2, 1, 1),
 (10, 'kaycee', '$2y$10$R2ZAfl7C9bDMsSqlN8NK2uo35ukC1SnjParCIsRZnkPFQQpGd0Mku', 1, '2025-09-17 15:32:23', '2025-10-12 22:58:13', 2, 1, 1),
 (11, 'katcat05', '$2y$10$UEugO9J4PRa7CJ5HDo9CwemlMV2Fgn4/BIr3/RsiabTRTx0CAq24i', 1, '2025-10-06 14:36:34', '2025-10-12 22:58:13', 2, 1, 1),
-(12, 'marquils', '$2y$10$CLNJVcsT7D9nKQsQbdD0iuaU3EoKklHUrKLHT8vQujOnTSQdplxHi', 1, '2025-10-06 14:46:10', '2025-10-12 22:58:13', 2, 1, 0),
+(12, 'marquils', '$2y$10$CLNJVcsT7D9nKQsQbdD0iuaU3EoKklHUrKLHT8vQujOnTSQdplxHi', 0, '2025-10-06 14:46:10', '2025-10-25 11:21:33', 2, 1, 0),
 (13, 'brixxxx', '$2y$10$w6zT2ga14N65IhOQvyD1seDwO7tXD7HMZuuKxTCcJmAqf3wkMeZaC', 1, '2025-10-09 12:51:01', '2025-10-12 22:58:13', 2, 1, 0),
 (14, 'inventory_kervie', '$2y$10$xobZbBiLieHOXC6QEoWGE.SZwaCukMHGci7TUzIAbVLBDRAyITheK', 0, '2025-10-09 13:32:35', '2025-10-15 14:20:29', 2, 0, 0),
 (15, 'inventory_kervie2', '$2y$10$08KD5ZtnnBpauaPiySgSAOx8YYQ/U03iOPxtWDO2zXTFQHcTsk2m2', 0, '2025-10-09 13:42:10', '2025-10-15 14:20:29', 2, 0, 0),
@@ -3662,7 +4065,14 @@ INSERT INTO `users` (`user_id`, `username`, `password`, `is_active`, `date_creat
 (31, 'mariannequiling', '$2y$10$M4JO5nUp9iAUPkcEKu46QuWHL3tlJkrRylFmZlv.0cArcGq04PRpW', 1, '2025-10-18 15:09:11', '2025-10-18 15:09:11', 2, 0, 0),
 (32, 'mariannequilingzoii', '$2y$10$KVi9qIXQN33/9l0LnRFgculBsm0sBugyzddT3Ep1xCE4zIVxwBQsa', 1, '2025-10-18 15:09:46', '2025-10-18 15:10:13', 2, 1, 0),
 (33, 'briybriy', '$2y$10$T0D6O9APhEH0Vk3Fy16XzOMgPXD8gRXhfiIKRFas/MawCQpnavcI2', 1, '2025-10-19 15:20:02', '2025-10-19 15:20:02', 2, 0, 0),
-(34, 'briybriy1', '$2y$10$wDsUV3oi9gTfdlohMGxWnuR8CRM6syNj8UxCKOryDdMcwJHA9PZyO', 1, '2025-10-19 15:24:36', '2025-10-19 15:24:47', 2, 1, 0);
+(34, 'briybriy1', '$2y$10$wDsUV3oi9gTfdlohMGxWnuR8CRM6syNj8UxCKOryDdMcwJHA9PZyO', 1, '2025-10-19 15:24:36', '2025-10-19 15:24:47', 2, 1, 0),
+(35, 'brixxxsaaa', '$2y$10$JhbremI/e193mBJUs63F1OWCCxgiWffo3RxluEZvX4KjkpuhonQCy', 1, '2025-10-25 11:19:30', '2025-10-25 11:19:30', 2, 0, 0),
+(36, 'brixxxxxsu', '$2y$10$Ai7rLsIJzeB6EDgyL1o0OOMTY1jYmrtHL1O.kgFfEbxtytwlD6zKG', 1, '2025-10-29 03:42:01', '2025-10-29 03:42:01', 2, 0, 0),
+(37, 'brixxxxxssss', '$2y$10$OgZH25ZIcGhv6Tu.qNfp4.89v0oJZ0vm34Mv/Vhqytq88MT20rXiC', 1, '2025-10-29 03:52:02', '2025-10-29 03:52:02', 2, 0, 0),
+(38, 'brixssaa', '$2y$10$J7YHELwU7i05FmVqJwKQ3Olmmp5conkZ0UfRgoWwsDTCkO6kl69Du', 1, '2025-10-29 03:55:22', '2025-10-29 03:55:22', 2, 0, 0),
+(39, 'brixxxxxsuuuu', '$2y$10$.H7tWg1aGU41HaHTrZAtS.OqkGI.EMWG7wEJ7subPunjhwCzUtJKa', 1, '2025-10-30 03:40:36', '2025-10-30 03:41:02', 2, 1, 0),
+(40, 'zaynngian', '$2y$10$PXc9tP4R6CQCyW8VTnAo2O1iCxffjSdO/HPBtJAbSYA4gCuLCdWF6', 1, '2025-10-30 03:53:32', '2025-10-30 03:53:32', 2, 0, 0),
+(41, 'giannnzz', '$2y$10$5CVvWcwFDe4N8Bd0sdpCKOWgNcdvSIV9TPPkgTlOOzl4drq5K3Imm', 1, '2025-10-30 03:55:10', '2025-10-30 03:55:10', 2, 0, 0);
 
 -- --------------------------------------------------------
 
@@ -3677,6 +4087,7 @@ CREATE TABLE `user_info` (
   `last_name` varchar(100) DEFAULT NULL,
   `email` varchar(100) NOT NULL,
   `phone` varchar(20) DEFAULT NULL,
+  `gcash_number` varchar(20) DEFAULT NULL,
   `profile_picture` varchar(255) DEFAULT NULL,
   `date_created` timestamp NOT NULL DEFAULT current_timestamp(),
   `date_updated` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -3686,36 +4097,43 @@ CREATE TABLE `user_info` (
 -- Dumping data for table `user_info`
 --
 
-INSERT INTO `user_info` (`user_info_id`, `user_id`, `first_name`, `last_name`, `email`, `phone`, `profile_picture`, `date_created`, `date_updated`) VALUES
-(4, 2, 'System', 'Admin', 'admin@example.com', '09123456789', 'uploads/default.png', '2025-09-03 11:34:15', '2025-09-04 05:26:28'),
-(5, 3, 'Marion Brix', 'Quiling', 'brixquils16@gmail.com', '09213197822', 'uploads/profile_3_1761016294_68f6f9e68bb32.jpg', '2025-09-04 04:31:55', '2025-10-21 03:11:34'),
-(7, 4, 'Marion Brix Quiling', '', 'superadmin@mikemadz.com', '09514971216', 'profile_4_1758110938.jpg', '2025-09-04 13:23:31', '2025-09-17 12:08:58'),
-(8, 5, NULL, NULL, 'testadmin@gmail.com', NULL, NULL, '2025-09-05 11:49:59', '2025-09-05 11:49:59'),
-(9, 6, NULL, NULL, 'inventory@gmail.com', NULL, NULL, '2025-09-08 13:04:23', '2025-09-08 13:04:23'),
-(10, 7, NULL, NULL, 'admin3@gmail.com', NULL, NULL, '2025-09-08 13:05:16', '2025-09-08 13:05:16'),
-(11, 8, NULL, NULL, 'sales@gmail.com', NULL, NULL, '2025-09-08 13:28:52', '2025-09-08 13:28:52'),
-(12, 9, 'GIAN', 'CARMEN', 'giansteven58@gmail.com', '09213197822', 'uploads/profile_9_1758035256_68c97d38429a6.jpg', '2025-09-15 14:28:22', '2025-09-16 15:07:36'),
-(13, 10, 'Kaycee', 'Gallaza', 'kreatives09@gmail.com', '0921314193', 'uploads/profile_10_1758123186_68cad4b29a052.jpg', '2025-09-17 15:32:23', '2025-09-17 15:33:06'),
-(14, 11, 'Katrina', 'Catani', 'ntalavera0426@gmail.com', '09213197822', 'uploads/profile_11_1759838874_68e5029ad845a.jpg', '2025-10-06 14:36:34', '2025-10-07 12:07:54'),
-(16, 13, 'Marion Brix', 'Quiling', 'marionquils16@gmail.com', NULL, NULL, '2025-10-09 12:51:01', '2025-10-09 12:51:01'),
-(17, 14, NULL, NULL, 'inventorykervie@gmail.com', NULL, NULL, '2025-10-09 13:32:35', '2025-10-09 13:32:35'),
-(18, 15, NULL, NULL, 'inventory_kervie@gmail.com', NULL, NULL, '2025-10-09 13:42:10', '2025-10-09 13:42:10'),
-(19, 16, NULL, NULL, 'salesadmin_test@gmail.com', NULL, NULL, '2025-10-12 09:13:01', '2025-10-12 09:13:01'),
-(20, 17, NULL, NULL, 'admin5@gmail.com', NULL, NULL, '2025-10-12 09:16:10', '2025-10-12 09:16:10'),
-(21, 18, NULL, NULL, 'monitoring_admin@gmail.com', NULL, NULL, '2025-10-12 09:28:37', '2025-10-12 09:28:37'),
-(22, 19, NULL, NULL, 'monitoring_admin2@gmail.com', NULL, NULL, '2025-10-13 06:21:21', '2025-10-13 06:21:21'),
-(23, 20, 'David', 'Mosqueda', 'davidsonmosqueda07@gmail.com', '09514971216', 'uploads/profile_20_1761110960_68f86bb006b61.jpg', '2025-10-15 12:37:18', '2025-10-22 05:29:20'),
-(24, 21, 'hatchiko', 'chew', 'brixquils@gmail.com', NULL, NULL, '2025-10-15 12:52:28', '2025-10-15 12:52:28'),
-(25, 22, NULL, NULL, 'giancarmen@gmail.com', NULL, NULL, '2025-10-15 14:51:03', '2025-10-15 14:51:03'),
-(26, 23, 'Gian Zayn', '', 'giangiangian@gmail.com', '', 'profile_23_1760542588.jpg', '2025-10-15 15:17:15', '2025-10-15 15:37:25'),
-(27, 24, '', '', 'davidsales@gmail.com', '', 'profile_24_1760543859.jpg', '2025-10-15 15:39:31', '2025-10-15 15:57:39'),
-(28, 25, NULL, NULL, 'kerviemoni@gmail.com', NULL, 'profile_25_1760586850.jpg', '2025-10-16 03:42:53', '2025-10-16 03:54:10'),
-(29, 26, 'Marianne', 'Zoi', 'mariannezoiquiling99@gmail.com', NULL, NULL, '2025-10-18 14:55:20', '2025-10-18 14:55:20'),
-(33, 30, 'Marianne', 'Quiling', 'mariannezoiquiling99@gmail.com', NULL, NULL, '2025-10-18 15:03:02', '2025-10-18 15:03:02'),
-(34, 31, 'Marianne', 'Quiling', 'mariannequiling893@gmail.com', NULL, NULL, '2025-10-18 15:09:11', '2025-10-18 15:09:11'),
-(35, 32, 'Marianne', 'Quiling', 'mariannequiling893@gmail.com', NULL, NULL, '2025-10-18 15:09:46', '2025-10-18 15:09:46'),
-(36, 33, 'Briy', 'Quiling', 'briyquils@gmail.com', NULL, NULL, '2025-10-19 15:20:02', '2025-10-19 15:20:02'),
-(37, 34, 'Briy', 'Quiling', 'briyquils@gmail.com', NULL, NULL, '2025-10-19 15:24:36', '2025-10-19 15:24:36');
+INSERT INTO `user_info` (`user_info_id`, `user_id`, `first_name`, `last_name`, `email`, `phone`, `gcash_number`, `profile_picture`, `date_created`, `date_updated`) VALUES
+(4, 2, 'System', 'Admin', 'admin@example.com', '09123456789', NULL, 'uploads/default.png', '2025-09-03 11:34:15', '2025-09-04 05:26:28'),
+(5, 3, 'Marion Brix', 'Quiling', 'brixquils16@gmail.com', '09612351251', '09514971216', 'uploads/profile_3_1761016294_68f6f9e68bb32.jpg', '2025-09-04 04:31:55', '2025-10-30 12:26:22'),
+(7, 4, 'Marion Brix Quiling', '', 'superadmin@mikemadz.com', '09514971216', NULL, 'profile_4_1758110938.jpg', '2025-09-04 13:23:31', '2025-09-17 12:08:58'),
+(8, 5, NULL, NULL, 'testadmin@gmail.com', NULL, NULL, NULL, '2025-09-05 11:49:59', '2025-09-05 11:49:59'),
+(9, 6, NULL, NULL, 'inventory@gmail.com', NULL, NULL, NULL, '2025-09-08 13:04:23', '2025-09-08 13:04:23'),
+(10, 7, NULL, NULL, 'admin3@gmail.com', NULL, NULL, NULL, '2025-09-08 13:05:16', '2025-09-08 13:05:16'),
+(11, 8, NULL, NULL, 'sales@gmail.com', NULL, NULL, NULL, '2025-09-08 13:28:52', '2025-09-08 13:28:52'),
+(12, 9, 'GIAN', 'CARMEN', 'giansteven58@gmail.com', '09213197822', '09517891233', 'uploads/profile_9_1758035256_68c97d38429a6.jpg', '2025-09-15 14:28:22', '2025-10-30 13:18:14'),
+(13, 10, 'Kaycee', 'Gallaza', 'kreatives09@gmail.com', '09321344122', '09514721312', 'uploads/profile_10_1758123186_68cad4b29a052.jpg', '2025-09-17 15:32:23', '2025-10-31 11:46:04'),
+(14, 11, 'Katrina', 'Catani', 'ntalavera0426@gmail.com', '09213197822', NULL, 'uploads/profile_11_1759838874_68e5029ad845a.jpg', '2025-10-06 14:36:34', '2025-10-07 12:07:54'),
+(16, 13, 'Marion Brix', 'Quiling', 'marionquils16@gmail.com', NULL, NULL, NULL, '2025-10-09 12:51:01', '2025-10-09 12:51:01'),
+(17, 14, NULL, NULL, 'inventorykervie@gmail.com', NULL, NULL, NULL, '2025-10-09 13:32:35', '2025-10-09 13:32:35'),
+(18, 15, NULL, NULL, 'inventory_kervie@gmail.com', NULL, NULL, NULL, '2025-10-09 13:42:10', '2025-10-09 13:42:10'),
+(19, 16, NULL, NULL, 'salesadmin_test@gmail.com', NULL, NULL, NULL, '2025-10-12 09:13:01', '2025-10-12 09:13:01'),
+(20, 17, NULL, NULL, 'admin5@gmail.com', NULL, NULL, NULL, '2025-10-12 09:16:10', '2025-10-12 09:16:10'),
+(21, 18, NULL, NULL, 'monitoring_admin@gmail.com', NULL, NULL, NULL, '2025-10-12 09:28:37', '2025-10-12 09:28:37'),
+(22, 19, NULL, NULL, 'monitoring_admin2@gmail.com', NULL, NULL, NULL, '2025-10-13 06:21:21', '2025-10-13 06:21:21'),
+(23, 20, 'David', 'Mosqueda', 'davidsonmosqueda07@gmail.com', '09514971216', NULL, 'uploads/profile_20_1761110960_68f86bb006b61.jpg', '2025-10-15 12:37:18', '2025-10-22 05:29:20'),
+(24, 21, 'hatchiko', 'chew', 'brixquils@gmail.com', NULL, NULL, NULL, '2025-10-15 12:52:28', '2025-10-15 12:52:28'),
+(25, 22, NULL, NULL, 'giancarmen@gmail.com', NULL, NULL, NULL, '2025-10-15 14:51:03', '2025-10-15 14:51:03'),
+(26, 23, 'Gian Zayn', '', 'giangiangian@gmail.com', '', NULL, 'profile_23_1760542588.jpg', '2025-10-15 15:17:15', '2025-10-15 15:37:25'),
+(27, 24, '', '', 'davidsales@gmail.com', '', NULL, 'profile_24_1760543859.jpg', '2025-10-15 15:39:31', '2025-10-15 15:57:39'),
+(28, 25, NULL, NULL, 'kerviemoni@gmail.com', NULL, NULL, 'profile_25_1760586850.jpg', '2025-10-16 03:42:53', '2025-10-16 03:54:10'),
+(29, 26, 'Marianne', 'Zoi', 'mariannezoiquiling99@gmail.com', NULL, NULL, NULL, '2025-10-18 14:55:20', '2025-10-18 14:55:20'),
+(33, 30, 'Marianne', 'Quiling', 'mariannezoiquiling99@gmail.com', NULL, NULL, NULL, '2025-10-18 15:03:02', '2025-10-18 15:03:02'),
+(34, 31, 'Marianne', 'Quiling', 'mariannequiling893@gmail.com', NULL, NULL, NULL, '2025-10-18 15:09:11', '2025-10-18 15:09:11'),
+(35, 32, 'Marianne', 'Quiling', 'mariannequiling893@gmail.com', NULL, NULL, NULL, '2025-10-18 15:09:46', '2025-10-18 15:09:46'),
+(36, 33, 'Briy', 'Quiling', 'briyquils@gmail.com', NULL, NULL, NULL, '2025-10-19 15:20:02', '2025-10-19 15:20:02'),
+(37, 34, 'Briy', 'Quiling', 'briyquils@gmail.com', NULL, NULL, NULL, '2025-10-19 15:24:36', '2025-10-19 15:24:36'),
+(38, 35, 'brixsu', 'brixsaa', 'brixquils.1@gmail.com', NULL, NULL, NULL, '2025-10-25 11:19:30', '2025-10-25 11:19:30'),
+(39, 36, 'marr', 'brixxxx', 'brixquils.1@gmail.com', NULL, NULL, NULL, '2025-10-29 03:42:01', '2025-10-29 03:42:01'),
+(40, 37, 'brixx', 'shaaa', 'brixquils.1@gmail.com', NULL, NULL, NULL, '2025-10-29 03:52:02', '2025-10-29 03:52:02'),
+(41, 38, 'Marion Brix', 'Quiling', 'brixquils.1@gmail.com', NULL, NULL, NULL, '2025-10-29 03:55:22', '2025-10-29 03:55:22'),
+(42, 39, 'brixxxxx', 'waaah', 'brixquils.1@gmail.com', '09321321321', '09312213333', 'uploads/default.png', '2025-10-30 03:40:36', '2025-10-30 13:13:52'),
+(43, 40, 'GIan', 'AZayn', 'nicoletalavera826@gmail.com', NULL, NULL, NULL, '2025-10-30 03:53:32', '2025-10-30 03:53:32'),
+(44, 41, 'GIIII', 'ZAYN', 'nicoletalavera826@gmail.com', NULL, NULL, NULL, '2025-10-30 03:55:10', '2025-10-30 03:55:10');
 
 -- --------------------------------------------------------
 
@@ -4059,7 +4477,8 @@ ALTER TABLE `product_batches`
   ADD PRIMARY KEY (`batch_id`),
   ADD KEY `product_id` (`product_id`),
   ADD KEY `expiration_date` (`expiration_date`),
-  ADD KEY `idx_product_batches_brand` (`brand_id`);
+  ADD KEY `idx_product_batches_brand` (`brand_id`),
+  ADD KEY `idx_expired_batches` (`expiration_date`,`is_processed_expired`,`is_active`);
 
 --
 -- Indexes for table `product_boxes`
@@ -4277,7 +4696,7 @@ ALTER TABLE `user_type`
 -- AUTO_INCREMENT for table `addresses`
 --
 ALTER TABLE `addresses`
-  MODIFY `address_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `address_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT for table `adjustment_types`
@@ -4301,7 +4720,7 @@ ALTER TABLE `alert_types`
 -- AUTO_INCREMENT for table `batch_movements`
 --
 ALTER TABLE `batch_movements`
-  MODIFY `movement_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=228;
+  MODIFY `movement_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=281;
 
 --
 -- AUTO_INCREMENT for table `brands`
@@ -4313,19 +4732,19 @@ ALTER TABLE `brands`
 -- AUTO_INCREMENT for table `brand_product_stock`
 --
 ALTER TABLE `brand_product_stock`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=95;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=150;
 
 --
 -- AUTO_INCREMENT for table `cart`
 --
 ALTER TABLE `cart`
-  MODIFY `cart_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=133;
+  MODIFY `cart_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=163;
 
 --
 -- AUTO_INCREMENT for table `cart_items`
 --
 ALTER TABLE `cart_items`
-  MODIFY `cartitem_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2333;
+  MODIFY `cartitem_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2693;
 
 --
 -- AUTO_INCREMENT for table `categories`
@@ -4343,19 +4762,19 @@ ALTER TABLE `customer_id_verification`
 -- AUTO_INCREMENT for table `discount_codes`
 --
 ALTER TABLE `discount_codes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `discount_code_usage`
 --
 ALTER TABLE `discount_code_usage`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `email_verification`
 --
 ALTER TABLE `email_verification`
-  MODIFY `emailverify_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+  MODIFY `emailverify_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
 
 --
 -- AUTO_INCREMENT for table `faq_questions`
@@ -4367,7 +4786,7 @@ ALTER TABLE `faq_questions`
 -- AUTO_INCREMENT for table `favorites`
 --
 ALTER TABLE `favorites`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=74;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=77;
 
 --
 -- AUTO_INCREMENT for table `history_action_types`
@@ -4379,7 +4798,7 @@ ALTER TABLE `history_action_types`
 -- AUTO_INCREMENT for table `history_logs`
 --
 ALTER TABLE `history_logs`
-  MODIFY `historylog_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=446;
+  MODIFY `historylog_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=517;
 
 --
 -- AUTO_INCREMENT for table `inventory_alerts`
@@ -4391,31 +4810,31 @@ ALTER TABLE `inventory_alerts`
 -- AUTO_INCREMENT for table `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=77;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=87;
 
 --
 -- AUTO_INCREMENT for table `orders`
 --
 ALTER TABLE `orders`
-  MODIFY `orders_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=366;
+  MODIFY `orders_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=403;
 
 --
 -- AUTO_INCREMENT for table `order_cancellations`
 --
 ALTER TABLE `order_cancellations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=81;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=91;
 
 --
 -- AUTO_INCREMENT for table `order_items`
 --
 ALTER TABLE `order_items`
-  MODIFY `orderitems_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=228;
+  MODIFY `orderitems_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=269;
 
 --
 -- AUTO_INCREMENT for table `order_ratings`
 --
 ALTER TABLE `order_ratings`
-  MODIFY `rating_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
+  MODIFY `rating_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=53;
 
 --
 -- AUTO_INCREMENT for table `order_status`
@@ -4427,7 +4846,7 @@ ALTER TABLE `order_status`
 -- AUTO_INCREMENT for table `payments`
 --
 ALTER TABLE `payments`
-  MODIFY `payments_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=203;
+  MODIFY `payments_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=240;
 
 --
 -- AUTO_INCREMENT for table `payment_status`
@@ -4451,7 +4870,7 @@ ALTER TABLE `products`
 -- AUTO_INCREMENT for table `product_batches`
 --
 ALTER TABLE `product_batches`
-  MODIFY `batch_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=108;
+  MODIFY `batch_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=122;
 
 --
 -- AUTO_INCREMENT for table `product_boxes`
@@ -4499,13 +4918,13 @@ ALTER TABLE `product_uom_conversions`
 -- AUTO_INCREMENT for table `promo_messages`
 --
 ALTER TABLE `promo_messages`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `rating_images`
 --
 ALTER TABLE `rating_images`
-  MODIFY `image_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
+  MODIFY `image_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
 
 --
 -- AUTO_INCREMENT for table `reports`
@@ -4523,7 +4942,7 @@ ALTER TABLE `report_types`
 -- AUTO_INCREMENT for table `restocking`
 --
 ALTER TABLE `restocking`
-  MODIFY `restocking_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=100;
+  MODIFY `restocking_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=121;
 
 --
 -- AUTO_INCREMENT for table `restocking_status`
@@ -4553,13 +4972,13 @@ ALTER TABLE `role_permissions`
 -- AUTO_INCREMENT for table `stock_adjustment`
 --
 ALTER TABLE `stock_adjustment`
-  MODIFY `stockadjustment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
+  MODIFY `stockadjustment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
 -- AUTO_INCREMENT for table `stock_movements`
 --
 ALTER TABLE `stock_movements`
-  MODIFY `stockmovement_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=133;
+  MODIFY `stockmovement_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=160;
 
 --
 -- AUTO_INCREMENT for table `stock_movement_types`
@@ -4577,7 +4996,7 @@ ALTER TABLE `suppliers`
 -- AUTO_INCREMENT for table `supplier_products`
 --
 ALTER TABLE `supplier_products`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=40;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=46;
 
 --
 -- AUTO_INCREMENT for table `system_settings`
@@ -4595,13 +5014,13 @@ ALTER TABLE `uom`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
+  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
 
 --
 -- AUTO_INCREMENT for table `user_info`
 --
 ALTER TABLE `user_info`
-  MODIFY `user_info_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
+  MODIFY `user_info_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
 
 --
 -- AUTO_INCREMENT for table `user_permissions`

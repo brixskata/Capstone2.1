@@ -141,7 +141,13 @@ function initProfileValidation() {
     validator.addRule('last_name', ValidationRules.minLength(2), 'Last name must be at least 2 characters');
     validator.addRule('email', ValidationRules.required, 'Email is required');
     validator.addRule('email', ValidationRules.email, 'Please enter a valid email address');
-    validator.addRule('phone', ValidationRules.phone, 'Please enter a valid phone number');
+    // Phone is required and must be exactly 11 digits
+    validator.addRule('contact_phone', ValidationRules.required, 'Phone number is required');
+    validator.addRule('contact_phone', (value) => /^\d{11}$/.test(value), 'Phone number must be exactly 11 digits');
+
+    // GCash number is required and must be exactly 11 digits
+    validator.addRule('gcash_number', ValidationRules.required, 'GCash number is required');
+    validator.addRule('gcash_number', (value) => /^\d{11}$/.test(value), 'GCash number must be exactly 11 digits');
 }
 
 // Address form validation

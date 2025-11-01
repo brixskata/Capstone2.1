@@ -39,15 +39,15 @@ $all_addresses_stmt = $pdo->prepare("SELECT * FROM addresses WHERE user_id = :us
 $all_addresses_stmt->execute(['user_id' => $user_id]);
 $all_addresses = $all_addresses_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-if (empty($all_addresses)) {
-    $_SESSION['address_required'] = "Please add a delivery address before placing an order. You'll be redirected to add your address.";
-    $_SESSION['show_address_modal'] = true; // Flag to auto-open address modal
-    header('Location: orders.php');
-    exit;
+$has_any_address = !empty($all_addresses);
+if (!$has_any_address) {
+    // Let the page render with a visible banner and block place order instead of redirecting
+    $_SESSION['address_required'] = "Please add a delivery address before placing an order.";
+    $_SESSION['show_address_modal'] = true; // Orders page can use this flag
 }
 
 // Fetch user profile info using normalized structure
-$stmt = $pdo->prepare("SELECT u.user_id, u.username, ui.email, ui.first_name, ui.last_name, ui.phone 
+$stmt = $pdo->prepare("SELECT u.user_id, u.username, ui.email, ui.first_name, ui.last_name, ui.phone, ui.gcash_number 
                        FROM users u 
                        INNER JOIN user_info ui ON u.user_id = ui.user_id 
                        WHERE u.user_id = :user_id");
@@ -828,6 +828,27 @@ foreach ($gcash_defaults as $key => $default_value) {
     <?php include 'includes/user_navbar.php'; ?>
 
     <div class="container my-5">
+        <?php if (isset($_SESSION['address_required'])): ?>
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="fas fa-map-marker-alt me-2"></i>
+                <?= $_SESSION['address_required'] ?>
+                <a href="orders.php#addresses" class="btn btn-sm btn-primary ms-2">
+                    <i class="fas fa-map-marker-alt me-1"></i>Go to My Addresses
+                </a>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            <?php unset($_SESSION['address_required']); ?>
+        <?php endif; ?>
+        <?php if (empty($user['phone']) || empty($user['gcash_number'])): ?>
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Please provide your Phone Number and GCash Number in My Account before placing an order.
+                <a href="orders.php#account" class="btn btn-sm btn-primary ms-2">
+                    <i class="fas fa-user-cog me-1"></i>Go to My Account
+                </a>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
         <?php if (isset($_SESSION['upload_error'])): ?>
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 <i class="fas fa-exclamation-triangle me-2"></i>
@@ -990,8 +1011,11 @@ foreach ($gcash_defaults as $key => $default_value) {
                                                                         <?= $address['is_default'] ? '<span class="badge bg-success address-badge ms-2">Default</span>' : '' ?>
                                                                     </strong>
                                                                     <div class="text-muted small mt-1">
-                                                            <strong><?= htmlspecialchars($user['first_name'] ?? '') ?> <?= htmlspecialchars($user['last_name'] ?? '') ?></strong><br>
-                                                            <?= htmlspecialchars($user['phone'] ?? '') ?><br>
+                            <strong><?= htmlspecialchars($user['first_name'] ?? '') ?> <?= htmlspecialchars($user['last_name'] ?? '') ?></strong><br>
+                            <?= htmlspecialchars($user['phone'] ?? '') ?><br>
+                            <?php if (!empty($user['gcash_number'])): ?>
+                                <span>GCash: <?= htmlspecialchars($user['gcash_number']) ?></span><br>
+                            <?php endif; ?>
                                                                         <?= htmlspecialchars($address['address_line']) ?>
                                                                         <?php if ($address['address_line2']): ?>
                                                                             <br><?= htmlspecialchars($address['address_line2']) ?>
@@ -1688,6 +1712,53 @@ foreach ($gcash_defaults as $key => $default_value) {
             if (event) event.preventDefault();
             
             const form = document.querySelector('form[action="place_order.php"]');
+            // Require phone and gcash number on file
+            const userHasPhone = <?= json_encode(!empty($user['phone'])) ?>;
+            const userHasGCash = <?= json_encode(!empty($user['gcash_number'])) ?>;
+            const userHasAnyAddress = <?= json_encode($has_any_address) ?>;
+
+            // Block if no saved address exists at all
+            if (!userHasAnyAddress) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'No Address on File',
+                    html: 'Please add a delivery address in My Addresses before placing an order.',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-map-marker-alt me-2"></i>Go to My Addresses',
+                    cancelButtonText: '<i class="fas fa-times me-2"></i>Stay Here',
+                    confirmButtonColor: '#7F1734',
+                    cancelButtonColor: '#6c757d'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = 'orders.php#addresses';
+                    }
+                });
+                return;
+            }
+
+            if (!userHasPhone || !userHasGCash) {
+                const missing = [
+                    !userHasPhone ? 'Phone Number' : null,
+                    !userHasGCash ? 'GCash Number' : null
+                ].filter(Boolean).join(' and ');
+
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Missing Account Information',
+                    html: `Please add your <strong>${missing}</strong> in My Account before placing an order.`,
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-user-cog me-2"></i>Go to My Account',
+                    cancelButtonText: '<i class="fas fa-times me-2"></i>Stay Here',
+                    confirmButtonColor: '#7F1734',
+                    cancelButtonColor: '#6c757d',
+                    customClass: { popup: 'swal2-popup' }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = 'orders.php#account';
+                    }
+                });
+                return;
+            }
             
             // Validate required fields before showing confirmation
             const paymentMethod = document.querySelector('input[name="payment_method"]:checked');

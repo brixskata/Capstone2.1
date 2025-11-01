@@ -217,12 +217,14 @@ if ($product_id <= 0) {
                         COALESCE(ui.first_name, u.username) as customer_name,
                         COALESCE(ui.last_name, '') as customer_last_name,
                         oi.quantity,
-                        'kilos' as unit_name
+                        'kilos' as unit_name,
+                        b.name AS brand_name
                     FROM order_ratings orate
                     INNER JOIN orders o ON orate.order_id = o.orders_id
                     INNER JOIN order_items oi ON oi.order_id = o.orders_id AND oi.product_id = ?
                     LEFT JOIN users u ON orate.user_id = u.user_id
                     LEFT JOIN user_info ui ON u.user_id = ui.user_id
+                    LEFT JOIN brands b ON b.id = oi.brand_id
                     ORDER BY orate.created_at DESC
                     LIMIT " . (int)$ratings_per_page . " OFFSET " . (int)$offset
                 );
@@ -1448,6 +1450,9 @@ if ($product_id <= 0) {
                                         <div class="order-quantity">
                                             <i class="fas fa-shopping-bag me-1"></i>
                                             Ordered <?= number_format($rating['quantity'], 1) ?> <?= htmlspecialchars($rating['unit_name'] ?? 'kilos') ?>
+                                            <?php if (!empty($rating['brand_name'])): ?>
+                                                <span class="ms-2 text-muted">Brand: <?= htmlspecialchars($rating['brand_name']) ?></span>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                     <div class="rating-stars">

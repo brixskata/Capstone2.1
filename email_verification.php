@@ -1,4 +1,24 @@
 
+<?php
+session_start();
+include 'includes/db.php';
+
+// Check if user is verified
+$isVerified = false;
+if (isset($_GET['email'])) {
+    $email = $_GET['email'];
+    $stmt = $pdo->prepare("SELECT u.email_verified FROM users u 
+                           INNER JOIN user_info ui ON u.user_id = ui.user_id 
+                           WHERE ui.email = ? 
+                           ORDER BY u.date_created DESC 
+                           LIMIT 1");
+    $stmt->execute([$email]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($user && $user['email_verified'] == 1) {
+        $isVerified = true;
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -464,9 +484,15 @@
             </div>
 
             <div class="back-to-login">
-                <a href="login.php">
-                    <i class="fas fa-arrow-left me-1"></i>Back to Login
-                </a>
+                <?php if ($isVerified): ?>
+                    <a href="login.php">
+                        <i class="fas fa-arrow-left me-1"></i>Back to Login
+                    </a>
+                <?php else: ?>
+                    <a href="register.php">
+                        <i class="fas fa-arrow-left me-1"></i>Back to Register
+                    </a>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -653,6 +679,19 @@
             document.querySelectorAll('.step').forEach(step => {
                 step.classList.remove('active');
             });
+            
+            // Update back link based on step
+            const backLink = document.querySelector('.back-to-login a');
+            
+            if (stepNumber === 3) {
+                // Success - user is now verified, show "Back to Login"
+                backLink.href = 'login.php';
+                backLink.innerHTML = '<i class="fas fa-arrow-left me-1"></i>Back to Login';
+            } else {
+                // Not verified yet, show "Back to Register"
+                backLink.href = 'register.php';
+                backLink.innerHTML = '<i class="fas fa-arrow-left me-1"></i>Back to Register';
+            }
             
             setTimeout(() => {
                 document.getElementById('step' + stepNumber).classList.add('active');

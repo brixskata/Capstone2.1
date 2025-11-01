@@ -10,7 +10,7 @@ include 'includes/db.php';
 
 // Fetch user information using normalized structure
 $user_id = $_SESSION['user_id'];
-$sql = "SELECT u.user_id, u.username, ui.first_name, ui.last_name, ui.email, ui.phone, ui.user_info_id, ui.profile_picture
+$sql = "SELECT u.user_id, u.username, ui.first_name, ui.last_name, ui.email, ui.phone, ui.gcash_number, ui.user_info_id, ui.profile_picture
         FROM users u 
         INNER JOIN user_info ui ON u.user_id = ui.user_id 
         WHERE u.user_id = :user_id";
@@ -96,6 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
         last_name = :last_name,
         email = :email,
         phone = :phone,
+        gcash_number = :gcash_number,
         profile_picture = :profile_picture
         WHERE user_id = :user_id";
 
@@ -104,7 +105,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
         ':first_name' => $_POST['first_name'],
         ':last_name' => $_POST['last_name'],
         ':email' => $_POST['email'],
-        ':phone' => $_POST['phone'],
+        ':phone' => $_POST['contact_phone'] ?? '',
+        ':gcash_number' => $_POST['gcash_number'] ?? '',
         ':profile_picture' => $profile_picture,
         ':user_id' => $user_id
     ]);
@@ -2263,10 +2265,17 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="form-group">
+                                                    <label class="form-label">Phone Number</label>
+                                                    <input type="tel" name="contact_phone" value="<?= htmlspecialchars($user['phone'] ?? '') ?>" class="form-control" placeholder="09XXXXXXXXX" maxlength="11" pattern="\d{11}" inputmode="numeric" required>
+                                                    <div data-error="contact_phone"></div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group">
                                                     <label class="form-label">GCash Number</label>
-                                                    <input type="tel" name="phone" value="<?= htmlspecialchars($user['phone'] ?? '') ?>" class="form-control">
+                                                    <input type="tel" name="gcash_number" value="<?= htmlspecialchars($user['gcash_number'] ?? '') ?>" class="form-control" maxlength="11" pattern="\d{11}" inputmode="numeric" required>
                                                     <small class="text-muted"><i class="fas fa-info-circle me-1"></i>for Refund Purposes</small>
-                                                    <div data-error="phone"></div>
+                                                    <div data-error="gcash_number"></div>
                                                 </div>
                                             </div>
                                             <div class="col-12">

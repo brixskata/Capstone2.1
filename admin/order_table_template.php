@@ -168,7 +168,7 @@
             <td>
               <div class="d-flex gap-1 flex-wrap">
                 <!-- View Details Button -->
-                <button type="button" class="action-btn" style="background: #6c757d; color: white;" onclick="event.stopPropagation(); viewOrderDetails(<?= $order['id'] ?>, '<?= addslashes($order['username']) ?>', '<?= addslashes($order['email'] ?? '') ?>', '<?= addslashes($order['phone'] ?? '') ?>', '<?= addslashes($order['address_line'] ?? '') ?>', '<?= addslashes($order['address_line2'] ?? '') ?>', '<?= addslashes($order['city'] ?? '') ?>', '<?= addslashes($order['state'] ?? '') ?>', '<?= addslashes($order['postal_code'] ?? '') ?>', '<?= addslashes($order['country'] ?? '') ?>', '<?= addslashes($order['items']) ?>', '<?= $order['total_amount'] ?>', '<?= addslashes($order['payment_method'] ?? '') ?>', '<?= addslashes($order['payment_proof'] ?? '') ?>', '<?= addslashes($order['gcash_transaction_id'] ?? '') ?>', '<?= addslashes($order['status']) ?>', '<?= addslashes($order['delivery_option'] ?? '') ?>', '<?= $order['created_at'] ?>', '<?= addslashes($order['application_name'] ?? '') ?>', '<?= addslashes($order['rider_name'] ?? '') ?>', '<?= addslashes($order['plate_number'] ?? '') ?>', '<?= addslashes($order['rider_contact_number'] ?? '') ?>', '<?= addslashes($order['transaction_number'] ?? '') ?>')">
+                <button type="button" class="action-btn" style="background: #6c757d; color: white;" onclick="event.stopPropagation(); viewOrderDetails(<?= $order['id'] ?>, '<?= addslashes($order['username']) ?>', '<?= addslashes($order['email'] ?? '') ?>', '<?= addslashes($order['phone'] ?? '') ?>', '<?= addslashes($order['gcash_number'] ?? '') ?>', '<?= addslashes($order['address_line'] ?? '') ?>', '<?= addslashes($order['address_line2'] ?? '') ?>', '<?= addslashes($order['city'] ?? '') ?>', '<?= addslashes($order['state'] ?? '') ?>', '<?= addslashes($order['postal_code'] ?? '') ?>', '<?= addslashes($order['country'] ?? '') ?>', '<?= addslashes($order['items']) ?>', '<?= $order['total_amount'] ?>', '<?= addslashes($order['payment_method'] ?? '') ?>', '<?= addslashes($order['payment_proof'] ?? '') ?>', '<?= addslashes($order['gcash_transaction_id'] ?? '') ?>', '<?= addslashes($order['status']) ?>', '<?= addslashes($order['delivery_option'] ?? '') ?>', '<?= $order['created_at'] ?>', '<?= addslashes($order['application_name'] ?? '') ?>', '<?= addslashes($order['rider_name'] ?? '') ?>', '<?= addslashes($order['plate_number'] ?? '') ?>', '<?= addslashes($order['rider_contact_number'] ?? '') ?>', '<?= addslashes($order['transaction_number'] ?? '') ?>')">
                   <i class="fas fa-eye me-1"></i>View Details
                 </button>
                 
@@ -217,7 +217,12 @@
                        
                        $isOverdue = $totalMinutes > 180; // 3 hours = 180 minutes
                      ?>
-                     <?php if ($isOverdue): ?>
+                     <?php 
+                     // Only show cancel button for Cash on Delivery orders (not paid orders like GCash)
+                     $paymentMethod = strtolower($order['payment_method'] ?? '');
+                     $isCOD = empty($order['payment_method']) || empty($order['payment_proof']) || $paymentMethod === 'cash on delivery';
+                     ?>
+                     <?php if ($isOverdue && $isCOD): ?>
                        <button type="button" class="action-btn" style="background: #dc3545; color: white;" onclick="event.stopPropagation(); cancelOverduePickup(<?= $order['id'] ?>, <?= round($totalMinutes / 60, 1) ?>, '<?= htmlspecialchars($order['payment_method'] ?? '') ?>', '<?= htmlspecialchars($order['payment_proof'] ?? '') ?>')">
                          <i class="fas fa-exclamation-triangle me-1"></i>Cancel Overdue
                        </button>

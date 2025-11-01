@@ -1430,7 +1430,15 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
         /* Testimonials Content */
         .testimonials-content {
-            padding-left: 2rem;
+            padding-left: 0;
+        }
+
+        .section-header.text-center .section-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            line-height: 1.2;
         }
 
         .section-header.text-start .section-title {
@@ -1484,6 +1492,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             opacity: 0.3;
             margin-bottom: 1rem;
             line-height: 1;
+            text-align: center;
         }
 
         .testimonial-text {
@@ -1492,11 +1501,15 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
             color: var(--text-secondary);
             margin-bottom: 1.5rem;
             font-style: italic;
-            max-width: 500px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            text-align: center;
         }
 
         .testimonial-rating {
             margin-bottom: 2rem;
+            text-align: center;
         }
 
         .testimonial-rating i {
@@ -1514,6 +1527,7 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
         .testimonial-author {
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 1rem;
         }
 
@@ -1577,6 +1591,11 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
 
             .testimonials-content {
                 padding-left: 0;
+            }
+
+            .section-header.text-center .section-title {
+                font-size: 2rem;
+                text-align: center;
             }
 
             .section-header.text-start .section-title {
@@ -2001,22 +2020,13 @@ $page_keywords = 'meat delivery, fresh beef, chicken, fish, seafood, online meat
     <!-- Customer Ratings Section -->
     <section class="customer-ratings-section">
         <div class="container">
-            <div class="row align-items-center">
-                <!-- Food Image Column -->
-                <div class="col-lg-4 col-md-6 mb-4 mb-lg-0">
-                    <div class="food-image-container">
-                        <div class="food-plate">
-                            <img src="images/homepage-chicken.png" alt="Fresh Chicken Drumsticks" class="food-image">
-                        </div>
-                                    </div>
-                                </div>
-
+            <div class="row justify-content-center">
                 <!-- Testimonials Column -->
-                <div class="col-lg-8 col-md-6">
+                <div class="col-lg-10 col-md-12">
                     <div class="testimonials-content">
-                        <div class="section-header text-start mb-4">
+                        <div class="section-header text-center mb-4">
                             <h2 class="section-title">Customer Ratings</h2>
-                            <div class="title-divider"></div>
+                            <div class="title-divider mx-auto"></div>
                             </div>
 
                         <div class="testimonial-carousel">
