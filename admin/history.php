@@ -144,61 +144,6 @@ $roles = $roles_stmt->fetchAll(PDO::FETCH_COLUMN);
         font-weight: 700;
         font-size: 2rem;
     }
-
-    /* Analytics Cards - Light Version */
-    .analytics-card {
-        background: white;
-        color: var(--bs-dark);
-        border-radius: 1rem;
-        padding: 1.5rem;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-        border: 1px solid #e9ecef;
-        transition: all 0.3s ease;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        position: relative;
-        overflow: hidden;
-    }
-
-
-    .analytics-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-    }
-
-    .card-icon {
-        width: 60px;
-        height: 60px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        flex-shrink: 0;
-        background: rgba(127, 23, 52, 0.1);
-        color: var(--bs-primary);
-    }
-
-    .card-content {
-        flex: 1;
-    }
-
-    .card-number {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--bs-primary);
-        margin: 0;
-        line-height: 1;
-    }
-
-    .card-label {
-        color: var(--bs-secondary);
-        font-size: 0.9rem;
-        font-weight: 500;
-        margin: 0.5rem 0 0 0;
-    }
     
     .table-card {
         background: white;
@@ -281,67 +226,6 @@ $roles = $roles_stmt->fetchAll(PDO::FETCH_COLUMN);
           <div>
             <h2><i class="fas fa-history me-2"></i>Activity History</h2>
             <p class="mb-0 opacity-75">View and track all system activities and user actions</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Analytics Cards -->
-      <div class="row g-4 mb-4">
-        <div class="col-lg-3 col-md-6">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-list"></i>
-            </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo count($history_logs); ?></h3>
-              <p class="card-label">Total Logs</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-lg-3 col-md-6">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-calendar-day"></i>
-            </div>
-            <div class="card-content">
-              <?php
-              $today_count = count(array_filter($history_logs, function($log) {
-                return date('Y-m-d', strtotime($log['performed_at'])) === date('Y-m-d');
-              }));
-              ?>
-              <h3 class="card-number"><?php echo $today_count; ?></h3>
-              <p class="card-label">Today's Activities</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-lg-3 col-md-6">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-user-shield"></i>
-            </div>
-            <div class="card-content">
-              <?php
-              $admin_count = count(array_filter($history_logs, function($log) {
-                return $log['performed_by_role'] === 'admin' || $log['performed_by_username'] === 'admin';
-              }));
-              ?>
-              <h3 class="card-number"><?php echo $admin_count; ?></h3>
-              <p class="card-label">Admin Actions</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-lg-3 col-md-6">
-          <div class="analytics-card">
-            <div class="card-icon">
-              <i class="fas fa-clock"></i>
-            </div>
-            <div class="card-content">
-              <h3 class="card-number"><?php echo count(array_unique(array_column($history_logs, 'action_name'))); ?></h3>
-              <p class="card-label">Action Types</p>
-            </div>
           </div>
         </div>
       </div>

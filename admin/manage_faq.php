@@ -583,16 +583,6 @@ try {
                                                 Restore
                                             </button>
                                         </form>
-                                    <?php else: ?>
-                                        <!-- Archive button for non-archived answered questions -->
-                                        <form method="POST" style="display: inline;">
-                                            <input type="hidden" name="faq_id" value="<?php echo $faq['faq_id']; ?>">
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" 
-                                                    onclick="confirmArchiveAnswered(<?php echo $faq['faq_id']; ?>, '<?php echo htmlspecialchars($faq['question'], ENT_QUOTES); ?>')">
-                                                <i class="fas fa-archive me-1"></i>
-                                                Archive
-                                            </button>
-                                        </form>
                                     <?php endif; ?>
                                 </div>
                                 
@@ -773,48 +763,6 @@ try {
             Swal.fire({
                 title: 'Archive Question',
                 html: `Are you sure you want to archive this question?<br><br><strong>"${question}"</strong><br><br><small class="text-muted">This will move the question to the archived section.</small>`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#ffc107',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: '<i class="fa fa-archive me-1"></i>Archive',
-                cancelButtonText: '<i class="fa fa-times me-1"></i>Cancel',
-                customClass: {
-                    popup: 'swal2-popup-custom',
-                    title: 'swal2-title-custom',
-                    content: 'swal2-content-custom',
-                    confirmButton: 'swal2-confirm-custom',
-                    cancelButton: 'swal2-cancel-custom'
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Create a form to submit the archive action
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.style.display = 'none';
-                    
-                    const faqIdInput = document.createElement('input');
-                    faqIdInput.type = 'hidden';
-                    faqIdInput.name = 'faq_id';
-                    faqIdInput.value = faqId;
-                    
-                    const archiveInput = document.createElement('input');
-                    archiveInput.type = 'hidden';
-                    archiveInput.name = 'archive_question';
-                    archiveInput.value = '1';
-                    
-                    form.appendChild(faqIdInput);
-                    form.appendChild(archiveInput);
-                    document.body.appendChild(form);
-                    form.submit();
-                }
-            });
-        }
-
-        function confirmArchiveAnswered(faqId, question) {
-            Swal.fire({
-                title: 'Archive Answered Question',
-                html: `Are you sure you want to archive this answered question?<br><br><strong>"${question}"</strong><br><br><small class="text-muted">This will move the question to the archived section.</small>`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#ffc107',

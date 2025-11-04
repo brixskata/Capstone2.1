@@ -60,6 +60,25 @@ if (isset($_POST['update_status'])) {
 
         $pdo->beginTransaction();
 
+        // Get customer email and order details for email notification (before update)
+        $emailStmt = $pdo->prepare("
+            SELECT ui.email, u.username, o.total_price, 
+                   GROUP_CONCAT(CONCAT(p.product_name, ' (', oi.quantity, ')') SEPARATOR ', ') as items
+            FROM orders o
+            JOIN users u ON o.user_id = u.user_id
+            LEFT JOIN user_info ui ON ui.user_id = u.user_id
+            LEFT JOIN order_items oi ON o.orders_id = oi.order_id
+            LEFT JOIN products p ON oi.product_id = p.product_id
+            WHERE o.orders_id = ?
+            GROUP BY ui.email, u.username, o.total_price
+        ");
+        $emailStmt->execute([$order_id]);
+        $customerData = $emailStmt->fetch(PDO::FETCH_ASSOC);
+        $customerEmail = $customerData['email'] ?? null;
+        $customerName = $customerData['username'] ?? 'Customer';
+        $totalAmount = $customerData['total_price'] ?? 0;
+        $itemsList = $customerData['items'] ?? 'Items from your order';
+
         // Map status name to orderstatus_id and update
         $stmt = $pdo->prepare("UPDATE orders o
                                 JOIN order_status os ON os.status_name = :status
@@ -73,6 +92,11 @@ if (isset($_POST['update_status'])) {
                                         WHEN :status = 'Ready for Pick Up' AND o.pickup_ready_at IS NULL 
                                         THEN NOW() 
                                         ELSE o.pickup_ready_at 
+                                    END,
+                                    o.out_for_delivery_at = CASE 
+                                        WHEN :status = 'Out for delivery' AND o.out_for_delivery_at IS NULL 
+                                        THEN NOW() 
+                                        ELSE o.out_for_delivery_at 
                                     END
                                 WHERE o.orders_id = :order_id");
         $stmt->execute([
@@ -84,6 +108,69 @@ if (isset($_POST['update_status'])) {
             'application_name' => $application_name,
             'rider_name' => $rider_name
         ]);
+
+        // Send email notification when order is processed (To Ship or Ready for Pick Up)
+        // Wrap in try-catch to prevent email failures from breaking the transaction
+        if (($new_status === 'To Ship' || $new_status === 'Ready for Pick Up') && $customerEmail) {
+            try {
+                include_once __DIR__ . '/../includes/email_helper.php';
+                
+                $emailSubject = "Order #{$order_id} Has Been Processed - MikeMadz";
+                
+                if ($new_status === 'Ready for Pick Up') {
+                    $statusMessage = "Your order is ready for pickup!";
+                    $instructionMessage = "Please visit our store to pick up your order. Make sure to bring a valid ID for verification.";
+                } else {
+                    $statusMessage = "Your order has been processed and is being prepared for shipping!";
+                    $instructionMessage = "We will notify you once your order is out for delivery.";
+                }
+                
+                // Format items list
+                $itemsHtml = '';
+                $itemsArray = explode(', ', $itemsList);
+                foreach ($itemsArray as $item) {
+                    $itemsHtml .= '<li>' . htmlspecialchars($item) . '</li>';
+                }
+                
+                $emailBody = "
+                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+                    <div style='background-color: #7F1734; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;'>
+                        <h2 style='margin: 0;'>MikeMadz</h2>
+                    </div>
+                    <div style='background-color: #f9f9f9; padding: 20px; border-radius: 0 0 10px 10px;'>
+                        <h3 style='color: #7F1734;'>Order Status Update</h3>
+                        <p>Hello {$customerName},</p>
+                        <p><strong>{$statusMessage}</strong></p>
+                        
+                        <div style='background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #7F1734;'>
+                            <p style='margin: 5px 0;'><strong>Order ID:</strong> #{$order_id}</p>
+                            <p style='margin: 5px 0;'><strong>Status:</strong> {$new_status}</p>
+                            <p style='margin: 5px 0;'><strong>Total Amount:</strong> ₱" . number_format($totalAmount, 2) . "</p>
+                        </div>
+                        
+                        <div style='margin: 20px 0;'>
+                            <p><strong>Order Items:</strong></p>
+                            <ul style='list-style-position: inside;'>
+                                {$itemsHtml}
+                            </ul>
+                        </div>
+                        
+                        <p>{$instructionMessage}</p>
+                        
+                        <p style='margin-top: 30px;'>Thank you for choosing MikeMadz!</p>
+                        
+                        <div style='margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px;'>
+                            <p>This is an automated email. Please do not reply to this message.</p>
+                        </div>
+                    </div>
+                </div>";
+                
+                sendCustomerEmail($customerEmail, $emailSubject, $emailBody);
+            } catch (Exception $emailError) {
+                // Log email error but don't break the transaction
+                error_log("Failed to send order processing email for order #{$order_id}: " . $emailError->getMessage());
+            }
+        }
 
         // If shipping order, notify customer with delivery details
         if ($new_status === 'Out for delivery' && $plate_number && $transaction_number) {
@@ -188,6 +275,25 @@ if (isset($_POST['cancel_order'])) {
             $ins = $pdo->prepare("INSERT INTO order_cancellations (order_id, reason, cancelled_by) VALUES (:order_id, :reason, :by)");
             $ins->execute(['order_id' => $order_id, 'reason' => $reason, 'by' => $adminName]);
 
+            // Get customer email and order details for email notification
+            $emailStmt = $pdo->prepare("
+                SELECT ui.email, u.username, o.total_price, 
+                       GROUP_CONCAT(CONCAT(p.product_name, ' (', oi.quantity, ')') SEPARATOR ', ') as items
+                FROM orders o
+                JOIN users u ON o.user_id = u.user_id
+                LEFT JOIN user_info ui ON ui.user_id = u.user_id
+                LEFT JOIN order_items oi ON o.orders_id = oi.order_id
+                LEFT JOIN products p ON oi.product_id = p.product_id
+                WHERE o.orders_id = ?
+                GROUP BY ui.email, u.username, o.total_price
+            ");
+            $emailStmt->execute([$order_id]);
+            $customerData = $emailStmt->fetch(PDO::FETCH_ASSOC);
+            $customerEmail = $customerData['email'] ?? null;
+            $customerName = $customerData['username'] ?? 'Customer';
+            $totalAmount = $customerData['total_price'] ?? 0;
+            $itemsList = $customerData['items'] ?? 'Items from your order';
+
             // Check if this is an overdue pickup cancellation that might need refund
             $needsRefund = false;
             if (strpos($reason, 'Customer did not pick up order within 3 hours') !== false) {
@@ -211,13 +317,69 @@ if (isset($_POST['cancel_order'])) {
                 }
             }
 
-            // Notify customer
+            // Notify customer (in-app notification)
             $uidStmt = $pdo->prepare("SELECT user_id FROM orders WHERE orders_id = ?");
             $uidStmt->execute([$order_id]);
             $userId = $uidStmt->fetchColumn();
             if ($userId) {
                 $notif = $pdo->prepare("INSERT INTO notifications (user_id, order_id, message, is_read, created_at) VALUES (?, ?, ?, 0, NOW())");
                 $notif->execute([$userId, $order_id, 'Your order has been cancelled by admin: ' . $reason]);
+            }
+
+            // Send email notification to customer
+            // Wrap in try-catch to prevent email failures from breaking the transaction
+            if ($customerEmail) {
+                try {
+                    include_once __DIR__ . '/../includes/email_helper.php';
+                    
+                    $emailSubject = "Order #{$order_id} Has Been Cancelled - MikeMadz";
+                    
+                    // Format items list
+                    $itemsHtml = '';
+                    $itemsArray = explode(', ', $itemsList);
+                    foreach ($itemsArray as $item) {
+                        $itemsHtml .= '<li>' . htmlspecialchars($item) . '</li>';
+                    }
+                    
+                    $emailBody = "
+                    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+                        <div style='background-color: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;'>
+                            <h2 style='margin: 0;'>MikeMadz</h2>
+                        </div>
+                        <div style='background-color: #f9f9f9; padding: 20px; border-radius: 0 0 10px 10px;'>
+                            <h3 style='color: #dc3545;'>Order Cancellation Notice</h3>
+                            <p>Hello {$customerName},</p>
+                            <p>We regret to inform you that your order has been cancelled.</p>
+                            
+                            <div style='background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #dc3545;'>
+                                <p style='margin: 5px 0;'><strong>Order ID:</strong> #{$order_id}</p>
+                                <p style='margin: 5px 0;'><strong>Status:</strong> Cancelled</p>
+                                <p style='margin: 5px 0;'><strong>Total Amount:</strong> ₱" . number_format($totalAmount, 2) . "</p>
+                                <p style='margin: 5px 0;'><strong>Cancellation Reason:</strong> " . htmlspecialchars($reason) . "</p>
+                            </div>
+                            
+                            <div style='margin: 20px 0;'>
+                                <p><strong>Order Items:</strong></p>
+                                <ul style='list-style-position: inside;'>
+                                    {$itemsHtml}
+                                </ul>
+                            </div>
+                            
+                            <p>If you have any questions or concerns about this cancellation, please contact our support team.</p>
+                            
+                            <p style='margin-top: 30px;'>Thank you for your understanding.</p>
+                            
+                            <div style='margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px;'>
+                                <p>This is an automated email. Please do not reply to this message.</p>
+                            </div>
+                        </div>
+                    </div>";
+                    
+                    sendCustomerEmail($customerEmail, $emailSubject, $emailBody);
+                } catch (Exception $emailError) {
+                    // Log email error but don't break the transaction
+                    error_log("Failed to send order cancellation email for order #{$order_id}: " . $emailError->getMessage());
+                }
             }
 
             $pdo->commit();

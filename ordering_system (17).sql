@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 31, 2025 at 02:53 PM
+-- Generation Time: Nov 01, 2025 at 01:32 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -659,7 +659,8 @@ INSERT INTO `cart` (`cart_id`, `user_id`, `session_token`, `is_active`, `created
 (159, 3, NULL, 0, '2025-10-30 11:34:01', '2025-10-31 07:56:44'),
 (160, 9, NULL, 1, '2025-10-30 13:17:23', '2025-10-30 13:46:48'),
 (161, 3, NULL, 0, '2025-10-31 08:11:54', '2025-10-31 11:45:37'),
-(162, 10, NULL, 1, '2025-10-31 11:46:16', '2025-10-31 12:26:27');
+(162, 10, NULL, 1, '2025-10-31 11:46:16', '2025-10-31 12:26:27'),
+(163, 3, NULL, 0, '2025-11-01 00:03:13', '2025-11-01 00:03:24');
 
 -- --------------------------------------------------------
 
@@ -827,7 +828,9 @@ INSERT INTO `email_verification` (`emailverify_id`, `user_id`, `otp`, `expires_a
 (33, 38, '542311', '2025-10-30 04:49:41', 0, '2025-10-30 03:39:41'),
 (34, 39, '868742', '2025-10-30 04:50:37', 1, '2025-10-30 03:40:37'),
 (36, 40, '702467', '2025-10-30 05:04:33', 0, '2025-10-30 03:54:33'),
-(37, 41, '172201', '2025-10-30 05:05:10', 0, '2025-10-30 03:55:10');
+(37, 41, '172201', '2025-10-30 05:05:10', 0, '2025-10-30 03:55:10'),
+(38, 42, '260134', '2025-11-01 08:21:33', 0, '2025-11-01 00:11:33'),
+(40, 43, '623273', '2025-11-01 08:23:29', 0, '2025-11-01 00:13:29');
 
 -- --------------------------------------------------------
 
@@ -875,6 +878,7 @@ INSERT INTO `favorites` (`id`, `user_id`, `product_id`) VALUES
 (33, 3, 1),
 (34, 3, 2),
 (67, 3, 4),
+(77, 3, 27),
 (30, 4, 2),
 (40, 9, 4),
 (59, 10, 6),
@@ -4072,7 +4076,9 @@ INSERT INTO `users` (`user_id`, `username`, `password`, `is_active`, `date_creat
 (38, 'brixssaa', '$2y$10$J7YHELwU7i05FmVqJwKQ3Olmmp5conkZ0UfRgoWwsDTCkO6kl69Du', 1, '2025-10-29 03:55:22', '2025-10-29 03:55:22', 2, 0, 0),
 (39, 'brixxxxxsuuuu', '$2y$10$.H7tWg1aGU41HaHTrZAtS.OqkGI.EMWG7wEJ7subPunjhwCzUtJKa', 1, '2025-10-30 03:40:36', '2025-10-30 03:41:02', 2, 1, 0),
 (40, 'zaynngian', '$2y$10$PXc9tP4R6CQCyW8VTnAo2O1iCxffjSdO/HPBtJAbSYA4gCuLCdWF6', 1, '2025-10-30 03:53:32', '2025-10-30 03:53:32', 2, 0, 0),
-(41, 'giannnzz', '$2y$10$5CVvWcwFDe4N8Bd0sdpCKOWgNcdvSIV9TPPkgTlOOzl4drq5K3Imm', 1, '2025-10-30 03:55:10', '2025-10-30 03:55:10', 2, 0, 0);
+(41, 'giannnzz', '$2y$10$5CVvWcwFDe4N8Bd0sdpCKOWgNcdvSIV9TPPkgTlOOzl4drq5K3Imm', 1, '2025-10-30 03:55:10', '2025-10-30 03:55:10', 2, 0, 0),
+(42, 'gianssssuu', '$2y$10$swGAyqPPVedhOG8ZcrqivOb73iZBhIRStiKViQxy2jRyT2zPpZbFa', 1, '2025-11-01 00:11:33', '2025-11-01 00:11:33', 2, 0, 0),
+(43, 'bbbbbbbbbarrryy', '$2y$10$5/CzY.8dMvqCRpvMZeMNz.99IbEtXilxe3TxwKvsVRLqMVGuGKKy.', 1, '2025-11-01 00:12:13', '2025-11-01 00:12:13', 2, 0, 0);
 
 -- --------------------------------------------------------
 
@@ -4133,7 +4139,9 @@ INSERT INTO `user_info` (`user_info_id`, `user_id`, `first_name`, `last_name`, `
 (41, 38, 'Marion Brix', 'Quiling', 'brixquils.1@gmail.com', NULL, NULL, NULL, '2025-10-29 03:55:22', '2025-10-29 03:55:22'),
 (42, 39, 'brixxxxx', 'waaah', 'brixquils.1@gmail.com', '09321321321', '09312213333', 'uploads/default.png', '2025-10-30 03:40:36', '2025-10-30 13:13:52'),
 (43, 40, 'GIan', 'AZayn', 'nicoletalavera826@gmail.com', NULL, NULL, NULL, '2025-10-30 03:53:32', '2025-10-30 03:53:32'),
-(44, 41, 'GIIII', 'ZAYN', 'nicoletalavera826@gmail.com', NULL, NULL, NULL, '2025-10-30 03:55:10', '2025-10-30 03:55:10');
+(44, 41, 'GIIII', 'ZAYN', 'nicoletalavera826@gmail.com', NULL, NULL, NULL, '2025-10-30 03:55:10', '2025-10-30 03:55:10'),
+(45, 42, 'GIANI', 'ZAYNU', 'nicoletalavera826@gmail.com', NULL, NULL, NULL, '2025-11-01 00:11:33', '2025-11-01 00:11:33'),
+(46, 43, 'Marion Brix', 'Quiling', 'nicoletalavera826@gmail.com', NULL, NULL, NULL, '2025-11-01 00:12:13', '2025-11-01 00:12:13');
 
 -- --------------------------------------------------------
 
@@ -4738,13 +4746,13 @@ ALTER TABLE `brand_product_stock`
 -- AUTO_INCREMENT for table `cart`
 --
 ALTER TABLE `cart`
-  MODIFY `cart_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=163;
+  MODIFY `cart_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=164;
 
 --
 -- AUTO_INCREMENT for table `cart_items`
 --
 ALTER TABLE `cart_items`
-  MODIFY `cartitem_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2693;
+  MODIFY `cartitem_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2694;
 
 --
 -- AUTO_INCREMENT for table `categories`
@@ -4774,7 +4782,7 @@ ALTER TABLE `discount_code_usage`
 -- AUTO_INCREMENT for table `email_verification`
 --
 ALTER TABLE `email_verification`
-  MODIFY `emailverify_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
+  MODIFY `emailverify_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
 -- AUTO_INCREMENT for table `faq_questions`
@@ -4786,7 +4794,7 @@ ALTER TABLE `faq_questions`
 -- AUTO_INCREMENT for table `favorites`
 --
 ALTER TABLE `favorites`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=77;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=78;
 
 --
 -- AUTO_INCREMENT for table `history_action_types`
@@ -5014,13 +5022,13 @@ ALTER TABLE `uom`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
+  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=44;
 
 --
 -- AUTO_INCREMENT for table `user_info`
 --
 ALTER TABLE `user_info`
-  MODIFY `user_info_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
+  MODIFY `user_info_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=47;
 
 --
 -- AUTO_INCREMENT for table `user_permissions`

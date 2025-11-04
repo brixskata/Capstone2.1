@@ -375,7 +375,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
       <div class="page-header">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <h2><i class="fas fa-users me-2"></i>User Management</h2>
+            <h2><i class="fas fa-users me-2"></i>User Accounts  </h2>
             <p class="mb-0 opacity-75">Manage user accounts and permissions</p>
           </div>
           <?php if (hasPermission($pdo, 'user_create')): ?>

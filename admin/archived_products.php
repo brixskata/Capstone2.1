@@ -133,61 +133,6 @@ $archivedProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
       font-size: 2rem;
     }
 
-    /* Analytics Cards - Light Version */
-    .analytics-card {
-      background: white;
-      color: var(--bs-dark);
-      border-radius: 1rem;
-      padding: 1.5rem;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-      border: 1px solid #e9ecef;
-      transition: all 0.3s ease;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      position: relative;
-      overflow: hidden;
-    }
-
-
-    .analytics-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-    }
-
-    .card-icon {
-      width: 60px;
-      height: 60px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      flex-shrink: 0;
-      background: rgba(127, 23, 52, 0.1);
-      color: var(--bs-primary);
-    }
-
-    .card-content {
-      flex: 1;
-    }
-
-    .card-number {
-      font-size: 2rem;
-      font-weight: 700;
-      color: var(--bs-primary);
-      margin: 0;
-      line-height: 1;
-    }
-
-    .card-label {
-      color: var(--bs-secondary);
-      font-size: 0.9rem;
-      font-weight: 500;
-      margin: 0.5rem 0 0 0;
-    }
-
     /* Filter Card */
     .filter-card {
       background: white;
@@ -437,70 +382,14 @@ $archivedProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <h2><i class="fas fa-archive me-2"></i>Archived Products</h2>
             </div>
 
-            <!-- Analytics Cards -->
-            <div class="row g-4 mb-4">
-                <div class="col-md-4">
-                    <div class="analytics-card">
-                        <div class="card-icon">
-                            <i class="fas fa-archive"></i>
-                        </div>
-                        <div class="card-content">
-                            <h3 class="card-number"><?php echo count($archivedProducts); ?></h3>
-                            <p class="card-label">Archived Products</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="analytics-card">
-                        <div class="card-icon">
-                            <i class="fas fa-box"></i>
-                        </div>
-                        <div class="card-content">
-                            <h3 class="card-number"><?php echo array_sum(array_column($archivedProducts, 'stock')); ?></h3>
-                            <p class="card-label">Total Stock</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="analytics-card">
-                        <div class="card-icon">
-                            <i class="fas fa-dollar-sign"></i>
-                        </div>
-                        <div class="card-content">
-                            <h3 class="card-number">₱<?php echo number_format(array_sum(array_column($archivedProducts, 'price')), 2); ?></h3>
-                            <p class="card-label">Total Value</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Search and Filter Section -->
+            <!-- Search Section -->
             <div class="filter-card">
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-12">
                         <div class="input-group">
                             <span class="input-group-text"><i class="fa fa-search"></i></span>
                             <input type="text" class="form-control" id="productSearch" placeholder="Search archived products...">
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <select class="form-select" id="categoryFilter">
-                            <option value="">All Categories</option>
-                            <?php 
-                            $stmt = $pdo->query("SELECT DISTINCT c.category_name FROM products p LEFT JOIN categories c ON p.category_id = c.category_id WHERE p.is_archive = 1");
-                            $categories = $stmt->fetchAll(PDO::FETCH_COLUMN);
-                            foreach ($categories as $category): ?>
-                                <option value="<?= htmlspecialchars($category) ?>"><?= htmlspecialchars($category) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <select class="form-select" id="stockFilter">
-                            <option value="">All Stock Levels</option>
-                            <option value="in_stock">In Stock</option>
-                            <option value="low_stock">Low Stock</option>
-                            <option value="out_of_stock">Out of Stock</option>
-                        </select>
                     </div>
                 </div>
             </div>
@@ -619,41 +508,23 @@ $archivedProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <?php include 'includes/admin_scripts.php'; ?>
     <script>
-        // Search and Filter Functionality
+        // Search Functionality
         function filterProducts() {
             const searchTerm = document.getElementById('productSearch').value.toLowerCase();
-            const categoryFilter = document.getElementById('categoryFilter').value.toLowerCase();
-            const stockFilter = document.getElementById('stockFilter').value;
             const products = document.querySelectorAll('.product-item');
             
             let visibleCount = 0;
             
             products.forEach(product => {
                 const name = product.dataset.name;
-                const category = product.dataset.category;
-                const stock = parseInt(product.dataset.stock);
-                
-                let show = true;
                 
                 // Search filter
                 if (searchTerm && !name.includes(searchTerm)) {
-                    show = false;
+                    product.style.display = 'none';
+                } else {
+                    product.style.display = 'block';
+                    visibleCount++;
                 }
-                
-                // Category filter
-                if (categoryFilter && !category.includes(categoryFilter)) {
-                    show = false;
-                }
-                
-                // Stock filter
-                if (stockFilter) {
-                    if (stockFilter === 'in_stock' && stock <= 10) show = false;
-                    if (stockFilter === 'low_stock' && (stock <= 0 || stock > 10)) show = false;
-                    if (stockFilter === 'out_of_stock' && stock > 0) show = false;
-                }
-                
-                product.style.display = show ? 'block' : 'none';
-                if (show) visibleCount++;
             });
             
             document.getElementById('archivedCount').textContent = `${visibleCount} products`;
@@ -678,10 +549,8 @@ $archivedProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
         });
 
-        // Event listeners for search and filter
+        // Event listener for search
         document.getElementById('productSearch').addEventListener('input', filterProducts);
-        document.getElementById('categoryFilter').addEventListener('change', filterProducts);
-        document.getElementById('stockFilter').addEventListener('change', filterProducts);
     </script>
 </body>
 </html>

@@ -3946,7 +3946,7 @@ $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         updateAutoConfirmIndicator(orderCard, hoursRemaining);
                     }
                 } else {
-                    console.warn(`Could not get out-for-delivery time for order ${orderId}:`, data.message);
+                    console.warn(`Could not get out-for-delivery time for order ${orderId}:`, data.error || data.message);
                     console.warn(`Error details:`, data.error_details);
                     console.warn(`Error file:`, data.error_file, `Line:`, data.error_line);
                     

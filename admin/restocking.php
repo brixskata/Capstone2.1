@@ -629,16 +629,6 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
             background: #f8f9fa;
         }
         
-        .low-stock-item {
-            background-color: #fff8e1;
-            border-left: 4px solid #ffb74d;
-        }
-        
-        .out-of-stock-item {
-            background-color: #ffebee;
-            border-left: 4px solid #f44336;
-        }
-        
         /* Pastel button styles */
         .btn-pastel-primary {
             background-color: #e3f2fd;
@@ -890,58 +880,6 @@ $pending_restocks = $pdo->query("SELECT COUNT(*) FROM restocking WHERE status_id
                     </div>
                 </div>
             </div>
-
-            <!-- Products Needing Restocking -->
-            <div class="table-card mb-4">
-                <div class="card-header bg-transparent border-0 p-4">
-                    <h5 class="fw-bold mb-0 text-dark">
-                        <i class="fas fa-exclamation-triangle me-2"></i>Products Needing Restocking
-                    </h5>
-                </div>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="fw-semibold">Product</th>
-                            <th class="fw-semibold">Current Stock</th>
-                            <th class="fw-semibold">Reorder Point</th>
-                            <th class="fw-semibold">Status</th>
-                            <th class="fw-semibold">Supplier</th>
-                            <th class="fw-semibold">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($products as $product): ?>
-                            <?php if ((float)$product['stock'] <= (float)$product['reorder_point']): ?>
-                                <tr class="<?= (float)$product['stock'] <= 0 ? 'out-of-stock-item' : 'low-stock-item' ?>">
-                                    <td>
-                                        <div class="fw-semibold"><?= htmlspecialchars($product['name']) ?></div>
-                                        <small class="text-muted"><?= htmlspecialchars($product['category_name']) ?></small>
-                                    </td>
-                                    <td>
-                                        <span class="fw-semibold"><?= number_format((float)$product['stock'], 1) ?> <?= htmlspecialchars($product['uom_name']) ?></span>
-                                    </td>
-                                    <td><?= $product['reorder_point'] ?></td>
-                                    <td>
-                                        <?php if ((float)$product['stock'] <= 0): ?>
-                                            <span class="badge badge-pastel-danger">Out of Stock</span>
-                                        <?php else: ?>
-                                            <span class="badge badge-pastel-warning">Low Stock</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?= htmlspecialchars($product['supplier_name']) ?></td>
-                                    <td>
-                                        <button class="btn btn-pastel-success" onclick="openRestockModal(<?= $product['id'] ?>, '<?= htmlspecialchars($product['name']) ?>')">
-                                            <i class="fa fa-plus me-1"></i>Restock
-                                        </button>
-                                    </td>
-                                </tr>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
 
             <!-- Recent Restocking Records -->
             <div class="table-card">

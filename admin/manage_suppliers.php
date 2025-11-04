@@ -933,8 +933,7 @@ foreach ($archivedSuppliers as $supplier) {
                 </thead>
             <tbody>
           <?php foreach ($activeSuppliers as $supplier): ?>
-                <tr class="supplier-row" style="cursor: pointer;" 
-                    onclick="toggleProductsView(<?= $supplier['id'] ?>)"
+                <tr class="supplier-row"
                         data-id="<?= $supplier['id'] ?>"
                         data-name="<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>"
                         data-phone="<?= htmlspecialchars($supplier['phone'] ?? '', ENT_QUOTES) ?>"
@@ -962,20 +961,19 @@ foreach ($archivedSuppliers as $supplier) {
                       <span class="badge bg-primary me-2"><?= $supplier['product_count'] ?></span>
                       <button class="btn btn-sm" 
                               style="background: #b3d9ff; color: #003d82; border-radius: 8px;"
-                              onclick="event.stopPropagation(); openAssignProductsModal(<?= $supplier['id'] ?>, '<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>')"
+                              onclick="openAssignProductsModal(<?= $supplier['id'] ?>, '<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>')"
                               title="Assign Products">
                         <i class="fa fa-plus"></i>
                       </button>
                       <?php 
                       $products = $supplierProducts[$supplier['id']] ?? [];
-                      if (!empty($products)): ?>
-                        <button class="btn btn-sm" 
-                                style="background: #d1ecf1; color: #0c5460; border-radius: 8px;"
-                                onclick="event.stopPropagation(); toggleProductsView(<?= $supplier['id'] ?>)"
-                                title="View All Products">
-                          <i class="fa fa-eye"></i>
-                        </button>
-                      <?php endif; ?>
+                      ?>
+                      <button class="btn btn-sm" 
+                              style="background: #d1ecf1; color: #0c5460; border-radius: 8px;"
+                              onclick="toggleProductsView(<?= $supplier['id'] ?>)"
+                              title="View All Products">
+                        <i class="fa fa-eye"></i>
+                      </button>
                   </div>
                     <?php if (!empty($products)): ?>
                       <div class="mt-2">
@@ -1000,7 +998,7 @@ foreach ($archivedSuppliers as $supplier) {
                     <div class="btn-group" role="group">
                       <button class="btn btn-sm" 
                               style="background: #cce5ff; color: #004085; border-radius: 8px;"
-                              onclick="event.stopPropagation(); openEditSupplierModal(this)"
+                              onclick="openEditSupplierModal(this)"
                               data-id="<?= $supplier['id'] ?>"
                               data-name="<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>"
                               data-phone="<?= htmlspecialchars($supplier['phone'] ?? '', ENT_QUOTES) ?>"
@@ -1028,7 +1026,7 @@ foreach ($archivedSuppliers as $supplier) {
                           <i class="fa fa-box me-2 text-primary"></i>Products Supplied by <?= htmlspecialchars($supplier['name']) ?>
                         </h6>
                         <button class="btn btn-success btn-sm" 
-                                onclick="event.stopPropagation(); openCreatePOModal(<?= $supplier['id'] ?>, '<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>')">
+                                onclick="openCreatePOModal(<?= $supplier['id'] ?>, '<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>')">
                           <i class="fa fa-file-invoice me-1"></i>Create Purchase Order
                         </button>
                       </div>
@@ -1122,8 +1120,7 @@ foreach ($archivedSuppliers as $supplier) {
                 </thead>
             <tbody>
           <?php foreach ($archivedSuppliers as $supplier): ?>
-                <tr class="supplier-row" style="cursor: pointer; opacity: 0.7;" 
-                    onclick="toggleProductsView(<?= $supplier['id'] ?>)"
+                <tr class="supplier-row" style="opacity: 0.7;"
                         data-id="<?= $supplier['id'] ?>"
                         data-name="<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>"
                         data-phone="<?= htmlspecialchars($supplier['phone'] ?? '', ENT_QUOTES) ?>"
@@ -1152,14 +1149,13 @@ foreach ($archivedSuppliers as $supplier) {
                       <span class="badge bg-secondary me-2"><?= $supplier['product_count'] ?></span>
                       <?php 
                       $products = $archivedSupplierProducts[$supplier['id']] ?? [];
-                      if (!empty($products)): ?>
-                        <button class="btn btn-sm" 
-                                style="background: #d1ecf1; color: #0c5460; border-radius: 8px;"
-                                onclick="event.stopPropagation(); toggleProductsView(<?= $supplier['id'] ?>)"
-                                title="View All Products">
-                          <i class="fa fa-eye"></i>
-                        </button>
-                      <?php endif; ?>
+                      ?>
+                      <button class="btn btn-sm" 
+                              style="background: #d1ecf1; color: #0c5460; border-radius: 8px;"
+                              onclick="toggleProductsView(<?= $supplier['id'] ?>)"
+                              title="View All Products">
+                        <i class="fa fa-eye"></i>
+                      </button>
                   </div>
                     <?php if (!empty($products)): ?>
                       <div class="mt-2">
@@ -1184,7 +1180,7 @@ foreach ($archivedSuppliers as $supplier) {
                     <div class="btn-group" role="group">
                       <button class="btn btn-sm" 
                               style="background: #cce5ff; color: #004085; border-radius: 8px;"
-                              onclick="event.stopPropagation(); openEditSupplierModal(this)"
+                              onclick="openEditSupplierModal(this)"
                               data-id="<?= $supplier['id'] ?>"
                               data-name="<?= htmlspecialchars($supplier['name'], ENT_QUOTES) ?>"
                               data-phone="<?= htmlspecialchars($supplier['phone'] ?? '', ENT_QUOTES) ?>"

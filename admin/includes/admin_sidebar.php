@@ -110,7 +110,7 @@ try {
           </div>
           <span>Dashboard</span>
           <div class="nav-indicator"></div>
-          <div class="nav-badge">Live</div>
+          
         </a>
       </div>
     </div>
