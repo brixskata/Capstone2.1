@@ -26,6 +26,34 @@ if (isset($_SESSION['user_id'])) {
     $id_verified = $user_verification && $user_verification['id_verified'];
 }
 
+// Fetch user display name for dropdown
+$user_display_name = null;
+if (isset($_SESSION['user_id'])) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT u.username, ui.first_name, ui.last_name
+            FROM users u 
+            LEFT JOIN user_info ui ON u.user_id = ui.user_id 
+            WHERE u.user_id = ?
+        ");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user_data = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($user_data) {
+            // Use full name if available, otherwise username
+            if (!empty($user_data['first_name']) && !empty($user_data['last_name'])) {
+                $user_display_name = $user_data['first_name'] . ' ' . $user_data['last_name'];
+            } else {
+                $user_display_name = $user_data['username'] ?? 'User';
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Error fetching user name: " . $e->getMessage());
+        // Fallback to username from session
+        $user_display_name = $_SESSION['username'] ?? 'User';
+    }
+}
+
 // Prepare cart items and total
 $cart_items = [];
 $cart_total = 0;
@@ -161,7 +189,7 @@ if (!empty($_SESSION['cart'])) {
           </button>
           <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="profileDropdown">
             <li><a class="dropdown-item" href="orders.php">
-              <i class="fas fa-user"></i>Profile
+              <i class="fas fa-user"></i><?= isset($user_display_name) ? htmlspecialchars($user_display_name) : 'Profile' ?>
             </a></li>
             <li><hr class="dropdown-divider"></li>
             <li><button class="dropdown-item dark-mode-toggle" type="button">
@@ -234,7 +262,7 @@ if (!empty($_SESSION['cart'])) {
         <i class="fas fa-heart me-2"></i> Favorites
       </a>
       <a class="text-dark <?php if ($current == 'orders.php') echo 'fw-bold'; ?>" href="orders.php">
-        <i class="fas fa-user me-2"></i> Profile
+        <i class="fas fa-user me-2"></i> <?= isset($user_display_name) ? htmlspecialchars($user_display_name) : 'Profile' ?>
       </a>
     <?php else: ?>
       <a class="text-dark" href="login.php">

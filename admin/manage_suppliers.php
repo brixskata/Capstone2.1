@@ -904,6 +904,16 @@ foreach ($archivedSuppliers as $supplier) {
       </button>
     </div>
 
+    <!-- Search Suppliers -->
+    <div class="mb-4">
+      <div class="input-group" style="max-width: 400px;">
+        <span class="input-group-text" style="background: #f8f9fa;">
+          <i class="fa fa-search"></i>
+        </span>
+        <input type="text" id="supplierSearch" class="form-control" placeholder="Search suppliers by name...">
+      </div>
+    </div>
+
     <!-- Active Suppliers Table -->
     <div class="mb-5">
       <div class="table-card">
@@ -1831,6 +1841,26 @@ foreach ($archivedSuppliers as $supplier) {
         }
       });
     }
+
+    // Supplier Search Function
+    document.getElementById('supplierSearch')?.addEventListener('input', function(e) {
+      const searchTerm = this.value.toLowerCase().trim();
+      const supplierRows = document.querySelectorAll('.supplier-row');
+      
+      supplierRows.forEach(row => {
+        const supplierName = row.querySelector('td .fw-semibold')?.textContent.toLowerCase() || '';
+        const matches = supplierName.includes(searchTerm);
+        
+        row.style.display = matches ? '' : 'none';
+        
+        // Hide product rows if supplier is hidden
+        const supplierId = row.getAttribute('data-id');
+        const productRow = document.getElementById('products-row-' + supplierId);
+        if (productRow && !matches) {
+          productRow.style.display = 'none';
+        }
+      });
+    });
 
   </script>
 </body>

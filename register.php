@@ -364,6 +364,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             color: #198754;
         }
 
+        /* Password note dark mode styling */
+        [data-theme="dark"] #passwordNote {
+            color: white !important;
+        }
+
         .divider {
             text-align: center;
             margin: 1.5rem 0;
@@ -545,6 +550,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                         <i class="fas fa-eye toggle-password" onclick="togglePassword('password')"></i>
                                     </div>
                                     <div class="password-strength" id="passwordStrength"></div>
+                                    <small id="passwordNote" class="text-muted" style="display: none; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                                        Use 8 or more characters with a mix of uppercase, lowercase, numbers
+                                    </small>
                                 </div>
 
                                 <div class="form-group">
@@ -721,6 +729,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         document.getElementById('password').addEventListener('input', function() {
             const password = this.value;
             const strengthDiv = document.getElementById('passwordStrength');
+            const passwordNote = document.getElementById('passwordNote');
+            
+            // Show password note when user starts typing
+            if (password.length > 0) {
+                passwordNote.style.display = 'block';
+            } else {
+                passwordNote.style.display = 'none';
+            }
             
             if (password.length === 0) {
                 strengthDiv.innerHTML = '';

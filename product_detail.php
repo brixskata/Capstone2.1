@@ -2133,17 +2133,49 @@ if ($product_id <= 0) {
                     document.getElementById('quantity').value = 1;
                 } else {
                     const errorMessage = data.error || data.message || 'Failed to add product to cart';
-                    Swal.fire({
-                        title: 'Error',
-                        text: errorMessage,
-                        icon: 'error',
-                        confirmButtonColor: '#dc3545',
-                        confirmButtonText: '<i class="fas fa-times me-1"></i>OK',
-                        customClass: {
-                            popup: 'swal2-danger',
-                            confirmButton: 'swal2-confirm'
-                        }
-                    });
+                    
+                    // Check if error is related to login requirement
+                    if (errorMessage.toLowerCase().includes('log in') || errorMessage.toLowerCase().includes('login')) {
+                        Swal.fire({
+                            title: 'Login Required',
+                            html: `
+                                <div class="text-center">
+                                    <i class="fas fa-user-lock text-primary mb-3" style="font-size: 3rem;"></i>
+                                    <p>You need to be logged in to add items to your cart.</p>
+                                    <p class="text-muted">Please log in or create an account to continue.</p>
+                                </div>
+                            `,
+                            showCancelButton: true,
+                            confirmButtonColor: '#7F1734',
+                            cancelButtonColor: '#6c757d',
+                            confirmButtonText: '<i class="fas fa-sign-in-alt me-1"></i>Login',
+                            cancelButtonText: '<i class="fas fa-user-plus me-1"></i>Register',
+                            customClass: {
+                                popup: 'swal2-popup',
+                                confirmButton: 'swal2-confirm',
+                                cancelButton: 'swal2-cancel'
+                            }
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.href = 'login.php';
+                            } else if (result.dismiss === Swal.DismissReason.cancel) {
+                                window.location.href = 'register.php';
+                            }
+                        });
+                    } else {
+                        // Generic error handling for other errors
+                        Swal.fire({
+                            title: 'Error',
+                            text: errorMessage,
+                            icon: 'error',
+                            confirmButtonColor: '#dc3545',
+                            confirmButtonText: '<i class="fas fa-times me-1"></i>OK',
+                            customClass: {
+                                popup: 'swal2-danger',
+                                confirmButton: 'swal2-confirm'
+                            }
+                        });
+                    }
                 }
             })
             .catch(error => {
