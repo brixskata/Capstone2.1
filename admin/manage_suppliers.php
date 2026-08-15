@@ -336,7 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
             $stmt->execute([$productId]);
             $productName = $stmt->fetchColumn();
 
-            logHistory($pdo, 'Assigned Product to Supplier', "Supplier: $supplierName, Product: $productName" . ($isPrimary ? ' (Primary)' : ''), $_SESSION['username']);
+            logHistory($pdo, 'Assigned Product to Supplier', "Supplier: $supplierName, Product: $productName", $_SESSION['username']);
             $_SESSION['success'] = "Product assigned to supplier successfully!";
         }
     } catch (Exception $e) {
