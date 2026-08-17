@@ -23,7 +23,7 @@ function sendCustomerEmail($toEmail, $subject, $htmlBody) {
                 $mailer->Host       = 'smtp.gmail.com';
                 $mailer->SMTPAuth   = true;
                 $mailer->Username   = getenv('SMTP_USERNAME') ?: 'mikemadzstore021@gmail.com';
-                $mailer->Password   = getenv('SMTP_PASSWORD') ?: 'agbz ofsx rdfb omdz';
+            $mailer->Password   = getenv('SMTP_PASSWORD') ?: 'yxjb kkzb jhzr odyy';
                 $mailer->SMTPSecure = 'tls';
                 $mailer->Port       = 587;
 

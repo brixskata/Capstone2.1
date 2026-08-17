@@ -23,7 +23,12 @@ $batchManager = new BatchManager($pdo);
 // Handle order status updates
 if (isset($_POST['update_status'])) {
     $order_id = $_POST['order_id'];
-    $new_status = $_POST['new_status'];
+    $new_status = trim($_POST['new_status'] ?? '');
+    // Use one application-level value for delivery status while remaining
+    // compatible with the existing database value ('Out for delivery').
+    if (strcasecmp($new_status, 'Out for delivery') === 0) {
+        $new_status = 'Out for Delivery';
+    }
     $plate_number = $_POST['plate_number'] ?? null;
     $rider_contact_number = $_POST['rider_contact_number'] ?? null;
     $transaction_number = $_POST['transaction_number'] ?? null;
@@ -81,7 +86,7 @@ if (isset($_POST['update_status'])) {
 
         // Map status name to orderstatus_id and update
         $stmt = $pdo->prepare("UPDATE orders o
-                                JOIN order_status os ON os.status_name = :status
+                                JOIN order_status os ON LOWER(os.status_name) = LOWER(:status)
                                 SET o.orderstatus_id = os.orderstatus_id,
                                     o.plate_number = :plate_number,
                                     o.rider_contact_number = :rider_contact_number,
@@ -94,7 +99,7 @@ if (isset($_POST['update_status'])) {
                                         ELSE o.pickup_ready_at 
                                     END,
                                     o.out_for_delivery_at = CASE 
-                                        WHEN :status = 'Out for delivery' AND o.out_for_delivery_at IS NULL 
+                                        WHEN :status = 'Out for Delivery' AND o.out_for_delivery_at IS NULL
                                         THEN NOW() 
                                         ELSE o.out_for_delivery_at 
                                     END
@@ -165,15 +170,126 @@ if (isset($_POST['update_status'])) {
                     </div>
                 </div>";
                 
-                sendCustomerEmail($customerEmail, $emailSubject, $emailBody);
+                if (!sendCustomerEmail($customerEmail, $emailSubject, $emailBody)) {
+                    error_log("Failed to send order processing email for order #{$order_id}.");
+                }
             } catch (Exception $emailError) {
                 // Log email error but don't break the transaction
                 error_log("Failed to send order processing email for order #{$order_id}: " . $emailError->getMessage());
             }
+        } elseif ($new_status === 'To Ship' || $new_status === 'Ready for Pick Up') {
+            error_log("Order processing email skipped for order #{$order_id}: customer email is empty.");
+        }
+
+        // Send email notification when the order is out for delivery.
+        if ($new_status === 'Out for Delivery' && $customerEmail) {
+            try {
+                include_once __DIR__ . '/../includes/email_helper.php';
+
+                $emailSubject = "Order #{$order_id} Is Out for Delivery - MikeMadz";
+                $trackingRows = "
+                    <p style='margin: 5px 0;'><strong>Application:</strong> " . htmlspecialchars((string)$application_name, ENT_QUOTES, 'UTF-8') . "</p>
+                    <p style='margin: 5px 0;'><strong>Rider's Name:</strong> " . htmlspecialchars((string)$rider_name, ENT_QUOTES, 'UTF-8') . "</p>
+                    <p style='margin: 5px 0;'><strong>Plate Number:</strong> " . htmlspecialchars((string)$plate_number, ENT_QUOTES, 'UTF-8') . "</p>
+                    <p style='margin: 5px 0;'><strong>Rider Contact:</strong> " . htmlspecialchars((string)$rider_contact_number, ENT_QUOTES, 'UTF-8') . "</p>
+                    <p style='margin: 5px 0;'><strong>Transaction Number:</strong> " . htmlspecialchars((string)$transaction_number, ENT_QUOTES, 'UTF-8') . "</p>";
+
+                $itemsHtml = '';
+                foreach (explode(', ', $itemsList) as $item) {
+                    $itemsHtml .= '<li>' . htmlspecialchars($item) . '</li>';
+                }
+
+                $emailBody = "
+                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+                    <div style='background-color: #7F1734; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;'>
+                        <h2 style='margin: 0;'>MikeMadz</h2>
+                    </div>
+                    <div style='background-color: #f9f9f9; padding: 20px; border-radius: 0 0 10px 10px;'>
+                        <h3 style='color: #7F1734;'>Order Status Update</h3>
+                        <p>Hello {$customerName},</p>
+                        <p><strong>Your order is now out for delivery!</strong></p>
+
+                        <div style='background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #7F1734;'>
+                            <p style='margin: 5px 0;'><strong>Order ID:</strong> #{$order_id}</p>
+                            <p style='margin: 5px 0;'><strong>Status:</strong> Out for Delivery</p>
+                            <p style='margin: 5px 0;'><strong>Total Amount:</strong> ₱" . number_format($totalAmount, 2) . "</p>
+                        </div>
+
+                        <div style='background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #7F1734;'>
+                            <p style='margin: 5px 0;'><strong>Delivery Details:</strong></p>
+                            {$trackingRows}
+                        </div>
+
+                        <div style='margin: 20px 0;'>
+                            <p><strong>Order Items:</strong></p>
+                            <ul style='list-style-position: inside;'>{$itemsHtml}</ul>
+                        </div>
+
+                        <p>Please keep your phone available for the rider.</p>
+                        <p style='margin-top: 30px;'>Thank you for choosing MikeMadz!</p>
+                        <div style='margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px;'>
+                            <p>This is an automated email. Please do not reply to this message.</p>
+                        </div>
+                    </div>
+                </div>";
+
+                if (!sendCustomerEmail($customerEmail, $emailSubject, $emailBody)) {
+                    error_log("Failed to send out-for-delivery email for order #{$order_id}.");
+                }
+            } catch (Exception $emailError) {
+                error_log("Failed to send out-for-delivery email for order #{$order_id}: " . $emailError->getMessage());
+            }
+        }
+
+        // Send email notification when the order is completed.
+        if ($new_status === 'Completed' && $customerEmail) {
+            try {
+                include_once __DIR__ . '/../includes/email_helper.php';
+
+                $emailSubject = "Order #{$order_id} Has Been Completed - MikeMadz";
+                $itemsHtml = '';
+                foreach (explode(', ', $itemsList) as $item) {
+                    $itemsHtml .= '<li>' . htmlspecialchars($item) . '</li>';
+                }
+
+                $emailBody = "
+                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+                    <div style='background-color: #7F1734; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;'>
+                        <h2 style='margin: 0;'>MikeMadz</h2>
+                    </div>
+                    <div style='background-color: #f9f9f9; padding: 20px; border-radius: 0 0 10px 10px;'>
+                        <h3 style='color: #7F1734;'>Order Status Update</h3>
+                        <p>Hello {$customerName},</p>
+                        <p><strong>Your order has been completed successfully.</strong></p>
+
+                        <div style='background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #7F1734;'>
+                            <p style='margin: 5px 0;'><strong>Order ID:</strong> #{$order_id}</p>
+                            <p style='margin: 5px 0;'><strong>Status:</strong> Completed</p>
+                            <p style='margin: 5px 0;'><strong>Total Amount:</strong> ₱" . number_format($totalAmount, 2) . "</p>
+                        </div>
+
+                        <div style='margin: 20px 0;'>
+                            <p><strong>Order Items:</strong></p>
+                            <ul style='list-style-position: inside;'>{$itemsHtml}</ul>
+                        </div>
+
+                        <p>Thank you for choosing MikeMadz. We hope to serve you again!</p>
+                        <div style='margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px;'>
+                            <p>This is an automated email. Please do not reply to this message.</p>
+                        </div>
+                    </div>
+                </div>";
+
+                if (!sendCustomerEmail($customerEmail, $emailSubject, $emailBody)) {
+                    error_log("Failed to send completed-order email for order #{$order_id}.");
+                }
+            } catch (Exception $emailError) {
+                error_log("Failed to send completed-order email for order #{$order_id}: " . $emailError->getMessage());
+            }
         }
 
         // If shipping order, notify customer with delivery details
-        if ($new_status === 'Out for delivery' && $plate_number && $transaction_number) {
+        if ($new_status === 'Out for Delivery' && $plate_number && $transaction_number) {
             // Get customer user_id for notification
             $uidStmt = $pdo->prepare("SELECT user_id FROM orders WHERE orders_id = ?");
             $uidStmt->execute([$order_id]);
@@ -375,11 +491,15 @@ if (isset($_POST['cancel_order'])) {
                         </div>
                     </div>";
                     
-                    sendCustomerEmail($customerEmail, $emailSubject, $emailBody);
+                    if (!sendCustomerEmail($customerEmail, $emailSubject, $emailBody)) {
+                        error_log("Failed to send order cancellation email for order #{$order_id}.");
+                    }
                 } catch (Exception $emailError) {
                     // Log email error but don't break the transaction
                     error_log("Failed to send order cancellation email for order #{$order_id}: " . $emailError->getMessage());
                 }
+            } else {
+                error_log("Order cancellation email skipped for order #{$order_id}: customer email is empty.");
             }
 
             $pdo->commit();

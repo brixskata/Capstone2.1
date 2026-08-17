@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $mailer->Host       = 'smtp.gmail.com';
                     $mailer->SMTPAuth   = true;
                     $mailer->Username   = getenv('SMTP_USERNAME') ?: 'mikemadzstore021@gmail.com';
-                    $mailer->Password   = getenv('SMTP_PASSWORD') ?: 'agbz ofsx rdfb omdz';
+                    $mailer->Password   = getenv('SMTP_PASSWORD') ?: 'yxjb kkzb jhzr odyy';
                     // Use string to support environments without the constant
                     $mailer->SMTPSecure = 'tls';
                     $mailer->Port       = 587;
